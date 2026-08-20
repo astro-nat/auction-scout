@@ -1,0 +1,28 @@
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from .database import Base, engine
+from . import models  # noqa: F401 — import registers models on Base before create_all
+from .routers import lots, enrichment
+
+# Dev convenience only — creates tables from models if they don't exist.
+# Once this is a real app with data you care about, replace this with Alembic
+# migrations instead of letting SQLAlchemy auto-create/alter tables.
+Base.metadata.create_all(bind=engine)
+
+app = FastAPI(title="AuctionScout")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],  # Vite dev server
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(lots.router)
+app.include_router(enrichment.router)
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}

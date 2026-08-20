@@ -1,0 +1,19 @@
+# env / secrets
+.env
+
+# python
+__pycache__/
+*.pyc
+.venv/
+backend/.venv/
+
+# node
+node_modules/
+frontend/dist/
+
+# db
+pgdata/
+
+# editor
+.vscode/*
+!.vscode/settings.json
