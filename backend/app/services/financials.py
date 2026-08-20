@@ -5,9 +5,12 @@ resale estimate and current bid. The knobs (premium, tax, fees) mirror the
 prototype's defaults; override per-call if an auction house differs.
 """
 
+import os
 from dataclasses import dataclass
 
-TARGET_ROI = 5.0          # 500% — resale must clear 5x all-in cost to be a "buy"
+# 500% default (prototype's setting) — resale must clear 5x all-in cost to be a
+# "buy". Tune via TARGET_ROI_PCT in .env (e.g. 100 = double your money).
+TARGET_ROI = float(os.environ.get("TARGET_ROI_PCT", "500")) / 100
 BUYERS_PREMIUM = 0.15     # auction house premium on the hammer price
 SALES_TAX = 0.0825        # TX sales tax, applied on hammer + premium
 PLATFORM_FEE = 0.15       # eBay final-value fee on the resale side

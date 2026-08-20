@@ -153,9 +153,12 @@ def _enrich(lot: models.Lot, e: models.Enrichment) -> None:
     e.price_source = comps["price_source"]
 
     # --- 4. ROI ---
+    # Always compute the ceiling when we have a resale estimate — even on
+    # red-flagged lots, knowing max_bid is useful context. Red flags and
+    # unreachable pickups just can't be GOLD MINEs.
     red_flag = e.verdict in ("broken, damaged, or for parts",
                              "untested or unknown condition")
-    if comps["est_resale"] and not lot.unreachable_pickup and not red_flag:
+    if comps["est_resale"]:
         penalty = LOGISTICS_PENALTY.get(lot.logistics_ease or "NEUTRAL", 25.0)
         effective_bid = float(max(lot.current_bid or 0, lot.next_bid or 0))
         lead = financials.evaluate_lead(
@@ -167,7 +170,7 @@ def _enrich(lot: models.Lot, e: models.Enrichment) -> None:
         e.max_bid = lead.max_bid
         e.est_roi = lead.roi
         e.profit = lead.profit
-        e.roi_status = lead.status
+        e.roi_status = "PASS" if (red_flag or lot.unreachable_pickup) else lead.status
     elif red_flag or lot.unreachable_pickup:
         e.roi_status = "PASS"
 
