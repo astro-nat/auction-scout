@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { enrichLot, fetchLot } from '../api'
 
 const cell = { padding: '4px 10px', borderBottom: '1px solid #ddd' }
@@ -8,8 +8,48 @@ function money(v) {
   return `$${Number(v).toFixed(2)}`
 }
 
+const num = (v) => (v === null || v === undefined ? null : Number(v))
+
+// Column definitions: label + accessor used for sorting. Numeric accessors
+// return numbers (or null); everything else sorts as lowercase strings.
+const COLUMNS = [
+  { key: 'title', label: 'Title', get: (l) => l.title?.toLowerCase() },
+  { key: 'category', label: 'Category', get: (l) => l.category?.toLowerCase() },
+  { key: 'bid', label: 'Bid', get: (l) => num(l.current_bid) },
+  { key: 'est_cost', label: 'Est Cost', get: (l) => num(l.est_cost) },
+  { key: 'ship', label: 'Ship', get: (l) => l.logistics_ease },
+  { key: 'bolo', label: 'BOLO', get: (l) => l.enrichment?.bolo_brand?.toLowerCase() },
+  { key: 'est_resale', label: 'Est Resale', get: (l) => num(l.enrichment?.est_resale) },
+  { key: 'max_bid', label: 'Max Bid', get: (l) => num(l.enrichment?.max_bid) },
+  { key: 'verdict', label: 'Verdict', get: (l) => l.enrichment?.verdict },
+  { key: 'status', label: 'Status', get: (l) => l.enrichment?.status },
+]
+
 export default function LotTable({ lots, onLotUpdated }) {
   const [pollingIds, setPollingIds] = useState(new Set())
+  const [sort, setSort] = useState({ key: null, dir: 1 })
+
+  const sorted = useMemo(() => {
+    if (!sort.key) return lots
+    const col = COLUMNS.find((c) => c.key === sort.key)
+    return [...lots].sort((a, b) => {
+      const av = col.get(a)
+      const bv = col.get(b)
+      // null/undefined always sorts last regardless of direction
+      if (av == null && bv == null) return 0
+      if (av == null) return 1
+      if (bv == null) return -1
+      if (av < bv) return -sort.dir
+      if (av > bv) return sort.dir
+      return 0
+    })
+  }, [lots, sort])
+
+  function handleSort(key) {
+    setSort((prev) =>
+      prev.key === key ? { key, dir: -prev.dir } : { key, dir: 1 }
+    )
+  }
 
   async function handleEnrich(lotId) {
     await enrichLot(lotId)
@@ -38,21 +78,22 @@ export default function LotTable({ lots, onLotUpdated }) {
     <table style={{ borderCollapse: 'collapse', fontSize: 14 }}>
       <thead>
         <tr>
-          <th style={cell}>Title</th>
-          <th style={cell}>Category</th>
-          <th style={cell}>Bid</th>
-          <th style={cell}>Est Cost</th>
-          <th style={cell}>Ship</th>
-          <th style={cell}>BOLO</th>
-          <th style={cell}>Est Resale</th>
-          <th style={cell}>Max Bid</th>
-          <th style={cell}>Verdict</th>
-          <th style={cell}>Status</th>
+          {COLUMNS.map((c) => (
+            <th
+              key={c.key}
+              style={{ ...cell, cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+              onClick={() => handleSort(c.key)}
+              title="Click to sort"
+            >
+              {c.label}
+              {sort.key === c.key ? (sort.dir === 1 ? ' ▲' : ' ▼') : ''}
+            </th>
+          ))}
           <th style={cell}></th>
         </tr>
       </thead>
       <tbody>
-        {lots.map((lot) => {
+        {sorted.map((lot) => {
           const e = lot.enrichment || {}
           const gold = e.roi_status === 'GOLD MINE'
           return (
