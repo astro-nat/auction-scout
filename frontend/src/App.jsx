@@ -7,6 +7,8 @@ export default function App() {
   const [selectedAuction, setSelectedAuction] = useState(null)
   const [lots, setLots] = useState([])
   const [filters, setFilters] = useState({ boloOnly: false, roiStatus: '' })
+  const [hideLowValue, setHideLowValue] = useState(true)
+  const [lowValueCutoff, setLowValueCutoff] = useState(25)
   const [busy, setBusy] = useState('')
 
   const loadLots = useCallback(() => {
@@ -49,6 +51,20 @@ export default function App() {
   function handleLotUpdated(updated) {
     setLots((prev) => prev.map((l) => (l.lot_id === updated.lot_id ? updated : l)))
   }
+
+  // "Confirmed low-value" = 3+ comps agree the resale is under the cutoff.
+  // Unenriched lots stay visible — unknown is not the same as confirmed cheap.
+  function isConfirmedLowValue(lot) {
+    const e = lot.enrichment
+    return (
+      e?.est_resale != null &&
+      e.comp_count >= 3 &&
+      Number(e.est_resale) < lowValueCutoff
+    )
+  }
+
+  const visibleLots = hideLowValue ? lots.filter((l) => !isConfirmedLowValue(l)) : lots
+  const hiddenCount = lots.length - visibleLots.length
 
   return (
     <div style={{ padding: '2rem', fontFamily: 'system-ui' }}>
@@ -110,6 +126,24 @@ export default function App() {
             onChange={(ev) => setFilters((f) => ({ ...f, roiStatus: ev.target.checked ? 'GOLD MINE' : '' }))}
           /> Gold mines only
         </label>
+        <label style={{ marginLeft: '1rem' }}>
+          <input
+            type="checkbox"
+            checked={hideLowValue}
+            onChange={(ev) => setHideLowValue(ev.target.checked)}
+          /> Hide confirmed low-value (resale under $
+          <input
+            type="number"
+            value={lowValueCutoff}
+            onChange={(ev) => setLowValueCutoff(Number(ev.target.value) || 0)}
+            style={{ width: 50 }}
+          /> with 3+ comps)
+        </label>
+        {hideLowValue && hiddenCount > 0 && (
+          <span style={{ marginLeft: '0.5rem', color: '#666' }}>
+            {hiddenCount} hidden
+          </span>
+        )}
         {selectedAuction && (
           <button style={{ marginLeft: '1rem' }} onClick={() => setSelectedAuction(null)}>
             Show all auctions' lots
@@ -118,7 +152,7 @@ export default function App() {
         <button style={{ marginLeft: '1rem' }} onClick={loadLots}>Refresh</button>
       </section>
 
-      <LotTable lots={lots} onLotUpdated={handleLotUpdated} />
+      <LotTable lots={visibleLots} onLotUpdated={handleLotUpdated} />
     </div>
   )
 }
