@@ -299,6 +299,7 @@ def _process_lot(raw: dict, auction_ctx: dict) -> dict:
         "lot_link": f"https://hibid.com/lot/{raw.get('id')}",
         "thumbnail_url": first_pic.get("thumbnailLocation"),
         "hd_thumbnail_url": first_pic.get("hdThumbnailLocation"),
+        "fullsize_url": first_pic.get("fullSizeLocation"),
         "image_count": len(pictures),
         # nationwide auction + pickup-only lot = unbuyable, never grade as a bargain
         "unreachable_pickup": (auction_ctx.get("source") == "Ship"

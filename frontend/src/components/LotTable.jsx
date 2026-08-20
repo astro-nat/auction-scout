@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { enrichLot, fetchLot } from '../api'
+import { enrichLot, inspectLot, fetchLot } from '../api'
 
 const cell = { padding: '4px 10px', borderBottom: '1px solid #ddd' }
 
@@ -57,6 +57,12 @@ export default function LotTable({ lots, onLotUpdated }) {
     poll(lotId)
   }
 
+  async function handleInspect(lotId) {
+    await inspectLot(lotId)
+    setPollingIds((prev) => new Set(prev).add(lotId))
+    poll(lotId)
+  }
+
   function poll(lotId) {
     const interval = setInterval(async () => {
       const updated = await fetchLot(lotId)
@@ -103,6 +109,12 @@ export default function LotTable({ lots, onLotUpdated }) {
                 {e.enriched_title && e.enriched_title !== lot.title && (
                   <div style={{ color: '#666', fontSize: 12 }}>→ {e.enriched_title}</div>
                 )}
+                {e.notes && e.ai_source === 'vision-itemized' && (
+                  <details style={{ fontSize: 12, color: '#444' }}>
+                    <summary>itemized breakdown</summary>
+                    <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{e.notes}</pre>
+                  </details>
+                )}
               </td>
               <td style={cell}>{lot.category}</td>
               <td style={cell}>{money(lot.current_bid)} / {money(lot.next_bid)}</td>
@@ -127,8 +139,11 @@ export default function LotTable({ lots, onLotUpdated }) {
                   <div style={{ color: '#a00', fontSize: 12 }}>{e.error_message.slice(0, 80)}</div>
                 )}
               </td>
-              <td style={cell}>
-                <button onClick={() => handleEnrich(lot.lot_id)}>Enrich</button>
+              <td style={{ ...cell, whiteSpace: 'nowrap' }}>
+                <button onClick={() => handleEnrich(lot.lot_id)}>Enrich</button>{' '}
+                <button onClick={() => handleInspect(lot.lot_id)} title="Identify and price each item in the photo individually">
+                  Inspect
+                </button>
               </td>
             </tr>
           )

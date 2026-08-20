@@ -73,13 +73,17 @@ verdict must be exactly one of "broken, damaged, or for parts" | "untested or un
 
 
 def _parse_json_response(text: str) -> dict:
-    """Models sometimes wrap JSON in a ```json ... ``` fence despite being told not
-    to. Strip it before parsing rather than relying on prompt compliance."""
+    """Models wrap JSON in ```fences or append commentary despite being told not
+    to. Parse the first JSON object in the text and ignore everything around it."""
     text = text.strip()
     if text.startswith("```"):
         text = text.split("\n", 1)[1] if "\n" in text else text[3:]
         text = text.removesuffix("```").strip()
-    return json.loads(text)
+    start = text.find("{")
+    if start == -1:
+        raise ValueError(f"no JSON object in response: {text[:120]!r}")
+    obj, _ = json.JSONDecoder().raw_decode(text[start:])
+    return obj
 
 
 def run_enrichment(lot_db_id: int) -> None:
@@ -153,16 +157,21 @@ def _enrich(lot: models.Lot, e: models.Enrichment) -> None:
     e.price_source = comps["price_source"]
 
     # --- 4. ROI ---
-    # Always compute the ceiling when we have a resale estimate — even on
-    # red-flagged lots, knowing max_bid is useful context. Red flags and
-    # unreachable pickups just can't be GOLD MINEs.
+    _apply_roi(lot, e)
+
+
+def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
+    """ROI verdict from whatever est_resale is currently on the enrichment.
+    Always compute the ceiling when we have a resale estimate — even on
+    red-flagged lots, knowing max_bid is useful context. Red flags and
+    unreachable pickups just can't be GOLD MINEs."""
     red_flag = e.verdict in ("broken, damaged, or for parts",
                              "untested or unknown condition")
-    if comps["est_resale"]:
+    if e.est_resale:
         penalty = LOGISTICS_PENALTY.get(lot.logistics_ease or "NEUTRAL", 25.0)
         effective_bid = float(max(lot.current_bid or 0, lot.next_bid or 0))
         lead = financials.evaluate_lead(
-            resale_value=float(comps["est_resale"]),
+            resale_value=float(e.est_resale),
             current_bid=effective_bid,
             logistics_penalty=penalty,
             dts=0.0,  # no sell-through data yet — don't fail lots on it
@@ -173,6 +182,97 @@ def _enrich(lot: models.Lot, e: models.Enrichment) -> None:
         e.roi_status = "PASS" if (red_flag or lot.unreachable_pickup) else lead.status
     elif red_flag or lot.unreachable_pickup:
         e.roi_status = "PASS"
+
+
+INSPECT_PROMPT = """This is a photo of a multi-item auction lot titled: {title}
+
+Identify each INDIVIDUALLY SELLABLE item you can actually read or recognize in
+the photo — CD/DVD/book spines, game boxes, branded products, etc. For each,
+give an eBay-searchable title (under 60 chars). Skip anything you can't
+specifically identify — never guess or pad the list. Max 12 items.
+
+Return ONLY valid JSON:
+{{"items": [{{"title": string}}], "summary": string}}
+summary = one sentence on what the lot contains overall.
+"""
+
+MAX_INSPECT_ITEMS = 12
+
+
+def run_inspection(lot_db_id: int) -> None:
+    """Itemized vision pass for mixed lots ("Lot of 10 CDs"): read the photo,
+    identify each sellable item, price them individually, and total it up.
+    Called from POST /lots/{id}/inspect as a background task."""
+    db: Session = SessionLocal()
+    try:
+        lot = db.query(models.Lot).filter(models.Lot.id == lot_db_id).first()
+        if not lot:
+            return
+        e = lot.enrichment
+        e.last_attempted_at = datetime.now(timezone.utc)
+        try:
+            _inspect(lot, e)
+            e.status = "success"
+            e.error_message = None
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Inspection failed for lot %s: %s", lot_db_id, exc)
+            e.status = "failed"
+            e.error_message = str(exc)
+        db.commit()
+    finally:
+        db.close()
+
+
+def _inspect(lot: models.Lot, e: models.Enrichment) -> None:
+    # Full-size image beats the thumbnails for reading spines/labels
+    image_bytes = _download_image(lot.fullsize_url or lot.hd_thumbnail_url
+                                  or lot.thumbnail_url)
+    if not image_bytes:
+        raise RuntimeError("no image available for inspection")
+
+    b64 = base64.b64encode(image_bytes).decode()
+    result = _call_with_retry(lambda: client.messages.create(
+        model=MODEL,
+        max_tokens=800,
+        messages=[{
+            "role": "user",
+            "content": [
+                {"type": "image", "source": {"type": "base64",
+                                             "media_type": "image/jpeg",
+                                             "data": b64}},
+                {"type": "text", "text": INSPECT_PROMPT.format(title=lot.title or "")},
+            ],
+        }],
+    ))
+    if result is None:
+        raise RuntimeError("vision call failed")
+
+    items = (result.get("items") or [])[:MAX_INSPECT_ITEMS]
+    lines = []
+    total = 0.0
+    priced = 0
+    for item in items:
+        item_title = (item.get("title") or "").strip()
+        if not item_title:
+            continue
+        comps = pricing.lookup_comps(item_title)
+        if comps["est_resale"]:
+            total += float(comps["est_resale"])
+            priced += 1
+            lines.append(f"{item_title} → ${comps['est_resale']} ({comps['comp_count']} comps)")
+        else:
+            lines.append(f"{item_title} → no comps")
+
+    summary = result.get("summary") or ""
+    e.notes = f"[inspected: {len(items)} items, {priced} priced] {summary}\n" + "\n".join(lines)
+    e.ai_source = "vision-itemized"
+    if total > 0:
+        e.est_resale = round(total, 2)
+        e.price_low = None
+        e.price_high = None
+        e.comp_count = priced
+        e.price_source = f"itemized vision ({priced}/{len(items)} items priced)"
+        _apply_roi(lot, e)
 
 
 # ------------------------------------------------------------------ AI calls

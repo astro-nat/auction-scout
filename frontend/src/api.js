@@ -26,6 +26,10 @@ export function enrichLot(lotId) {
   return request(`/lots/${lotId}/enrich`, { method: 'POST' })
 }
 
+export function inspectLot(lotId) {
+  return request(`/lots/${lotId}/inspect`, { method: 'POST' })
+}
+
 export function fetchAuctions() {
   return request('/auctions')
 }

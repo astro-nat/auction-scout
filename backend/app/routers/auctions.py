@@ -73,7 +73,8 @@ async def import_lots(auction_id: int, db: Session = Depends(get_db)):
         if row:
             # bids/status/time-left always come fresh; analysis fields stay
             for k in ("current_bid", "next_bid", "bid_count", "est_cost",
-                      "status", "time_left"):
+                      "status", "time_left", "thumbnail_url",
+                      "hd_thumbnail_url", "fullsize_url"):
                 setattr(row, k, data[k])
             updated += 1
         else:

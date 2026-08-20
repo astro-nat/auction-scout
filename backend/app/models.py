@@ -49,6 +49,7 @@ class Lot(Base):
     lot_link = Column(String)
     thumbnail_url = Column(String)
     hd_thumbnail_url = Column(String)
+    fullsize_url = Column(String)
     image_count = Column(Integer, default=0)
     created_at = Column(DateTime, server_default=func.now())
 
