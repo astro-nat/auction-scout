@@ -28,6 +28,16 @@ client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from env
 
 MAX_ATTEMPTS = 3
 
+
+def _parse_json_response(text: str) -> dict:
+    """Models sometimes wrap JSON in a ```json ... ``` fence despite being told not
+    to. Strip it before parsing rather than relying on prompt compliance."""
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+        text = text.removesuffix("```").strip()
+    return json.loads(text)
+
 PROMPT = """You are grading a resale auction lot for a reseller's BOLO (be-on-lookout) system.
 Given the lot title and description below, identify the brand (if any), item category,
 a buy-tier, and a target buy price ceiling for a healthy resale margin.
@@ -88,7 +98,7 @@ def _call_model(title: str, description: str) -> dict:
             "content": PROMPT.format(title=title, description=description),
         }],
     )
-    return json.loads(resp.content[0].text)
+    return _parse_json_response(resp.content[0].text)
 
 
 def _call_model_with_image(title: str, description: str, image_bytes: bytes) -> dict:
@@ -106,4 +116,4 @@ def _call_model_with_image(title: str, description: str, image_bytes: bytes) -> 
             ],
         }],
     )
-    return json.loads(resp.content[0].text)
+    return _parse_json_response(resp.content[0].text)
