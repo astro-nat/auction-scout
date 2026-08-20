@@ -30,6 +30,13 @@ export function inspectLot(lotId) {
   return request(`/lots/${lotId}/inspect`, { method: 'POST' })
 }
 
+export function patchEnrichment(lotId, changes) {
+  return request(`/lots/${lotId}/enrichment`, {
+    method: 'PATCH',
+    body: JSON.stringify(changes),
+  })
+}
+
 export function fetchAuctions() {
   return request('/auctions')
 }

@@ -30,6 +30,19 @@ class EnrichmentOut(BaseModel):
     profit: Optional[Decimal] = None
     roi_status: Optional[str] = None
     error_message: Optional[str] = None
+    user_overrides: list[str] = []
+
+
+class EnrichmentPatch(BaseModel):
+    """User corrections — every field optional; only sent fields are applied.
+    logistics_ease lives on the Lot but is corrected through the same endpoint."""
+    enriched_title: Optional[str] = None
+    verdict: Optional[str] = None
+    bolo_brand: Optional[str] = None
+    bolo_tier: Optional[str] = None
+    est_resale: Optional[Decimal] = None
+    notes: Optional[str] = None
+    logistics_ease: Optional[str] = None
 
 
 class LotOut(BaseModel):

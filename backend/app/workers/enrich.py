@@ -115,13 +115,16 @@ def run_enrichment(lot_db_id: int) -> None:
 def _enrich(lot: models.Lot, e: models.Enrichment) -> None:
     title = lot.title or ""
     description = lot.description or ""
+    # Fields the user hand-corrected are never overwritten by re-enrichment.
+    protected = set(e.user_overrides or [])
 
     # --- 1. BOLO match (free, deterministic) ---
     match = bolo_matcher.match(title, description)
-    if match:
+    if match and "bolo_brand" not in protected:
         e.bolo_brand = match["brand"]
         e.bolo_category = match["category"]
-        e.bolo_tier = str(match["tier"]) if match["tier"] is not None else None
+        if "bolo_tier" not in protected:
+            e.bolo_tier = str(match["tier"]) if match["tier"] is not None else None
         e.bolo_confidence = match["confidence"]
         e.matched_model = match["matched_model"]
         e.target_buy_price = match["target_buy_high"]
@@ -140,21 +143,25 @@ def _enrich(lot: models.Lot, e: models.Enrichment) -> None:
                 ai = vision
                 e.ai_source = "vision"
     if ai:
-        e.enriched_title = (ai.get("enriched_title") or "")[:80] or None
-        e.verdict = ai.get("verdict")
+        if "enriched_title" not in protected:
+            e.enriched_title = (ai.get("enriched_title") or "")[:80] or None
+        if "verdict" not in protected:
+            e.verdict = ai.get("verdict")
         e.confidence = "strong" if ai.get("confident") else "weak"
-        e.notes = ai.get("notes")
+        if "notes" not in protected:
+            e.notes = ai.get("notes")
     elif e.ai_source is None:
         e.ai_source = "none"
 
-    # --- 3. Comps ---
-    search_title = e.enriched_title or title
-    comps = pricing.lookup_comps(search_title)
-    e.est_resale = comps["est_resale"]
-    e.price_low = comps["price_low"]
-    e.price_high = comps["price_high"]
-    e.comp_count = comps["comp_count"]
-    e.price_source = comps["price_source"]
+    # --- 3. Comps (skipped entirely when the user hand-set the resale) ---
+    if "est_resale" not in protected:
+        search_title = e.enriched_title or title
+        comps = pricing.lookup_comps(search_title)
+        e.est_resale = comps["est_resale"]
+        e.price_low = comps["price_low"]
+        e.price_high = comps["price_high"]
+        e.comp_count = comps["comp_count"]
+        e.price_source = comps["price_source"]
 
     # --- 4. ROI ---
     _apply_roi(lot, e)
@@ -263,10 +270,12 @@ def _inspect(lot: models.Lot, e: models.Enrichment) -> None:
         else:
             lines.append(f"{item_title} → no comps")
 
+    protected = set(e.user_overrides or [])
     summary = result.get("summary") or ""
-    e.notes = f"[inspected: {len(items)} items, {priced} priced] {summary}\n" + "\n".join(lines)
+    if "notes" not in protected:
+        e.notes = f"[inspected: {len(items)} items, {priced} priced] {summary}\n" + "\n".join(lines)
     e.ai_source = "vision-itemized"
-    if total > 0:
+    if total > 0 and "est_resale" not in protected:
         e.est_resale = round(total, 2)
         e.price_low = None
         e.price_high = None

@@ -2,6 +2,7 @@ from sqlalchemy import (
     Column, Integer, String, Text, Numeric, DateTime, Boolean, Float,
     ForeignKey, func
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from .database import Base
 
@@ -96,5 +97,7 @@ class Enrichment(Base):
 
     error_message = Column(Text)
     last_attempted_at = Column(DateTime)
+    # Field names the user has hand-corrected — the worker never overwrites these.
+    user_overrides = Column(JSONB, default=list)
 
     lot = relationship("Lot", back_populates="enrichment")

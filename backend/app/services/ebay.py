@@ -54,8 +54,10 @@ def _get_token(client: httpx.Client) -> Optional[str]:
         return _token
 
 
-def search_active(query: str, limit: int = 8) -> list[dict]:
-    """Fixed-price active listings, cheapest first. Returns itemSummaries."""
+def search_active(query: str, limit: int = 20) -> list[dict]:
+    """Fixed-price active listings by relevance (best match). Sorting by price
+    would sample the cheapest asking prices — junk/for-parts listings — and
+    systematically lowball every estimate."""
     if not enabled() or not query:
         return []
     try:
@@ -70,7 +72,6 @@ def search_active(query: str, limit: int = 8) -> list[dict]:
                 params={
                     "q": query,
                     "filter": "buyingOptions:{FIXED_PRICE}",
-                    "sort": "price",
                     "limit": str(limit),
                 },
             )

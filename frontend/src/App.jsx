@@ -9,6 +9,7 @@ export default function App() {
   const [filters, setFilters] = useState({ boloOnly: false, roiStatus: '' })
   const [hideLowValue, setHideLowValue] = useState(true)
   const [lowValueCutoff, setLowValueCutoff] = useState(25)
+  const [hideHardShip, setHideHardShip] = useState(false)
   const [busy, setBusy] = useState('')
 
   const loadLots = useCallback(() => {
@@ -63,7 +64,11 @@ export default function App() {
     )
   }
 
-  const visibleLots = hideLowValue ? lots.filter((l) => !isConfirmedLowValue(l)) : lots
+  const visibleLots = lots.filter((l) => {
+    if (hideLowValue && isConfirmedLowValue(l)) return false
+    if (hideHardShip && l.logistics_ease === 'HARD') return false
+    return true
+  })
   const hiddenCount = lots.length - visibleLots.length
 
   return (
@@ -139,7 +144,14 @@ export default function App() {
             style={{ width: 50 }}
           /> with 3+ comps)
         </label>
-        {hideLowValue && hiddenCount > 0 && (
+        <label style={{ marginLeft: '1rem' }}>
+          <input
+            type="checkbox"
+            checked={hideHardShip}
+            onChange={(ev) => setHideHardShip(ev.target.checked)}
+          /> Hide HARD ship
+        </label>
+        {(hideLowValue || hideHardShip) && hiddenCount > 0 && (
           <span style={{ marginLeft: '0.5rem', color: '#666' }}>
             {hiddenCount} hidden
           </span>

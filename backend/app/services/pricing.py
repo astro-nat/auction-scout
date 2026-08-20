@@ -158,7 +158,7 @@ def _soldcomps_lookup(query: str, count: int = 120) -> list[tuple[float, str]]:
 def _active_lookup(query: str) -> list[tuple[float, str]]:
     """eBay Browse active fixed-price listings — the always-available fallback."""
     out = []
-    for item in ebay.search_active(query, limit=8):
+    for item in ebay.search_active(query, limit=20):
         try:
             p = float((item.get("price") or {}).get("value") or 0)
         except (ValueError, TypeError):
