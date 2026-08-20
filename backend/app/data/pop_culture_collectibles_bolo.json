@@ -1,0 +1,1148 @@
+{
+  "schema_version": "1.0",
+  "domain": "pop_culture_collectibles",
+  "last_updated": "2026-05-04",
+  "summary": "Pop-culture / fandom collectibles that ship lightweight: Funko Pops (Star Wars, Marvel, DC, anime, exclusives), Hot Wheels collector variants (Star Wars, Treasure Hunts, Redlines, RLC), vintage Kenner Star Wars (1977-85), Topps trading cards. All small enough to ship in poly mailer or small box. Sweet spot: sealed/unopened Funko Pops $15-50, exclusive/chase Pops $50-300, vintage Kenner carded $50-500, vintage Hot Wheels Redlines $30-200.",
+  "field_workflow": [
+    "Funko Pop: Verify the box is undamaged — collectors are pickier about box than figure",
+    "Funko Pop: Look for sticker — Convention (SDCC/NYCC), Chase, Funko Shop Exclusive, Hot Topic, etc. — these multiply value",
+    "Hot Wheels: TH (Treasure Hunt) / Super TH have green stripe / TH symbol on packaging; check for these markers",
+    "Vintage Kenner Star Wars: card grading (AFA/CAS) matters hugely; bubbles intact + clean back doubles value",
+    "Topps trading cards: factory-sealed boxes always > opened; verify wax-pack seal hasn't been tampered with",
+    "LEGO sets: 'retired' sets command 2-5x retail; verify sealed plastic on box hasn't been opened"
+  ],
+  "skip_list": [
+    "Custom-painted Funko (loses Funko premium)",
+    "Loose Funko Pop (no box) — usually <$10",
+    "Hot Wheels mainline (commodity blue-card)",
+    "Damaged box / creased card",
+    "Not for sale (NFS) prototypes",
+    "Reproduction Kenner figures",
+    "Reseller-graded (non-AFA/CAS) cards"
+  ],
+  "brands": [
+    {
+      "brand": "Funko Pop",
+      "category": "pop_culture_figure",
+      "tier": 2,
+      "models": [
+        "Funko Pop",
+        "Funko POP",
+        "Funko Pop!",
+        "Funko Pop Marvel",
+        "Funko Pop DC",
+        "Funko Pop Star Wars",
+        "Funko Pop Disney",
+        "Funko Pop Anime",
+        "Funko Pop Animation",
+        "Funko Pop Movies",
+        "Funko Pop Television",
+        "Funko Pop Games",
+        "Funko Pop Sports",
+        "SDCC Funko",
+        "NYCC Funko",
+        "Funko Shop Exclusive",
+        "Funko Chase",
+        "Hot Topic Exclusive Funko",
+        "Walmart Exclusive Funko",
+        "Target Exclusive Funko",
+        "Box Lunch Exclusive",
+        "Glow in the Dark Funko",
+        "Metallic Funko",
+        "Black Light Funko",
+        "Diamond Collection Funko",
+        "Funko Soda",
+        "Funko Vinyl SODA",
+        "Funko Mystery Mini"
+      ],
+      "era_markers": [
+        "Funko branding on box top corner",
+        "Pop! number on box (e.g. #594 Luke Skywalker)",
+        "Sticker designation: Convention (SDCC/NYCC), Chase, Hot Topic, Funko Shop, Walmart Exclusive, etc.",
+        "Vinyl figure inside protective case (premium signal)",
+        "Original protective hard case ('Pop Stack' brand) adds resale"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "Convention exclusive (SDCC / NYCC)",
+          "low": 80,
+          "high": 350
+        },
+        {
+          "item": "Chase variant (1:6 ratio)",
+          "low": 60,
+          "high": 200
+        },
+        {
+          "item": "Funko Shop / Glow / Metallic exclusive",
+          "low": 40,
+          "high": 150
+        },
+        {
+          "item": "Hot Topic / Walmart / Target exclusive",
+          "low": 25,
+          "high": 80
+        },
+        {
+          "item": "Standard Pop in good box",
+          "low": 12,
+          "high": 35
+        },
+        {
+          "item": "Vaulted / Retired Pop",
+          "low": 30,
+          "high": 200
+        }
+      ],
+      "target_buy_usd": {
+        "low": 2,
+        "high": 30
+      },
+      "platform_primary": "eBay",
+      "platform_secondary": "Mercari",
+      "comp_query_template": "funko pop {character} {number}",
+      "ship_class": "small_box",
+      "notes": "Funko Pop is the dominant modern pop-culture collectible. Box condition matters MORE than figure condition — many collectors buy sealed-in-package only. Convention exclusives + Chase variants are the resale champions. 'Vaulted' (retired) Pops appreciate steadily. Hard-shell protectors ('Pop Stack' / 'Pop Shield') signal serious collector ownership.",
+      "condition_critical": true
+    },
+    {
+      "brand": "Hot Wheels collector variants",
+      "category": "pop_culture_diecast",
+      "tier": 2,
+      "models": [
+        "Hot Wheels Treasure Hunt",
+        "Hot Wheels TH",
+        "Hot Wheels Super Treasure Hunt",
+        "Hot Wheels Super TH",
+        "Hot Wheels Redline",
+        "Hot Wheels RLC",
+        "Hot Wheels Red Line Club",
+        "Hot Wheels Premium",
+        "Hot Wheels Boulevard",
+        "Hot Wheels Cars Culture",
+        "Hot Wheels Car Culture",
+        "Hot Wheels Convention",
+        "Hot Wheels Mattel Creations",
+        "Hot Wheels Star Wars",
+        "Hot Wheels Marvel",
+        "Hot Wheels Pop Culture",
+        "Hot Wheels Entertainment",
+        "Hot Wheels Hall of Fame",
+        "Matchbox Lesney",
+        "Matchbox Models of Yesteryear",
+        "Matchbox 1-75 series"
+      ],
+      "era_markers": [
+        "Hot Wheels Treasure Hunt symbol (flame icon) on package",
+        "Super Treasure Hunt: gold-spectraflame paint + RR (real rider) tires",
+        "Redline tires (1968-77 vintage = 'Redlines') — colored stripe",
+        "RLC stamp (Red Line Club exclusive)",
+        "Original blister pack unopened (mainline) vs custom blister",
+        "Lesney era Matchbox (pre-1982 UK production)"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "Super Treasure Hunt unopened",
+          "low": 25,
+          "high": 150
+        },
+        {
+          "item": "RLC exclusive (Red Line Club)",
+          "low": 40,
+          "high": 200
+        },
+        {
+          "item": "Treasure Hunt unopened",
+          "low": 10,
+          "high": 40
+        },
+        {
+          "item": "Vintage Redline (1968-77) loose good condition",
+          "low": 20,
+          "high": 200
+        },
+        {
+          "item": "Vintage Redline carded mint",
+          "low": 100,
+          "high": 1000
+        },
+        {
+          "item": "Hot Wheels Star Wars Starship",
+          "low": 15,
+          "high": 60
+        },
+        {
+          "item": "Lesney Matchbox vintage",
+          "low": 25,
+          "high": 150
+        }
+      ],
+      "target_buy_usd": {
+        "low": 1,
+        "high": 30
+      },
+      "platform_primary": "eBay",
+      "platform_secondary": "Mercari",
+      "comp_query_template": "hot wheels {variant} {model}",
+      "ship_class": "poly_mailer",
+      "notes": "Most Hot Wheels mainline (blue-card) is commodity at <$5. The premium tier is Treasure Hunts (TH), Super Treasure Hunts (STH), RLC exclusives, vintage Redlines (1968-77), and pop-culture variants (Star Wars / Marvel / Cars Culture). VINTAGE Lesney Matchbox (pre-1982 UK production) commands premium. Modern mainline blue-card Hot Wheels = skip.",
+      "condition_critical": true
+    },
+    {
+      "brand": "Vintage Kenner Star Wars",
+      "category": "pop_culture_figure",
+      "tier": 1,
+      "models": [
+        "Kenner Star Wars",
+        "Kenner SW",
+        "Kenner 1977",
+        "Kenner 1978",
+        "Kenner 1979",
+        "Kenner 1980",
+        "Kenner 1981",
+        "Kenner 1982",
+        "Kenner 1983",
+        "Kenner 1984",
+        "Kenner 1985",
+        "Vintage Kenner",
+        "Kenner action figure",
+        "Power of the Force",
+        "POTF Kenner",
+        "Death Star Playset",
+        "Millennium Falcon Kenner",
+        "AT-AT Kenner",
+        "X-Wing Kenner",
+        "Kenner carded",
+        "Kenner cardback",
+        "12-back",
+        "20-back",
+        "21-back",
+        "31-back",
+        "32-back",
+        "41-back",
+        "45-back",
+        "47-back",
+        "65-back",
+        "77-back",
+        "92-back"
+      ],
+      "era_markers": [
+        "Kenner branding on cardback or box",
+        "Made in Hong Kong / Made in Macau / Made in China stamping",
+        "Backprint number identifies cardback era (12-back = 1978 first wave premium)",
+        "Original bubble intact + minimal corner wear",
+        "Star Wars logo era (1977-83) vs Empire / Return of the Jedi",
+        "Power of the Force coin (1985 final wave premium)"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "12-back carded figure (1978 first wave)",
+          "low": 200,
+          "high": 2000
+        },
+        {
+          "item": "20-back / 21-back carded ESB era",
+          "low": 80,
+          "high": 500
+        },
+        {
+          "item": "ROTJ-era carded figure",
+          "low": 40,
+          "high": 200
+        },
+        {
+          "item": "Power of the Force (1985) carded with coin",
+          "low": 200,
+          "high": 1500
+        },
+        {
+          "item": "Loose vintage Kenner figure complete",
+          "low": 15,
+          "high": 80
+        },
+        {
+          "item": "Vintage Kenner playset (Death Star, AT-AT, etc.)",
+          "low": 130,
+          "high": 800
+        }
+      ],
+      "target_buy_usd": {
+        "low": 5,
+        "high": 100
+      },
+      "platform_primary": "eBay",
+      "platform_secondary": null,
+      "comp_query_template": "kenner star wars {character} {era}",
+      "ship_class": "small_box",
+      "notes": "Vintage Kenner Star Wars (1977-85) is the foundation of modern toy collecting. Carded (unopened) figures command 5-20x loose-figure prices. Cardback number (visible on back) identifies era — 12-back (1978 first wave) is premium. AFA / CAS grading adds 50-200%. Counterfeits of rare cardbacks exist; verify with Imperial Gunnery cardback database.",
+      "condition_critical": true
+    },
+    {
+      "brand": "Topps trading cards",
+      "category": "trading_cards",
+      "tier": 2,
+      "models": [
+        "Topps factory sealed",
+        "Topps wax box",
+        "Topps wax pack",
+        "Topps Star Wars",
+        "Topps Heritage",
+        "Topps Chrome",
+        "Topps Allen & Ginter",
+        "Topps Update",
+        "Topps Bowman",
+        "Topps Stadium Club",
+        "Topps Tier One",
+        "Topps Triple Threads",
+        "Topps Definitive",
+        "Topps Dynasty",
+        "Topps Now",
+        "Topps Project 70",
+        "Topps Garbage Pail Kids",
+        "Topps GPK",
+        "Topps Wacky Packages",
+        "Topps 1987",
+        "Topps 1989",
+        "Topps 1990",
+        "Topps Mickey Mantle",
+        "Topps rookie"
+      ],
+      "era_markers": [
+        "Topps branding on packaging / card",
+        "Year on the front (e.g. '1987 Topps')",
+        "Factory-sealed wax pack vs broken box",
+        "Set seal: factory wrap intact = premium",
+        "Vintage 1950s-60s = highest premium era"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "Topps wax box vintage 1980s-90s",
+          "low": 80,
+          "high": 500
+        },
+        {
+          "item": "Topps Heritage / Chrome modern hobby box",
+          "low": 130,
+          "high": 380
+        },
+        {
+          "item": "Vintage 1950s-60s wax pack unopened",
+          "low": 200,
+          "high": 2000
+        },
+        {
+          "item": "Topps Star Wars wax box vintage",
+          "low": 130,
+          "high": 400
+        },
+        {
+          "item": "GPK / Wacky Packages vintage box",
+          "low": 80,
+          "high": 300
+        }
+      ],
+      "target_buy_usd": {
+        "low": 5,
+        "high": 100
+      },
+      "platform_primary": "eBay",
+      "platform_secondary": null,
+      "comp_query_template": "topps {set} {year} sealed",
+      "ship_class": "small_box",
+      "notes": "Topps factory-sealed wax boxes are the resale gold for trading cards. Junk-wax era (1986-92) is mostly commodity unless packaging-mint. Vintage (1950s-60s) sealed packs trade at extreme premium. Star Wars Topps (1977-83) and Garbage Pail Kids (1985-88) vintage trade well. Always verify pack/box hasn't been searched."
+    },
+    {
+      "brand": "Loungefly",
+      "category": "pop_culture_bag",
+      "tier": 1,
+      "models": [
+        "Loungefly",
+        "Loungefly Disney",
+        "Loungefly Marvel",
+        "Loungefly Star Wars",
+        "Loungefly Sanrio",
+        "Loungefly Pokemon",
+        "Loungefly Harry Potter",
+        "Loungefly Nightmare Before Christmas",
+        "Loungefly NBC",
+        "Loungefly Stitch",
+        "Loungefly Mickey",
+        "Loungefly Minnie",
+        "Loungefly Hello Kitty",
+        "Loungefly Princess",
+        "Loungefly cosplay",
+        "Loungefly mini backpack",
+        "Loungefly wallet",
+        "Loungefly crossbody",
+        "Loungefly exclusive",
+        "Loungefly Box Lunch",
+        "Loungefly Funko Shop",
+        "Loungefly Hot Topic",
+        "Loungefly Disney Parks",
+        "Loungefly WDW",
+        "Loungefly DL",
+        "Loungefly Disneyland",
+        "Loungefly grail",
+        "Loungefly NWT",
+        "Loungefly NIB",
+        "Loungefly LE",
+        "Loungefly Limited Edition",
+        "Loungefly LE 300",
+        "Loungefly LE 500",
+        "Loungefly LE 600",
+        "Loungefly LE 1000",
+        "Loungefly LE 150",
+        "Mickey Main Attraction",
+        "Mickeys Main Attraction",
+        "Mickeys And Minnies Main Attraction",
+        "Disney Parks Mickey Main Attraction Series",
+        "Mickey MMA",
+        "Minnie MMA",
+        "Main Attraction Series Backpack",
+        "Mickey Main Attraction 24 Loungefly",
+        "Main Attraction 24 Ear FULL SET",
+        "MMA Peter Pan Flight",
+        "MMA Peter Pans Flight Sequin",
+        "Stitch Shoppe",
+        "Stitch Shoppe Loungefly",
+        "Stitch Shoppe Crossbody",
+        "Stitch Shoppe Purse",
+        "Stitch Shoppe Alice in Wonderland",
+        "Stitch Shoppe Red Rose Crossbody",
+        "Stitch Shoppe Beauty and the Beast",
+        "Stitch Shoppe Rose Petal Crossbody",
+        "Stitch Shoppe Snow White Apple",
+        "Stitch Shoppe Cinderella Pumpkin Coach",
+        "Stitch Shoppe Chip Teacup",
+        "Stitch Shoppe Mary Poppins Carpet Bag",
+        "Stitch Shoppe Little Mermaid Dinglehopper",
+        "Stitch Shoppe Lady and the Tramp Spaghetti",
+        "Stitch Shoppe Haunted Mansion Wallpaper",
+        "Stitch Shoppe Star Wars Death Star",
+        "Stained Glass mini backpack",
+        "Belle Stained Glass mini backpack",
+        "Belle Beauty and the Beast Stained Glass",
+        "Ariel Stained Glass mini backpack",
+        "Little Mermaid Stained Glass",
+        "Disney Princess Ariel Stained Glass",
+        "Stained Glass Series",
+        "Stained Glass Backpack and Ears",
+        "Cinderella Stained Glass Carriage",
+        "Snow White Stained Glass",
+        "Sleeping Beauty Stained Glass",
+        "Pocahontas Stained Glass",
+        "Tangled Rapunzel Stained Glass",
+        "Sleeping Beauty Make It Pink",
+        "Sleeping Beauty Make It Blue",
+        "Sleeping Beauty Make It Pink Make It Blue",
+        "Make It Pink Blue Loungefly Backpack",
+        "Sleeping Beauty Aurora Pink Sequin",
+        "Aurora Pink Sequin",
+        "Inside Out 2 Anxiety",
+        "Inside Out Anxiety Cosplay",
+        "Inside Out Anxiety Mini Backpack",
+        "Anxiety Cosplay Mini Backpack",
+        "Minnie Mouse Swarovski",
+        "Minnie Swarovski Crystal",
+        "Minnie Swarovski LE 300",
+        "Minnie Mouse Swarovski Crystal Mini Backpack",
+        "Wizard of Oz Loungefly",
+        "Loungefly Wizard of Oz",
+        "Wizard of Oz Dorothy Toto Cosplay",
+        "Dorothy Toto Cosplay Mini Backpack",
+        "Wizard of Oz Tin Man Cosplay",
+        "Wizard of Oz Ruby Slippers Sequin",
+        "Wizard of Oz Tin Man Mini Backpack with Coin Purse",
+        "Wizard of Oz Toto WOZBK0005",
+        "RARE 2023 NWT Wizard Of Oz Loungefly",
+        "Wizard of Oz Grail",
+        "Lumpy Heffalump Roo",
+        "Winnie The Pooh Lumpy Heffalump",
+        "Winnie the Pooh Loungefly Grail",
+        "Lumpy Heffalump Roo Loungefly",
+        "Petes Dragon Elliot",
+        "Pete's Dragon Elliot Sequin",
+        "Petes Dragon Elliot Sequin Cosplay",
+        "Elliott Loungefly Sequins",
+        "Mummy Book of the Living",
+        "Mummy Book of the Dead",
+        "The Mummy Book of the Dead",
+        "The Mummy Book of the Living",
+        "Loungefly Mummy Universal Studios",
+        "Mummy Book of the Dead Universal Exclusive",
+        "Mummy Universal Mini Backpack BUNDLE",
+        "Jurassic Park T-Rex Light Up Escape",
+        "Jurassic Park T-Rex Loungefly",
+        "Jurassic Park Light Up Escape Mini Backpack",
+        "Pixar Cars Vampire Mater",
+        "Vampire Mater Mini Backpack",
+        "Cars Vampire Mater Limited Edition",
+        "Maleficent Dragon Sequin",
+        "Maleficent Dragon Light-Up",
+        "Maleficent Dragon Sequin Light-Up Glow",
+        "Disney Maleficent Dragon Backpack",
+        "Peter Pan Nana Cosplay",
+        "Peter Pan Nana Mini Backpack",
+        "Peter Pan Nana Flocked",
+        "Peter Pan Nana Dog Backpack",
+        "Disney Peter Pan Nana",
+        "Club 33 Loungefly",
+        "Club 33 Disney",
+        "Club 33 Disneyland",
+        "Club 33 WDW",
+        "Club 33 Tiki Room Parrots",
+        "Club 33 Shag Tiki Room",
+        "Club 33 Letterman Jacket Varsity",
+        "Club 33 Compass WDW",
+        "Club 33 Velvet Loungefly",
+        "Club 33 Velvet Backpack and Ears",
+        "Club 33 2026 Velvet",
+        "Club 33 Sequin Loungefly Ears",
+        "Club 33 Haunted Mansion 55th Anniversary",
+        "Club 33 Enchanted Tiki Room Scented",
+        "Club 33 Mini Backpack Blue Gold 33 Emblem",
+        "Club 33 Mickey 90th Anniversary",
+        "Club 33 New Orleans Square 55th",
+        "Club 33 Pirates of the Caribbean 50th",
+        "Club 33 Christmas Holiday Annual",
+        "Club 33 Alice In Wonderland Tea Party",
+        "75th anniversary Club 33 Tea Party",
+        "Club 33 Matterhorn Loungefly",
+        "Club 33 Blue Mosaic Loungefly",
+        "WDW Disney Parks Loungefly Backpack",
+        "Disney World Club 33 Loungefly",
+        "Snow White Evil Queen Sequin",
+        "Snow White Evil Queen Cosplay",
+        "Disney Villains Evil Queen Poison Apple",
+        "101 Dalmatians Puppy Basket",
+        "Disney 101 Dalmatians Puppy Basket Mini Backpack",
+        "Disney Dalmatians in a Basket",
+        "Labyrinth Ludo Ello Worm",
+        "Labyrinth Loungefly Bundle",
+        "Labyrinth Ludo Loungefly",
+        "Star Wars Cosplay Queen Amidala",
+        "Queen Amidala Padme",
+        "Star Wars Padme Loungefly",
+        "Star Wars Boba Fett Cosplay",
+        "Star Wars Mandalorian Grogu Cosplay",
+        "Star Wars Ahsoka Tano Cosplay",
+        "Star Wars Princess Leia Hoth",
+        "Star Wars Darth Vader Light-Up Lightsaber",
+        "Star Wars Rey Kylo Ren Cosplay",
+        "Cinderella Fairy Godmother",
+        "Disney Cinderella Fairy Godmother",
+        "Fairy Godmother Backpack Wallet 2PC",
+        "Lion King Simba Debossed",
+        "Lion King Simba Black Satchel",
+        "Disney Lion King Simba",
+        "Belle Library",
+        "Belle Green Dress Reading Books",
+        "Belle Mrs Potts BATB",
+        "Disney Beauty and the Beast Belle Library",
+        "Rapunzel Sequin Glow",
+        "Tangled Rapunzel Sequin",
+        "Disney Tangled Rapunzel",
+        "Monsters Inc Roz",
+        "Monsters Inc Roz Cosplay",
+        "Pixar Monsters Inc Roz",
+        "Finding Nemo Squirt Cosplay",
+        "Finding Nemo Squirt SDCC",
+        "Pixar Finding Nemo Squirt",
+        "Beauty and the Beast Belle Library HTF",
+        "Coco Pepita Cosplay",
+        "Coco Pepita Glow in the Dark",
+        "Coco Miguel Guitar Glow",
+        "Disney Coco Pepita",
+        "Mickey Mouse Haunted House",
+        "Mickey Skeleton Dance",
+        "Moana Tamatoa Bling Crab",
+        "Moana Tamatoa Cosplay",
+        "SDCC 2022 GITD Louis",
+        "SDCC Louis Princess and the Frog",
+        "Princess and the Frog Tiana Cosplay",
+        "Princess and the Frog Louis SDCC",
+        "Hades Cosplay Mini Backpack",
+        "Disney Hades Loungefly",
+        "Aerosmith Rock n Roller Coaster",
+        "Aerosmith Rock and Roller Coaster",
+        "Disney Clarabelle Cow Cosplay",
+        "Clarabelle Cow Mini Backpack",
+        "Disney Dumbo Mrs Jumbo Swivel Trunk",
+        "Dumbo Mrs Jumbo Baby Dumbo",
+        "Disney Dumbo Loungefly Grail",
+        "Disney NBC Scary Teddy Undead Duck",
+        "NBC Scary Teddy",
+        "NBC Oogie Boogie Sequin",
+        "NBC Sally Cosplay",
+        "NBC Zero Hot Topic Exclusive",
+        "Universal Monsters Books Collection",
+        "Universal Monsters GITD Crossbody",
+        "Universal Monsters Bride of Frankenstein",
+        "Universal Monsters Creature from the Black Lagoon",
+        "Beetlejuice Sandworm Cosplay",
+        "Beetlejuice Handbook for the Recently Deceased",
+        "Hocus Pocus Black Flame Candle",
+        "Hocus Pocus Binx House",
+        "Hocus Pocus Sanderson Sisters Spellbook",
+        "IT Pennywise Sewer Cosplay",
+        "Horror Light-Up Mini Backpack",
+        "Mickey Minnie Perfect Picnic Scented",
+        "Disney Perfect Picnic Scented Bundle",
+        "Mickey Pretzel Scented",
+        "Disney Parks Churro Scented",
+        "Dole Whip Scented Loungefly",
+        "Hello Kitty 50th Anniversary",
+        "Hello Kitty 45th Anniversary",
+        "Hello Kitty Pusheen Crossover",
+        "My Melody Strawberry Cosplay",
+        "Sanrio Cinnamoroll Cloud",
+        "Hello Kitty Pink Purple Purse",
+        "Pokemon Pikachu Cosplay Light-Up",
+        "Pokemon Eevee Evolutions Sequin",
+        "Pokemon Snorlax Sleeping Cosplay",
+        "Pokemon Gengar Cosplay GITD",
+        "Pokemon Mewtwo Cosplay",
+        "Marvel Loki TVA Variant Cosplay",
+        "Marvel WandaVision Scarlet Witch",
+        "Marvel Spider-Man Miles Morales",
+        "Marvel Doctor Strange Multiverse",
+        "Marvel Thor Mjolnir Cosplay",
+        "Disney Princess Tangled Rapunzel Sequin",
+        "Disney Princess Sequin Belle",
+        "Disney Princess Sequin Belle Mini Backpack",
+        "Tinker Bell Sequin Light-Up Pixie Hollow",
+        "Ursula Tentacle Sequin Cosplay",
+        "Cruella de Vil Sequin Cosplay",
+        "Mickey Mouse Sorcerer Apprentice Sequin",
+        "Mickey Sorcerer Apprentice Fantasia D23",
+        "Aladdin Genie Lamp Cosplay",
+        "Mulan Mushu Cosplay",
+        "Pinocchio Monstro Whale Cosplay",
+        "Hercules Megara Cosplay",
+        "Bambi Spring Flowers Cosplay",
+        "Aristocats Marie Cosplay",
+        "Lilo Stitch Sequin Cosplay",
+        "Lilo Stitch Scrump Cosplay",
+        "Box Lunch Lilo Stitch Surfboard",
+        "Toy Story Woody Buzz Cosplay",
+        "Disney Up Carl Ellie Adventure Book",
+        "Mary Poppins Returns Carpet Bag",
+        "Box Lunch Disney Princess Lenticular",
+        "D23 Expo Walt Disney World 50th",
+        "D23 Mickey Sorcerer Apprentice Fantasia",
+        "WDW 50th Anniversary EARidescent",
+        "Disneyland 65th Anniversary",
+        "Disneyland 70th Anniversary",
+        "Disneyland 65th Loungefly",
+        "Disneyland 70th Loungefly",
+        "Walt Disney World 50th Loungefly",
+        "SDCC Star Wars Boba Fett LE",
+        "SDCC Marvel Loki TVA LE 600",
+        "SDCC Disney Villains Ursula Tentacle",
+        "NYCC Hocus Pocus Sanderson Sisters",
+        "SDCC Pixar Up House Cosplay LE 1000",
+        "SDCC Star Wars Mandalorian Grogu Pram",
+        "SDCC Loungefly Exclusive",
+        "NYCC Loungefly Exclusive",
+        "D23 Loungefly Exclusive",
+        "Convention Exclusive Loungefly",
+        "Funko Shop Disney Pop Loungefly Crossover",
+        "Hot Topic Disney Villains Light-Up",
+        "TOYZ N FUN Exclusive",
+        "Loungefly TOYZ N FUN"
+      ],
+      "era_markers": [
+        "Loungefly logo embroidered on front strap or zipper",
+        "Hangtag with character licensing info (Disney, Marvel, etc.)",
+        "Faux-leather PU construction (signature Loungefly material)",
+        "Embossed/3D character details on front panel",
+        "Box Lunch / Hot Topic / Funko Shop / Disney Parks exclusive sticker",
+        "Loungefly serial / SKU on inside tag (LF-XXXXX format)",
+        "LE numbering on hangtag (LE 150 / LE 300 / LE 500 / LE 600 / LE 1000)",
+        "'Stitch Shoppe' figural-bag sub-brand = apex collector tier $300-$700",
+        "'Stained Glass' series with backpack + matching ears set = $400-$3,500 grail tier",
+        "'Cosplay' series (character-shaped backpack with 3D details) = $300-$1,400 LE",
+        "'Sequin' series (light-up / glow-in-the-dark variants) = $350-$700",
+        "'Scented' specialty (Mickey Pretzel / Churro / Dole Whip / Perfect Picnic) = $400-$600",
+        "Club 33 (Disneyland members-only restaurant exclusive) = $400-$800 perpetual",
+        "Convention LE drops (SDCC / NYCC / D23 Expo) = $400-$900 apex",
+        "Mickey & Minnie Main Attraction Series (24-piece + ears full set) = $4,000 set",
+        "Anniversary editions (Hello Kitty 45th/50th, WDW 50th, Disneyland 65th/70th) = $400-$700",
+        "GITD = Glow In The Dark variant (always premium tier)",
+        "Universal Monsters / Beetlejuice / Hocus Pocus / IT Pennywise = horror-themed apex"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "Mickey & Minnies Main Attraction 24 Loungefly + 24 Ears FULL SET",
+          "low": 3000,
+          "high": 4000
+        },
+        {
+          "item": "Belle Beauty and the Beast Stained Glass Mini Backpack with Ears",
+          "low": 2500,
+          "high": 3500
+        },
+        {
+          "item": "Sleeping Beauty Make It Pink Make It Blue Backpack and Wallet RARE NWT",
+          "low": 800,
+          "high": 1500
+        },
+        {
+          "item": "Inside Out 2 Anxiety Cosplay Mini Backpack Exclusive LE 1000",
+          "low": 800,
+          "high": 1400
+        },
+        {
+          "item": "Disney Parks Mickey Mouse Main Attraction Series Loungefly",
+          "low": 800,
+          "high": 1300
+        },
+        {
+          "item": "Loungefly Disney Minnie Mouse Swarovski Crystal Mini Backpack LE 300",
+          "low": 800,
+          "high": 1000
+        },
+        {
+          "item": "Stitch Shoppe Alice in Wonderland Red Rose Crossbody Bag Purse",
+          "low": 700,
+          "high": 990
+        },
+        {
+          "item": "Wizard of Oz Dorothy Toto Cosplay Mini Backpack Exclusive Grail",
+          "low": 600,
+          "high": 961
+        },
+        {
+          "item": "Lumpy Heffalump and Roo Winnie The Pooh GRAIL NWT",
+          "low": 600,
+          "high": 900
+        },
+        {
+          "item": "Wizard of Oz Ruby Slippers Sequin Loungefly Exclusive Grail",
+          "low": 600,
+          "high": 850
+        },
+        {
+          "item": "Pete's Dragon Elliot Sequin Cosplay Exclusive Drop",
+          "low": 600,
+          "high": 850
+        },
+        {
+          "item": "Wizard of Oz Tin Man Cosplay Mini Backpack with Coin Purse",
+          "low": 600,
+          "high": 810
+        },
+        {
+          "item": "Mummy Book of the Living/Book of the Dead Universal",
+          "low": 500,
+          "high": 780
+        },
+        {
+          "item": "Jurassic Park T-Rex Light Up Escape Mini Backpack",
+          "low": 500,
+          "high": 748
+        },
+        {
+          "item": "Disney Princess Ariel Stained Glass Backpack and Ears Set LE 1000",
+          "low": 500,
+          "high": 710
+        },
+        {
+          "item": "Pixar Cars Vampire Mater Mini Backpack Limited Edition",
+          "low": 400,
+          "high": 700
+        },
+        {
+          "item": "Maleficent Dragon Sequin Light-Up Glow Backpack NWT Rare Grail",
+          "low": 500,
+          "high": 663
+        },
+        {
+          "item": "Wizard Of Oz 2023 NWT Never Released Mini Backpack",
+          "low": 450,
+          "high": 650
+        },
+        {
+          "item": "Peter Pan Nana Cosplay Mini Backpack Flocked NWT",
+          "low": 400,
+          "high": 650
+        },
+        {
+          "item": "Club 33 Disneyland Tiki Room Parrots Backpack with Ears",
+          "low": 450,
+          "high": 650
+        },
+        {
+          "item": "Club 33 Disneyland Letterman Jacket Varsity",
+          "low": 450,
+          "high": 650
+        },
+        {
+          "item": "Snow White Evil Queen Sequin Cosplay Mini Backpack & Wallet",
+          "low": 450,
+          "high": 629
+        },
+        {
+          "item": "Disney 101 Dalmatians Puppy Basket Mini Backpack 2021 Exclusive",
+          "low": 400,
+          "high": 570
+        },
+        {
+          "item": "Club 33 Compass WDW Disney Parks Loungefly Backpack",
+          "low": 450,
+          "high": 550
+        },
+        {
+          "item": "Labyrinth Ludo Ello Worm Bundle Loungefly",
+          "low": 400,
+          "high": 563
+        },
+        {
+          "item": "Stitch Shoppe Beauty and the Beast Rose Petal Crossbody Purse",
+          "low": 350,
+          "high": 480
+        },
+        {
+          "item": "Star Wars Cosplay Queen Amidala Padme Loungefly Backpack LE",
+          "low": 350,
+          "high": 480
+        },
+        {
+          "item": "Cinderella Fairy Godmother Backpack Wallet 2PC SET",
+          "low": 350,
+          "high": 480
+        },
+        {
+          "item": "Club 33 2026 Velvet Loungefly Backpack and Ears Set",
+          "low": 350,
+          "high": 475
+        },
+        {
+          "item": "Lion King Simba Debossed Black Satchel and Wallet",
+          "low": 350,
+          "high": 475
+        },
+        {
+          "item": "Belle Green Dress Reading Books Mrs Potts BATB",
+          "low": 350,
+          "high": 455
+        },
+        {
+          "item": "Club 33 Mini Backpack Blue/Gold 33 Emblem",
+          "low": 350,
+          "high": 450
+        },
+        {
+          "item": "Sleeping Beauty Aurora Pink Sequin Mini Backpack and Wallet",
+          "low": 350,
+          "high": 450
+        },
+        {
+          "item": "Rapunzel Sequin Glow Mini Backpack",
+          "low": 300,
+          "high": 450
+        },
+        {
+          "item": "Club 33 Blue Mosaic Loungefly Backpack",
+          "low": 300,
+          "high": 450
+        },
+        {
+          "item": "Monsters Inc Roz Cosplay Mini Backpack Exclusive",
+          "low": 300,
+          "high": 430
+        },
+        {
+          "item": "Pixar Finding Nemo Squirt Cosplay Mini Backpack SDCC",
+          "low": 300,
+          "high": 425
+        },
+        {
+          "item": "Beauty and the Beast Belle Library Mini Backpack HTF RARE",
+          "low": 300,
+          "high": 424
+        },
+        {
+          "item": "Coco Pepita Cosplay Glow in the Dark Mini Backpack",
+          "low": 300,
+          "high": 420
+        },
+        {
+          "item": "Mickey Mouse Haunted House Skeleton Dance Backpack & Wallet",
+          "low": 300,
+          "high": 410
+        },
+        {
+          "item": "Moana Tamatoa Bling Crab Cosplay Mini Backpack Rare",
+          "low": 300,
+          "high": 408
+        },
+        {
+          "item": "SDCC 2022 GITD Louis Princess and The Frog",
+          "low": 300,
+          "high": 401
+        },
+        {
+          "item": "Minnie MMA Peter Pan's Flight Sequin Mini Backpack",
+          "low": 300,
+          "high": 400
+        },
+        {
+          "item": "Hades Cosplay Mini Backpack & Keychain",
+          "low": 300,
+          "high": 400
+        },
+        {
+          "item": "Aerosmith Rock n Roller Coaster Backpack",
+          "low": 300,
+          "high": 400
+        },
+        {
+          "item": "Disney Clarabelle Cow Cosplay Mini Backpack Exclusive RARE",
+          "low": 300,
+          "high": 400
+        },
+        {
+          "item": "75th anniversary Club 33 Alice In Wonderland Tea Party",
+          "low": 300,
+          "high": 400
+        },
+        {
+          "item": "Disney Dumbo Mrs Jumbo Swivel Trunk Mini Backpack Grail",
+          "low": 400,
+          "high": 525
+        },
+        {
+          "item": "NBC Scary Teddy Undead Duck Mini Backpack Wallet Keychain",
+          "low": 350,
+          "high": 500
+        },
+        {
+          "item": "Universal Monsters Books Collection GITD Crossbody Wallet",
+          "low": 350,
+          "high": 499
+        },
+        {
+          "item": "Club 33 Haunted Mansion 55th Anniversary Backpack/Ears",
+          "low": 350,
+          "high": 500
+        },
+        {
+          "item": "Club 33 Enchanted Tiki Room Mini-Backpack Scented",
+          "low": 350,
+          "high": 490
+        },
+        {
+          "item": "Mickey & Minnie Perfect Picnic Scented Bundle",
+          "low": 350,
+          "high": 500
+        },
+        {
+          "item": "Dalmatians in a Basket Mini Backpack pet dogs bag",
+          "low": 400,
+          "high": 570
+        },
+        {
+          "item": "Stitch Shoppe figural-bag Snow White Apple / Cinderella Pumpkin Coach / Mary Poppins Carpet Bag / Haunted Mansion Wallpaper / Star Wars Death Star (other)",
+          "low": 300,
+          "high": 700
+        },
+        {
+          "item": "Convention LE drops (SDCC / NYCC / D23) Marvel/Star Wars/Disney Villains",
+          "low": 400,
+          "high": 900
+        },
+        {
+          "item": "Anniversary editions Hello Kitty 45th/50th, WDW 50th, Disneyland 65th/70th",
+          "low": 350,
+          "high": 700
+        },
+        {
+          "item": "Universal Monsters Bride of Frankenstein/Creature from Black Lagoon Cosplay",
+          "low": 400,
+          "high": 600
+        },
+        {
+          "item": "Beetlejuice Sandworm/Handbook Cosplay",
+          "low": 350,
+          "high": 550
+        },
+        {
+          "item": "Hocus Pocus Black Flame Candle/Binx House Cosplay",
+          "low": 350,
+          "high": 600
+        },
+        {
+          "item": "IT Pennywise Sewer Cosplay Light-Up Mini Backpack",
+          "low": 300,
+          "high": 500
+        },
+        {
+          "item": "Star Wars retired Cosplay (Boba Fett/Mandalorian Grogu/Ahsoka/Leia Hoth/Vader Lightsaber)",
+          "low": 300,
+          "high": 600
+        },
+        {
+          "item": "Marvel retired Cosplay (Loki TVA/WandaVision/Spider-Man Miles/Doctor Strange/Thor Mjolnir)",
+          "low": 300,
+          "high": 550
+        },
+        {
+          "item": "Sanrio premium (Hello Kitty Anniversary/My Melody Strawberry/Cinnamoroll Cloud)",
+          "low": 300,
+          "high": 550
+        },
+        {
+          "item": "Pokemon premium (Pikachu Light-Up/Eevee Sequin/Snorlax/Gengar GITD/Mewtwo)",
+          "low": 300,
+          "high": 500
+        },
+        {
+          "item": "Box Lunch / Hot Topic / Funko Shop exclusive Loungefly",
+          "low": 200,
+          "high": 550
+        },
+        {
+          "item": "Sequin / Light-Up / GITD generic-character Cosplay",
+          "low": 200,
+          "high": 700
+        },
+        {
+          "item": "Retired/exclusive Loungefly mini backpack (mid-tier)",
+          "low": 130,
+          "high": 400
+        },
+        {
+          "item": "Standard Loungefly licensed mini backpack",
+          "low": 60,
+          "high": 180
+        },
+        {
+          "item": "Loungefly wallet / crossbody (non-Stitch-Shoppe)",
+          "low": 30,
+          "high": 80
+        },
+        {
+          "item": "Used Loungefly good condition",
+          "low": 35,
+          "high": 100
+        }
+      ],
+      "target_buy_usd": {
+        "low": 5,
+        "high": 200
+      },
+      "platform_primary": "eBay",
+      "platform_secondary": "Mercari",
+      "comp_query_template": "loungefly {character} mini backpack",
+      "ship_class": "small_box",
+      "notes": "Loungefly market: $0.99-$4,000 sold range, avg $53.18, 7,035 sellers (Last 30 days). The category is bimodal: standard licensed mini backpacks $60-$180, but apex grail tier (Stitch Shoppe figural / Stained Glass series / Cosplay LE / Sequin Light-Up / Scented / Club 33 / Convention LE / Anniversary editions) consistently clears $300-$4,000. Top apex specimens: Mickey & Minnies Main Attraction 24-piece + 24 Ears FULL SET ($4,000), Belle Beauty and the Beast Stained Glass + Ears ($3,500), Sleeping Beauty Make-It-Pink-Make-It-Blue ($899-$1,500), Inside Out 2 Anxiety Cosplay LE 1000 ($1,400), Mickey Main Attraction Series ($1,300), Minnie Swarovski Crystal LE 300 ($1,000), Stitch Shoppe Alice Red Rose Crossbody ($990), Wizard of Oz Dorothy Toto Cosplay ($775-$961), Winnie the Pooh Lumpy Heffalump Roo GRAIL ($900). Auction listings often DON'T explicitly say 'Loungefly' — they just say 'Disney mini backpack' or 'Stitch backpack' or 'Marvel mini backpack' — the matcher catches BOTH explicit and implicit via character + 'mini backpack' alias combinations. Verify Loungefly logo on strap or interior tag — counterfeits exist.",
+      "condition_critical": true,
+      "_disqualifiers": [
+        "loungefly inspired",
+        "loungefly style",
+        "loungefly replica",
+        "loungefly counterfeit",
+        "loungefly fake",
+        "fits loungefly",
+        "loungefly sticker only",
+        "loungefly logo sticker",
+        "loungefly sticker pack",
+        "loungefly patch only",
+        "loungefly logo patch",
+        "loungefly keychain charm only",
+        "loungefly enamel pin only",
+        "loungefly pin only",
+        "loungefly wall art print",
+        "loungefly digital print",
+        "loungefly t-shirt only",
+        "loungefly hoodie only",
+        "loungefly mug only",
+        "loungefly poster only"
+      ]
+    },
+    {
+      "brand": "Vintage Transformers + GI Joe + Masters",
+      "category": "pop_culture_figure",
+      "tier": 2,
+      "models": [
+        "G1 Transformers",
+        "Generation 1 Transformers",
+        "Optimus Prime G1",
+        "Megatron G1",
+        "Transformers takara",
+        "Soundwave Transformers",
+        "Vintage GI Joe",
+        "GI Joe ARAH",
+        "GI Joe Real American Hero",
+        "Snake Eyes GI Joe",
+        "Cobra Commander",
+        "Masters of the Universe",
+        "MOTU",
+        "He-Man vintage",
+        "She-Ra vintage",
+        "MOTU Origins",
+        "MOTU Classics",
+        "Skeletor vintage",
+        "Castle Grayskull",
+        "Vintage Mego",
+        "Mego World's Greatest"
+      ],
+      "era_markers": [
+        "Hasbro stamping on Transformers (G1 = 1984-92)",
+        "Made in Japan stamp on G1 Transformers (Takara) = premium",
+        "Made in Hong Kong / Macau stamp on early G1",
+        "GI Joe ARAH (A Real American Hero) = 1982-94",
+        "MOTU (Masters of the Universe) = 1982-87 vintage",
+        "Mego = 1970s World's Greatest Superheroes line"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "G1 Optimus Prime / Megatron sealed",
+          "low": 700,
+          "high": 3000
+        },
+        {
+          "item": "G1 Transformers carded common",
+          "low": 80,
+          "high": 280
+        },
+        {
+          "item": "GI Joe ARAH carded vintage",
+          "low": 60,
+          "high": 350
+        },
+        {
+          "item": "MOTU vintage carded figure",
+          "low": 80,
+          "high": 300
+        },
+        {
+          "item": "Castle Grayskull complete",
+          "low": 130,
+          "high": 500
+        },
+        {
+          "item": "Mego World's Greatest carded",
+          "low": 130,
+          "high": 600
+        }
+      ],
+      "target_buy_usd": {
+        "low": 5,
+        "high": 100
+      },
+      "platform_primary": "eBay",
+      "platform_secondary": null,
+      "comp_query_template": "{line} {character} vintage",
+      "ship_class": "small_box",
+      "notes": "G1 Transformers (1984-92), GI Joe ARAH (1982-94), and Masters of the Universe (1982-87) are the core 1980s vintage toy collector markets. Carded / sealed figures + complete playsets are the resale champions. Authentication risk for high-end pieces (G1 Optimus Prime); verify die-cast vs all-plastic, accessories complete."
+    }
+  ],
+  "platform_notes": {
+    "eBay": "Dominant marketplace for all pop-culture collectibles. Use sold-listings filter — asking prices are commonly 2-3x what items actually clear at.",
+    "Mercari": "Funko Pops + Hot Wheels collector tier sell well at slight discount to eBay; lower fees offset.",
+    "Funko Europe": "Reference for Funko exclusivity / Chase status — useful for confirming whether a box was a limited release.",
+    "Imperial Gunnery / Star Wars Cards": "Reference databases for vintage Kenner Star Wars cardback identification + counterfeit detection."
+  }
+}

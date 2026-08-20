@@ -1,23 +1,46 @@
 const API_BASE = 'http://localhost:8000'
 
-export async function fetchLots({ category, status } = {}) {
+async function request(path, options = {}) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options,
+  })
+  if (!res.ok) throw new Error(`${options.method || 'GET'} ${path}: ${res.status}`)
+  return res.json()
+}
+
+export function fetchLots({ auctionId, status, roiStatus, boloOnly } = {}) {
   const params = new URLSearchParams()
-  if (category) params.set('category', category)
+  if (auctionId) params.set('auction_id', auctionId)
   if (status) params.set('status', status)
-
-  const res = await fetch(`${API_BASE}/lots?${params}`)
-  if (!res.ok) throw new Error(`Failed to fetch lots: ${res.status}`)
-  return res.json()
+  if (roiStatus) params.set('roi_status', roiStatus)
+  if (boloOnly) params.set('bolo_only', 'true')
+  return request(`/lots?${params}`)
 }
 
-export async function enrichLot(lotId) {
-  const res = await fetch(`${API_BASE}/lots/${lotId}/enrich`, { method: 'POST' })
-  if (!res.ok) throw new Error(`Failed to enrich lot: ${res.status}`)
-  return res.json()
+export function fetchLot(lotId) {
+  return request(`/lots/${lotId}`)
 }
 
-export async function fetchLot(lotId) {
-  const res = await fetch(`${API_BASE}/lots/${lotId}`)
-  if (!res.ok) throw new Error(`Failed to fetch lot: ${res.status}`)
-  return res.json()
+export function enrichLot(lotId) {
+  return request(`/lots/${lotId}/enrich`, { method: 'POST' })
+}
+
+export function fetchAuctions() {
+  return request('/auctions')
+}
+
+export function scanAuctions({ nationwide = false } = {}) {
+  return request('/auctions/scan', {
+    method: 'POST',
+    body: JSON.stringify({ include_nationwide: nationwide }),
+  })
+}
+
+export function importLots(auctionId) {
+  return request(`/auctions/${auctionId}/import`, { method: 'POST' })
+}
+
+export function enrichAll(auctionId) {
+  return request(`/auctions/${auctionId}/enrich-all`, { method: 'POST' })
 }

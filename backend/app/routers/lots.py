@@ -11,16 +11,27 @@ router = APIRouter(prefix="/lots", tags=["lots"])
 @router.get("", response_model=List[schemas.LotOut])
 def list_lots(
     category: Optional[str] = None,
-    status: Optional[str] = Query(None, description="pending | success | failed"),
-    limit: int = 100,
+    status: Optional[str] = Query(None, description="pending | queued | success | failed"),
+    auction_id: Optional[int] = None,
+    roi_status: Optional[str] = Query(None, description="GOLD MINE | PASS"),
+    bolo_only: bool = False,
+    limit: int = 200,
     offset: int = 0,
     db: Session = Depends(get_db),
 ):
     q = db.query(models.Lot).options(joinedload(models.Lot.enrichment))
     if category:
         q = q.filter(models.Lot.category == category)
+    if auction_id:
+        q = q.filter(models.Lot.auction_id == auction_id)
+    if status or roi_status or bolo_only:
+        q = q.join(models.Enrichment)
     if status:
-        q = q.join(models.Enrichment).filter(models.Enrichment.status == status)
+        q = q.filter(models.Enrichment.status == status)
+    if roi_status:
+        q = q.filter(models.Enrichment.roi_status == roi_status)
+    if bolo_only:
+        q = q.filter(models.Enrichment.bolo_brand.isnot(None))
     return q.offset(offset).limit(limit).all()
 
 
