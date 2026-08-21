@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { fetchLots, fetchAuctions, scanAuctions, importLots, enrichAll } from './api'
 import LotTable from './components/LotTable'
+import useMediaQuery from './useMediaQuery'
 
 export default function App() {
+  const isMobile = useMediaQuery('(max-width: 768px)')
   const [auctions, setAuctions] = useState([])
   const [selectedAuction, setSelectedAuction] = useState(null)
   const [lots, setLots] = useState([])
@@ -72,13 +74,48 @@ export default function App() {
   const hiddenCount = lots.length - visibleLots.length
 
   return (
-    <div style={{ padding: '2rem', fontFamily: 'system-ui' }}>
-      <h1>AuctionScout</h1>
+    <div style={{ padding: isMobile ? '0.75rem' : '2rem', fontFamily: 'system-ui' }}>
+      <h1 style={{ fontSize: isMobile ? 24 : undefined }}>AuctionScout</h1>
 
       <section style={{ marginBottom: '1.5rem' }}>
-        <button onClick={handleScan} disabled={!!busy}>Scan nearby auctions</button>
+        <button onClick={handleScan} disabled={!!busy}
+                style={isMobile ? { width: '100%', padding: 10, fontSize: 15 } : undefined}>
+          Scan nearby auctions
+        </button>
         {busy && <span style={{ marginLeft: '1rem' }}>{busy}</span>}
-        {auctions.length > 0 && (
+        {auctions.length > 0 && (isMobile ? (
+          <details style={{ marginTop: '0.75rem' }} open={!selectedAuction}>
+            <summary style={{ fontWeight: 600, padding: '4px 0' }}>
+              Auctions ({auctions.length})
+            </summary>
+            {auctions.map((a) => (
+              <div key={a.id} style={{
+                border: '1px solid #ddd', borderRadius: 8, padding: 10, marginTop: 8,
+                background: selectedAuction === a.id ? '#eef' : '#fff',
+              }}>
+                <div style={{ fontWeight: 600 }}>
+                  <a href={a.source_url} target="_blank" rel="noreferrer">{a.name}</a>
+                </div>
+                <div style={{ fontSize: 13, color: '#555', margin: '4px 0' }}>
+                  {a.city}, {a.state} · {a.lot_count ?? '—'} lots
+                  · closes {a.closing_date ? new Date(a.closing_date).toLocaleDateString() : '—'}
+                  {a.buyer_premium_mult ? ` · ${Math.round((a.buyer_premium_mult - 1) * 100)}% premium` : ''}
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button style={{ flex: 1, padding: 8 }} onClick={() => handleImport(a.id)} disabled={!!busy}>
+                    Import
+                  </button>
+                  {a.imported_at && (
+                    <>
+                      <button style={{ flex: 1, padding: 8 }} onClick={() => setSelectedAuction(a.id)}>View</button>
+                      <button style={{ flex: 1, padding: 8 }} onClick={() => handleEnrichAll(a.id)}>Enrich all</button>
+                    </>
+                  )}
+                </div>
+              </div>
+            ))}
+          </details>
+        ) : (
           <table style={{ marginTop: '0.75rem', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
@@ -112,7 +149,7 @@ export default function App() {
               ))}
             </tbody>
           </table>
-        )}
+        ))}
       </section>
 
       <section style={{ marginBottom: '0.75rem' }}>

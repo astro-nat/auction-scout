@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { enrichLot, inspectLot, fetchLot, patchEnrichment, enrichBatch } from '../api'
+import useMediaQuery from '../useMediaQuery'
 
 const cell = { padding: '4px 10px', borderBottom: '1px solid #ddd' }
 
@@ -100,7 +101,17 @@ function EditableCell({ display, rawValue, onSave, options, inputType = 'text', 
   )
 }
 
+// Mobile sort choices — a dropdown replaces click-to-sort headers on phones.
+const MOBILE_SORTS = [
+  { label: 'Sort: default', key: null, dir: 1 },
+  { label: 'Est Resale (high first)', key: 'est_resale', dir: -1 },
+  { label: 'Max Bid (high first)', key: 'max_bid', dir: -1 },
+  { label: 'Current Bid (low first)', key: 'bid', dir: 1 },
+  { label: 'Est Cost (low first)', key: 'est_cost', dir: 1 },
+]
+
 export default function LotTable({ lots, onLotUpdated, onRefresh }) {
+  const isMobile = useMediaQuery('(max-width: 768px)')
   const [pollingIds, setPollingIds] = useState(new Set())
   const [sort, setSort] = useState({ key: null, dir: 1 })
   const [colFilters, setColFilters] = useState({})
@@ -213,6 +224,93 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
   const enrichableCount = sorted.filter(
     (l) => !['success', 'queued'].includes(l.enrichment?.status)
   ).length
+
+  if (isMobile) {
+    return (
+      <>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+          <input
+            value={colFilters.title ?? ''}
+            onChange={(ev) => setFilter('title', ev.target.value)}
+            placeholder="Search lots…"
+            style={{ flex: '1 1 100%', padding: 8, fontSize: 16 }}
+          />
+          <select
+            value={colFilters.category ?? ''}
+            onChange={(ev) => setFilter('category', ev.target.value)}
+            style={{ flex: 1, padding: 6, fontSize: 14, maxWidth: '48%' }}
+          >
+            <option value="">All categories</option>
+            {(distinctValues.category ?? []).map((v) => <option key={v} value={v}>{v}</option>)}
+          </select>
+          <select
+            value={MOBILE_SORTS.findIndex((s) => s.key === sort.key && s.dir === sort.dir)}
+            onChange={(ev) => {
+              const s = MOBILE_SORTS[Number(ev.target.value)] ?? MOBILE_SORTS[0]
+              setSort({ key: s.key, dir: s.dir })
+            }}
+            style={{ flex: 1, padding: 6, fontSize: 14, maxWidth: '48%' }}
+          >
+            {MOBILE_SORTS.map((s, i) => <option key={s.label} value={i}>{s.label}</option>)}
+          </select>
+          <button onClick={handleEnrichVisible} disabled={!enrichableCount}
+                  style={{ flex: '1 1 100%', padding: 10, fontSize: 15 }}>
+            Enrich visible ({enrichableCount})
+          </button>
+          {batchPolling && <span style={{ flexBasis: '100%' }}>enriching… refreshes every 5s</span>}
+        </div>
+        {sorted.map((lot) => {
+          const e = lot.enrichment || {}
+          const gold = e.roi_status === 'GOLD MINE'
+          return (
+            <div key={lot.lot_id} style={{
+              border: '1px solid #ddd', borderRadius: 8, padding: 10, marginBottom: 10,
+              background: gold ? '#e6ffe6' : '#fff',
+            }}>
+              <div style={{ fontWeight: 600 }}>
+                <a href={lot.lot_link} target="_blank" rel="noreferrer">{lot.title}</a>
+              </div>
+              {e.enriched_title && e.enriched_title !== lot.title && (
+                <div style={{ color: '#666', fontSize: 13 }}>→ {e.enriched_title}</div>
+              )}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', fontSize: 14, margin: '6px 0' }}>
+                <span>Bid {money(lot.current_bid)} / {money(lot.next_bid)}</span>
+                <span>Cost {money(lot.est_cost)}</span>
+                <span>Resale {money(e.est_resale)}{e.comp_count > 0 ? ` (${e.comp_count})` : ''}</span>
+                <span>Max bid {money(e.max_bid)}</span>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, fontSize: 12, marginBottom: 6 }}>
+                <span style={{ background: '#eee', borderRadius: 4, padding: '2px 6px' }}>{lot.logistics_ease}</span>
+                {e.bolo_brand && (
+                  <span style={{ background: '#ffe9b3', borderRadius: 4, padding: '2px 6px' }}>
+                    BOLO: {e.bolo_brand} T{e.bolo_tier ?? '?'}
+                  </span>
+                )}
+                {e.verdict && (
+                  <span style={{ background: '#eee', borderRadius: 4, padding: '2px 6px' }}>
+                    {gold ? '🟢' : e.roi_status === 'PASS' ? '🔴' : ''} {e.verdict}
+                  </span>
+                )}
+                <span style={{ background: '#eee', borderRadius: 4, padding: '2px 6px' }}>
+                  {pollingIds.has(lot.lot_id) ? 'enriching…' : e.status}
+                </span>
+              </div>
+              {e.notes && e.ai_source === 'vision-itemized' && (
+                <details style={{ fontSize: 12, color: '#444', marginBottom: 6 }}>
+                  <summary>itemized breakdown</summary>
+                  <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{e.notes}</pre>
+                </details>
+              )}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button style={{ flex: 1, padding: 8 }} onClick={() => handleEnrich(lot.lot_id)}>Enrich</button>
+                <button style={{ flex: 1, padding: 8 }} onClick={() => handleInspect(lot.lot_id)}>Inspect</button>
+              </div>
+            </div>
+          )
+        })}
+      </>
+    )
+  }
 
   return (
     <>
