@@ -66,11 +66,15 @@ export default function App() {
     )
   }
 
-  const visibleLots = lots.filter((l) => {
-    if (hideLowValue && isConfirmedLowValue(l)) return false
-    if (hideHardShip && l.logistics_ease === 'HARD') return false
-    return true
-  })
+  // Stamp each lot with its auction's name so the table can show/filter it.
+  const auctionNames = Object.fromEntries(auctions.map((a) => [a.id, a.name]))
+  const visibleLots = lots
+    .filter((l) => {
+      if (hideLowValue && isConfirmedLowValue(l)) return false
+      if (hideHardShip && l.logistics_ease === 'HARD') return false
+      return true
+    })
+    .map((l) => ({ ...l, auction_name: auctionNames[l.auction_id] ?? '—' }))
   const hiddenCount = lots.length - visibleLots.length
 
   return (
