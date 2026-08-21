@@ -1,5 +1,7 @@
 # AuctionScout
 
+<!-- deployed via Railway auto-deploy since 2026-08-21 -->
+
 Auction-lot sourcing for resellers: scrapes live HiBid auctions, matches lots
 against a curated BOLO (be-on-lookout) brand database, enriches them with
 Claude (text + vision), prices them against real eBay comps, and grades every
