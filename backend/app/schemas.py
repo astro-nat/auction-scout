@@ -101,7 +101,12 @@ class EnrichBatchRequest(BaseModel):
 
 
 class ScanRequest(BaseModel):
+    """Mirrors hibid.com's own search filters."""
     zip: Optional[str] = None
-    radius_miles: Optional[int] = None
+    radius_miles: Optional[int] = None      # -1 = Anywhere (HiBid's option)
     closing_within_days: Optional[int] = None
     include_nationwide: bool = False
+    search_text: str = ""
+    category_id: int = -1                   # from GET /auctions/categories
+    auction_type: str = "ALL"               # ALL | ONLINE | WEBCAST | ABSENTEE | LISTING
+    status: str = "OPEN"                    # OPEN | CLOSING | HOT | CLOSED | ALL

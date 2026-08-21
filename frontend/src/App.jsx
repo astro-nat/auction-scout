@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { fetchLots, fetchAuctions, scanAuctions, importLots, enrichAll } from './api'
+import { fetchLots, fetchAuctions, fetchCategories, scanAuctions, importLots, enrichAll } from './api'
 import LotTable from './components/LotTable'
 import useMediaQuery from './useMediaQuery'
 
@@ -13,6 +13,12 @@ export default function App() {
   const [lowValueCutoff, setLowValueCutoff] = useState(25)
   const [hideHardShip, setHideHardShip] = useState(false)
   const [busy, setBusy] = useState('')
+  // Scan filters — mirrors hibid.com's own search options
+  const [categories, setCategories] = useState([])
+  const [scan, setScan] = useState({
+    search_text: '', category_id: -1, auction_type: 'ALL',
+    status: 'OPEN', zip: '', radius_miles: 25,
+  })
 
   const loadLots = useCallback(() => {
     fetchLots({
@@ -23,14 +29,24 @@ export default function App() {
   }, [selectedAuction, filters])
 
   useEffect(() => { fetchAuctions().then(setAuctions).catch(console.error) }, [])
+  useEffect(() => { fetchCategories().then(setCategories).catch(console.error) }, [])
   useEffect(() => { loadLots() }, [loadLots])
 
   async function handleScan() {
-    setBusy('Scanning HiBid for nearby auctions…')
+    setBusy('Scanning HiBid…')
     try {
-      const found = await scanAuctions()
+      const found = await scanAuctions({
+        ...scan,
+        zip: scan.zip || undefined,
+        category_id: Number(scan.category_id),
+        radius_miles: Number(scan.radius_miles),
+      })
       setAuctions(found)
     } catch (e) { alert(e.message) } finally { setBusy('') }
+  }
+
+  function setScanField(field, value) {
+    setScan((prev) => ({ ...prev, [field]: value }))
   }
 
   async function handleImport(auctionId) {
@@ -82,9 +98,52 @@ export default function App() {
       <h1 style={{ fontSize: isMobile ? 24 : undefined }}>AuctionScout</h1>
 
       <section style={{ marginBottom: '1.5rem' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+          <input
+            value={scan.search_text}
+            onChange={(ev) => setScanField('search_text', ev.target.value)}
+            placeholder="Keyword (auction name/content)…"
+            style={{ flex: isMobile ? '1 1 100%' : '1 1 240px', padding: 6, fontSize: 14 }}
+          />
+          <select value={scan.category_id} onChange={(ev) => setScanField('category_id', ev.target.value)}
+                  style={{ flex: 1, padding: 6, fontSize: 14, minWidth: 140 }}>
+            <option value={-1}>All categories</option>
+            {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <select value={scan.auction_type} onChange={(ev) => setScanField('auction_type', ev.target.value)}
+                  style={{ flex: 1, padding: 6, fontSize: 14, minWidth: 120 }}>
+            <option value="ALL">All auction types</option>
+            <option value="ONLINE">Online Only</option>
+            <option value="WEBCAST">Live Webcast</option>
+            <option value="ABSENTEE">Absentee</option>
+            <option value="LISTING">Listing Only</option>
+          </select>
+          <select value={scan.status} onChange={(ev) => setScanField('status', ev.target.value)}
+                  style={{ flex: 1, padding: 6, fontSize: 14, minWidth: 110 }}>
+            <option value="OPEN">Open</option>
+            <option value="CLOSING">Closing soon</option>
+            <option value="HOT">Hot</option>
+            <option value="ALL">Any status</option>
+          </select>
+          <input
+            value={scan.zip}
+            onChange={(ev) => setScanField('zip', ev.target.value)}
+            placeholder="Zip (default 77058)"
+            style={{ flex: 1, padding: 6, fontSize: 14, minWidth: 100, maxWidth: 150 }}
+          />
+          <select value={scan.radius_miles} onChange={(ev) => setScanField('radius_miles', ev.target.value)}
+                  style={{ flex: 1, padding: 6, fontSize: 14, minWidth: 100, maxWidth: 130 }}>
+            <option value={25}>25 miles</option>
+            <option value={50}>50 miles</option>
+            <option value={100}>100 miles</option>
+            <option value={250}>250 miles</option>
+            <option value={500}>500 miles</option>
+            <option value={-1}>Anywhere</option>
+          </select>
+        </div>
         <button onClick={handleScan} disabled={!!busy}
                 style={isMobile ? { width: '100%', padding: 10, fontSize: 15 } : undefined}>
-          Scan nearby auctions
+          Scan auctions
         </button>
         {busy && <span style={{ marginLeft: '1rem' }}>{busy}</span>}
         {auctions.length > 0 && (isMobile ? (

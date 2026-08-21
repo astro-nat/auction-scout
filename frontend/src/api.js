@@ -52,10 +52,14 @@ export function fetchAuctions() {
   return request('/auctions')
 }
 
-export function scanAuctions({ nationwide = false } = {}) {
+export function fetchCategories() {
+  return request('/auctions/categories')
+}
+
+export function scanAuctions(filters = {}) {
   return request('/auctions/scan', {
     method: 'POST',
-    body: JSON.stringify({ include_nationwide: nationwide }),
+    body: JSON.stringify(filters),
   })
 }
 

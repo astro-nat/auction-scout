@@ -42,6 +42,32 @@ HEADERS = {
     "Referer": "https://hibid.com/",
 }
 
+# HiBid's filter vocabulary — probed against the live auctionMap endpoint
+# (their UI shows more statuses, but these are what this query accepts).
+AUCTION_TYPES = {"ALL", "ONLINE", "WEBCAST", "ABSENTEE", "LISTING"}
+STATUSES = {"ALL", "OPEN", "CLOSING", "HOT", "CLOSED"}
+
+CATEGORY_TREE_QUERY = """
+query { categoryTree(input: {}) { id categoryName children { id categoryName } } }
+"""
+
+_category_cache: list | None = None
+
+
+async def fetch_categories() -> list[dict]:
+    """HiBid's top-level category tree (17 categories), cached per process."""
+    global _category_cache
+    if _category_cache is not None:
+        return _category_cache
+    async with httpx.AsyncClient() as client:
+        data = await _graphql(client, None, CATEGORY_TREE_QUERY, {})
+    _category_cache = [
+        {"id": c["id"], "name": c["categoryName"]}
+        for c in data.get("categoryTree") or []
+    ]
+    return _category_cache
+
+
 AUCTION_MAP_QUERY = """
 query AuctionMap($zip: String, $miles: Int, $searchText: String, $categoryId: CategoryId, $filter: AuctionLotFilter, $status: AuctionLotStatus, $eventIds: [Int!] = null) {
   auctionMap(
@@ -144,25 +170,36 @@ def _parse_event_end(auction: dict) -> Optional[datetime]:
 async def discover_auctions(zip_code: str | None = None,
                             radius_miles: int | None = None,
                             closing_within_days: int | None = None,
-                            include_nationwide: bool = False) -> list[dict]:
-    """Find OPEN auctions near a zip (plus optionally shippable nationwide ones).
+                            include_nationwide: bool = False,
+                            search_text: str = "",
+                            category_id: int = -1,
+                            auction_type: str = "ALL",
+                            status: str = "OPEN") -> list[dict]:
+    """Find auctions matching HiBid's own search filters (keyword, category,
+    auction type, status) near a zip — or anywhere with radius_miles=-1.
     Returns a list of auction dicts ready to persist."""
     zip_code = zip_code or config.SOURCING_ZIP
     radius_miles = radius_miles if radius_miles is not None else config.SOURCING_RADIUS_MILES
     closing_within = closing_within_days if closing_within_days is not None else config.CLOSING_WITHIN_DAYS
+    auction_type = auction_type if auction_type in AUCTION_TYPES else "ALL"
+    status = status if status in STATUSES else "OPEN"
 
     async with httpx.AsyncClient() as client:
-        calls = [("local", {"zip": zip_code, "miles": radius_miles})]
-        if include_nationwide:
-            calls.append(("nationwide", {"zip": "", "miles": 0}))
+        if radius_miles == -1:  # HiBid's "Anywhere"
+            calls = [("nationwide", {"zip": "", "miles": 0})]
+        else:
+            calls = [("local", {"zip": zip_code, "miles": radius_miles})]
+            if include_nationwide:
+                calls.append(("nationwide", {"zip": "", "miles": 0}))
 
         results: list[dict] = []
         seen_ids: set[int] = set()
         cutoff = datetime.now() + timedelta(days=closing_within)
 
         for source_tag, geo in calls:
-            variables = {**geo, "searchText": "", "categoryId": -1,
-                         "filter": "ALL", "status": "OPEN", "eventIds": None}
+            variables = {**geo, "searchText": search_text or "",
+                         "categoryId": category_id if category_id else -1,
+                         "filter": auction_type, "status": status, "eventIds": None}
             data = await _graphql(client, "AuctionMap", AUCTION_MAP_QUERY, variables)
             markers = (data.get("auctionMap") or {}).get("mapMarkers") or []
             for marker in markers:

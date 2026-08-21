@@ -26,6 +26,12 @@ def list_auctions(db: Session = Depends(get_db)):
     return db.query(models.Auction).order_by(models.Auction.closing_date).all()
 
 
+@router.get("/categories")
+async def list_categories():
+    """HiBid's top-level category tree, for the scan filter dropdown."""
+    return await hibid.fetch_categories()
+
+
 @router.post("/scan", response_model=List[schemas.AuctionOut])
 async def scan_auctions(payload: schemas.ScanRequest, db: Session = Depends(get_db)):
     """Discover open auctions near the configured zip and store them."""
@@ -34,6 +40,10 @@ async def scan_auctions(payload: schemas.ScanRequest, db: Session = Depends(get_
         radius_miles=payload.radius_miles,
         closing_within_days=payload.closing_within_days,
         include_nationwide=payload.include_nationwide,
+        search_text=payload.search_text,
+        category_id=payload.category_id,
+        auction_type=payload.auction_type,
+        status=payload.status,
     )
     stored = []
     for a in found:
