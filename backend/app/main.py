@@ -1,3 +1,5 @@
+import time
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -8,7 +10,18 @@ from .routers import lots, enrichment, auctions
 # Dev convenience only — creates tables from models if they don't exist.
 # Once this is a real app with data you care about, replace this with Alembic
 # migrations instead of letting SQLAlchemy auto-create/alter tables.
-Base.metadata.create_all(bind=engine)
+# Retried because managed Postgres (Railway etc.) can take a few seconds to
+# accept connections at deploy time — crashing on the first refusal means an
+# endless crash-loop that looks like a broken deploy.
+for attempt in range(10):
+    try:
+        Base.metadata.create_all(bind=engine)
+        break
+    except Exception as exc:  # noqa: BLE001
+        if attempt == 9:
+            raise
+        print(f"Database not ready (attempt {attempt + 1}/10): {exc}")
+        time.sleep(3)
 
 app = FastAPI(title="AuctionScout")
 
