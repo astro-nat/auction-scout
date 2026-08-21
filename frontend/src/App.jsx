@@ -90,13 +90,13 @@ export default function App() {
             </summary>
             {auctions.map((a) => (
               <div key={a.id} style={{
-                border: '1px solid #ddd', borderRadius: 8, padding: 10, marginTop: 8,
-                background: selectedAuction === a.id ? '#eef' : '#fff',
+                border: '1px solid var(--border)', borderRadius: 8, padding: 10, marginTop: 8,
+                background: selectedAuction === a.id ? 'var(--highlight)' : 'var(--card-bg)',
               }}>
                 <div style={{ fontWeight: 600 }}>
                   <a href={a.source_url} target="_blank" rel="noreferrer">{a.name}</a>
                 </div>
-                <div style={{ fontSize: 13, color: '#555', margin: '4px 0' }}>
+                <div style={{ fontSize: 13, color: 'var(--muted)', margin: '4px 0' }}>
                   {a.city}, {a.state} · {a.lot_count ?? '—'} lots
                   · closes {a.closing_date ? new Date(a.closing_date).toLocaleDateString() : '—'}
                   {a.buyer_premium_mult ? ` · ${Math.round((a.buyer_premium_mult - 1) * 100)}% premium` : ''}
@@ -126,7 +126,7 @@ export default function App() {
             </thead>
             <tbody>
               {auctions.map((a) => (
-                <tr key={a.id} style={{ background: selectedAuction === a.id ? '#eef' : undefined }}>
+                <tr key={a.id} style={{ background: selectedAuction === a.id ? 'var(--highlight)' : undefined }}>
                   <td style={{ paddingRight: 12 }}>
                     <a href={a.source_url} target="_blank" rel="noreferrer">{a.name}</a>
                   </td>
@@ -189,7 +189,7 @@ export default function App() {
           /> Hide HARD ship
         </label>
         {(hideLowValue || hideHardShip) && hiddenCount > 0 && (
-          <span style={{ marginLeft: '0.5rem', color: '#666' }}>
+          <span style={{ marginLeft: '0.5rem', color: 'var(--muted)' }}>
             {hiddenCount} hidden
           </span>
         )}

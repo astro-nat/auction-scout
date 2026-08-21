@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { enrichLot, inspectLot, fetchLot, patchEnrichment, enrichBatch } from '../api'
 import useMediaQuery from '../useMediaQuery'
 
-const cell = { padding: '4px 10px', borderBottom: '1px solid #ddd' }
+const cell = { padding: '4px 10px', borderBottom: '1px solid var(--border)' }
 
 const VERDICTS = [
   'broken, damaged, or for parts',
@@ -94,7 +94,7 @@ function EditableCell({ display, rawValue, onSave, options, inputType = 'text', 
     <span
       onClick={start}
       title="Click to correct — your value is remembered and won't be overwritten"
-      style={{ cursor: 'pointer', borderBottom: '1px dashed #bbb' }}
+      style={{ cursor: 'pointer', borderBottom: '1px dashed var(--muted)' }}
     >
       {display}{edited ? ' ✎' : ''}
     </span>
@@ -264,14 +264,14 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
           const gold = e.roi_status === 'GOLD MINE'
           return (
             <div key={lot.lot_id} style={{
-              border: '1px solid #ddd', borderRadius: 8, padding: 10, marginBottom: 10,
-              background: gold ? '#e6ffe6' : '#fff',
+              border: '1px solid var(--border)', borderRadius: 8, padding: 10, marginBottom: 10,
+              background: gold ? 'var(--gold-bg)' : 'var(--card-bg)',
             }}>
               <div style={{ fontWeight: 600 }}>
                 <a href={lot.lot_link} target="_blank" rel="noreferrer">{lot.title}</a>
               </div>
               {e.enriched_title && e.enriched_title !== lot.title && (
-                <div style={{ color: '#666', fontSize: 13 }}>→ {e.enriched_title}</div>
+                <div style={{ color: 'var(--muted)', fontSize: 13 }}>→ {e.enriched_title}</div>
               )}
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', fontSize: 14, margin: '6px 0' }}>
                 <span>Bid {money(lot.current_bid)} / {money(lot.next_bid)}</span>
@@ -280,23 +280,23 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
                 <span>Max bid {money(e.max_bid)}</span>
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, fontSize: 12, marginBottom: 6 }}>
-                <span style={{ background: '#eee', borderRadius: 4, padding: '2px 6px' }}>{lot.logistics_ease}</span>
+                <span style={{ background: 'var(--badge-bg)', borderRadius: 4, padding: '2px 6px' }}>{lot.logistics_ease}</span>
                 {e.bolo_brand && (
-                  <span style={{ background: '#ffe9b3', borderRadius: 4, padding: '2px 6px' }}>
+                  <span style={{ background: 'var(--bolo-bg)', borderRadius: 4, padding: '2px 6px' }}>
                     BOLO: {e.bolo_brand} T{e.bolo_tier ?? '?'}
                   </span>
                 )}
                 {e.verdict && (
-                  <span style={{ background: '#eee', borderRadius: 4, padding: '2px 6px' }}>
+                  <span style={{ background: 'var(--badge-bg)', borderRadius: 4, padding: '2px 6px' }}>
                     {gold ? '🟢' : e.roi_status === 'PASS' ? '🔴' : ''} {e.verdict}
                   </span>
                 )}
-                <span style={{ background: '#eee', borderRadius: 4, padding: '2px 6px' }}>
+                <span style={{ background: 'var(--badge-bg)', borderRadius: 4, padding: '2px 6px' }}>
                   {pollingIds.has(lot.lot_id) ? 'enriching…' : e.status}
                 </span>
               </div>
               {e.notes && e.ai_source === 'vision-itemized' && (
-                <details style={{ fontSize: 12, color: '#444', marginBottom: 6 }}>
+                <details style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>
                   <summary>itemized breakdown</summary>
                   <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{e.notes}</pre>
                 </details>
@@ -373,10 +373,10 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
           const gold = e.roi_status === 'GOLD MINE'
           const edited = new Set(e.user_overrides || [])
           return (
-            <tr key={lot.lot_id} style={gold ? { background: '#e6ffe6' } : undefined}>
+            <tr key={lot.lot_id} style={gold ? { background: 'var(--gold-bg)' } : undefined}>
               <td style={cell}>
                 <a href={lot.lot_link} target="_blank" rel="noreferrer">{lot.title}</a>
-                <div style={{ color: '#666', fontSize: 12 }}>
+                <div style={{ color: 'var(--muted)', fontSize: 12 }}>
                   →{' '}
                   <EditableCell
                     display={e.enriched_title || '(no enriched title)'}
@@ -386,7 +386,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
                   />
                 </div>
                 {e.notes && e.ai_source === 'vision-itemized' && (
-                  <details style={{ fontSize: 12, color: '#444' }}>
+                  <details style={{ fontSize: 12, color: 'var(--muted)' }}>
                     <summary>itemized breakdown</summary>
                     <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{e.notes}</pre>
                   </details>
@@ -421,7 +421,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
                   onSave={(v) => handleCorrect(lot.lot_id, 'est_resale', v)}
                 />
                 {e.comp_count > 0 && (
-                  <span style={{ color: '#666', fontSize: 12 }}> ({e.comp_count})</span>
+                  <span style={{ color: 'var(--muted)', fontSize: 12 }}> ({e.comp_count})</span>
                 )}
               </td>
               <td style={cell}>{money(e.max_bid)}</td>
@@ -438,7 +438,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
               <td style={cell}>
                 {pollingIds.has(lot.lot_id) ? 'enriching…' : e.status}
                 {e.status === 'failed' && e.error_message && (
-                  <div style={{ color: '#a00', fontSize: 12 }}>{e.error_message.slice(0, 80)}</div>
+                  <div style={{ color: 'var(--error)', fontSize: 12 }}>{e.error_message.slice(0, 80)}</div>
                 )}
               </td>
               <td style={{ ...cell, whiteSpace: 'nowrap' }}>
