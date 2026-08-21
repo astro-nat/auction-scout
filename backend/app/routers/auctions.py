@@ -23,7 +23,24 @@ router = APIRouter(prefix="/auctions", tags=["auctions"])
 
 @router.get("", response_model=List[schemas.AuctionOut])
 def list_auctions(db: Session = Depends(get_db)):
-    return db.query(models.Auction).order_by(models.Auction.closing_date).all()
+    """All known auctions, each annotated with its gold-mine tally: how many
+    enriched lots are GOLD MINEs and their summed potential profit."""
+    from sqlalchemy import func
+    auctions = db.query(models.Auction).order_by(models.Auction.closing_date).all()
+    gold = dict()
+    rows = (
+        db.query(models.Lot.auction_id, func.count(models.Enrichment.id),
+                 func.coalesce(func.sum(models.Enrichment.profit), 0))
+        .join(models.Enrichment, models.Enrichment.lot_id == models.Lot.id)
+        .filter(models.Enrichment.roi_status == "GOLD MINE")
+        .group_by(models.Lot.auction_id)
+        .all()
+    )
+    for auction_id, count, profit in rows:
+        gold[auction_id] = (count, profit)
+    for a in auctions:
+        a.gold_count, a.gold_profit = gold.get(a.id, (0, 0))
+    return auctions
 
 
 @router.get("/categories")

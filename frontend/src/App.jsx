@@ -82,6 +82,13 @@ export default function App() {
     )
   }
 
+  // An auction is "hot" when its gold-mine lots add up to real money.
+  const isHotAuction = (a) => Number(a.gold_profit ?? 0) >= 100
+  const goldBadge = (a) =>
+    a.gold_count > 0
+      ? `🟢 ${a.gold_count} gold · ~$${Number(a.gold_profit).toFixed(0)} potential profit`
+      : null
+
   // Stamp each lot with its auction's name so the table can show/filter it.
   const auctionNames = Object.fromEntries(auctions.map((a) => [a.id, a.name]))
   const visibleLots = lots
@@ -153,8 +160,10 @@ export default function App() {
             </summary>
             {auctions.map((a) => (
               <div key={a.id} style={{
-                border: '1px solid var(--border)', borderRadius: 8, padding: 10, marginTop: 8,
-                background: selectedAuction === a.id ? 'var(--highlight)' : 'var(--card-bg)',
+                border: isHotAuction(a) ? '2px solid #2e9e4f' : '1px solid var(--border)',
+                borderRadius: 8, padding: 10, marginTop: 8,
+                background: isHotAuction(a) ? 'var(--gold-bg)'
+                  : selectedAuction === a.id ? 'var(--highlight)' : 'var(--card-bg)',
               }}>
                 <div style={{ fontWeight: 600 }}>
                   <a href={a.source_url} target="_blank" rel="noreferrer">{a.name}</a>
@@ -164,6 +173,9 @@ export default function App() {
                   · closes {a.closing_date ? new Date(a.closing_date).toLocaleDateString() : '—'}
                   {a.buyer_premium_mult ? ` · ${Math.round((a.buyer_premium_mult - 1) * 100)}% premium` : ''}
                 </div>
+                {goldBadge(a) && (
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{goldBadge(a)}</div>
+                )}
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button style={{ flex: 1, padding: 8 }} onClick={() => handleImport(a.id)} disabled={!!busy}>
                     Import
@@ -189,9 +201,15 @@ export default function App() {
             </thead>
             <tbody>
               {auctions.map((a) => (
-                <tr key={a.id} style={{ background: selectedAuction === a.id ? 'var(--highlight)' : undefined }}>
+                <tr key={a.id} style={{
+                  background: isHotAuction(a) ? 'var(--gold-bg)'
+                    : selectedAuction === a.id ? 'var(--highlight)' : undefined,
+                }}>
                   <td style={{ paddingRight: 12 }}>
                     <a href={a.source_url} target="_blank" rel="noreferrer">{a.name}</a>
+                    {goldBadge(a) && (
+                      <div style={{ fontSize: 12, fontWeight: 600 }}>{goldBadge(a)}</div>
+                    )}
                   </td>
                   <td style={{ paddingRight: 12 }}>{a.city}, {a.state} ({a.source})</td>
                   <td style={{ textAlign: 'center' }}>{a.lot_count ?? '—'}</td>

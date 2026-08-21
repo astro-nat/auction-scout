@@ -15,7 +15,7 @@ def list_lots(
     auction_id: Optional[int] = None,
     roi_status: Optional[str] = Query(None, description="GOLD MINE | PASS"),
     bolo_only: bool = False,
-    limit: int = 200,
+    limit: int = 2000,
     offset: int = 0,
     db: Session = Depends(get_db),
 ):

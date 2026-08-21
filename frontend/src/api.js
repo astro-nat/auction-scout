@@ -15,6 +15,7 @@ async function request(path, options = {}) {
 
 export function fetchLots({ auctionId, status, roiStatus, boloOnly } = {}) {
   const params = new URLSearchParams()
+  params.set('limit', '2000')
   if (auctionId) params.set('auction_id', auctionId)
   if (status) params.set('status', status)
   if (roiStatus) params.set('roi_status', roiStatus)

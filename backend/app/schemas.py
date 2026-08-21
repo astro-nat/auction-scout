@@ -94,6 +94,8 @@ class AuctionOut(BaseModel):
     closing_date: Optional[datetime] = None
     buyer_premium_mult: Optional[float] = None
     imported_at: Optional[datetime] = None
+    gold_count: int = 0                       # GOLD MINE lots found so far
+    gold_profit: Optional[Decimal] = None     # summed potential profit of those lots
 
 
 class EnrichBatchRequest(BaseModel):

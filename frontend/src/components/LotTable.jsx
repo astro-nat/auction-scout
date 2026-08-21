@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { enrichLot, inspectLot, fetchLot, patchEnrichment, enrichBatch } from '../api'
 import useMediaQuery from '../useMediaQuery'
 
@@ -116,27 +116,21 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
   const [pollingIds, setPollingIds] = useState(new Set())
   const [sort, setSort] = useState({ key: null, dir: 1 })
   const [colFilters, setColFilters] = useState({})
-  const [batchPolling, setBatchPolling] = useState(false)
-  const seenQueued = useRef(false)
 
-  // While a batch is running, refresh the whole table every 5s; stop once
-  // the queue drains (we've seen queued lots, and now there are none).
+  // Whenever ANY lot is queued — no matter which client or button started the
+  // batch — refresh the table every 5s until the queue drains, so background
+  // work is always visibly progressing.
+  const anyQueued = lots.some((l) => l.enrichment?.status === 'queued')
   useEffect(() => {
-    if (!batchPolling || !onRefresh) return
+    if (!anyQueued || !onRefresh) return
     const interval = setInterval(onRefresh, 5000)
     return () => clearInterval(interval)
-  }, [batchPolling, onRefresh])
+  }, [anyQueued, onRefresh])
 
-  useEffect(() => {
-    if (!batchPolling) return
-    const anyQueued = lots.some((l) => l.enrichment?.status === 'queued')
-    if (anyQueued) {
-      seenQueued.current = true
-    } else if (seenQueued.current) {
-      setBatchPolling(false)
-      seenQueued.current = false
-    }
-  }, [lots, batchPolling])
+  // A lot is "working" when the server has it queued or this client just
+  // kicked it off and is polling for the result.
+  const isWorking = (lot) =>
+    lot.enrichment?.status === 'queued' || pollingIds.has(lot.lot_id)
 
   const distinctValues = useMemo(() => {
     const out = {}
@@ -214,8 +208,6 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
       .map((l) => l.lot_id)
     if (!ids.length) return
     const r = await enrichBatch(ids)
-    seenQueued.current = false
-    setBatchPolling(true)
     onRefresh?.()
     alert(`Queued ${r.queued} visible lots — top of the table first`)
   }
@@ -258,7 +250,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
                   style={{ flex: '1 1 100%', padding: 10, fontSize: 15 }}>
             Enrich visible ({enrichableCount})
           </button>
-          {batchPolling && <span style={{ flexBasis: '100%' }}>enriching… refreshes every 5s</span>}
+          {anyQueued && <span style={{ flexBasis: '100%' }}><span className="spinner" />enriching in the background… auto-refreshing</span>}
         </div>
         {sorted.map((lot) => {
           const e = lot.enrichment || {}
@@ -294,7 +286,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
                   </span>
                 )}
                 <span style={{ background: 'var(--badge-bg)', borderRadius: 4, padding: '2px 6px' }}>
-                  {pollingIds.has(lot.lot_id) ? 'enriching…' : e.status}
+                  {isWorking(lot) ? <><span className="spinner" />working…</> : e.status}
                 </span>
               </div>
               {e.notes && e.ai_source === 'vision-itemized' && (
@@ -304,8 +296,10 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
                 </details>
               )}
               <div style={{ display: 'flex', gap: 8 }}>
-                <button style={{ flex: 1, padding: 8 }} onClick={() => handleEnrich(lot.lot_id)}>Enrich</button>
-                <button style={{ flex: 1, padding: 8 }} onClick={() => handleInspect(lot.lot_id)}>Inspect</button>
+                <button style={{ flex: 1, padding: 8 }} disabled={isWorking(lot)}
+                        onClick={() => handleEnrich(lot.lot_id)}>Enrich</button>
+                <button style={{ flex: 1, padding: 8 }} disabled={isWorking(lot)}
+                        onClick={() => handleInspect(lot.lot_id)}>Inspect</button>
               </div>
             </div>
           )
@@ -320,7 +314,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
       <button onClick={handleEnrichVisible} disabled={!enrichableCount}>
         Enrich visible ({enrichableCount})
       </button>
-      {batchPolling && <span style={{ marginLeft: '0.75rem' }}>enriching… table refreshes every 5s</span>}
+      {anyQueued && <span style={{ marginLeft: '0.75rem' }}><span className="spinner" />enriching in the background… auto-refreshing</span>}
     </div>
     <table style={{ borderCollapse: 'collapse', fontSize: 14 }}>
       <thead>
@@ -439,14 +433,15 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
                 />
               </td>
               <td style={cell}>
-                {pollingIds.has(lot.lot_id) ? 'enriching…' : e.status}
+                {isWorking(lot) ? <><span className="spinner" />working…</> : e.status}
                 {e.status === 'failed' && e.error_message && (
                   <div style={{ color: 'var(--error)', fontSize: 12 }}>{e.error_message.slice(0, 80)}</div>
                 )}
               </td>
               <td style={{ ...cell, whiteSpace: 'nowrap' }}>
-                <button onClick={() => handleEnrich(lot.lot_id)}>Enrich</button>{' '}
-                <button onClick={() => handleInspect(lot.lot_id)} title="Identify and price each item in the photo individually">
+                <button disabled={isWorking(lot)} onClick={() => handleEnrich(lot.lot_id)}>Enrich</button>{' '}
+                <button disabled={isWorking(lot)} onClick={() => handleInspect(lot.lot_id)}
+                        title="Identify and price each item in the photo individually">
                   Inspect
                 </button>
               </td>
