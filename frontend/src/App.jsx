@@ -164,7 +164,7 @@ export default function App() {
         <button style={{ marginLeft: '1rem' }} onClick={loadLots}>Refresh</button>
       </section>
 
-      <LotTable lots={visibleLots} onLotUpdated={handleLotUpdated} />
+      <LotTable lots={visibleLots} onLotUpdated={handleLotUpdated} onRefresh={loadLots} />
     </div>
   )
 }

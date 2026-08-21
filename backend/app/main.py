@@ -24,6 +24,27 @@ app.include_router(enrichment.router)
 app.include_router(auctions.router)
 
 
+@app.on_event("startup")
+def recover_orphaned_jobs():
+    """Reset lots stuck in 'queued' back to 'pending'. BackgroundTasks don't
+    survive a restart/reload, so anything still queued at startup was
+    interrupted mid-batch — make it re-runnable instead of stranded."""
+    from sqlalchemy import update
+    from .database import SessionLocal
+    db = SessionLocal()
+    try:
+        result = db.execute(
+            update(models.Enrichment)
+            .where(models.Enrichment.status == "queued")
+            .values(status="pending")
+        )
+        db.commit()
+        if result.rowcount:
+            print(f"Recovered {result.rowcount} enrichments orphaned by restart")
+    finally:
+        db.close()
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}

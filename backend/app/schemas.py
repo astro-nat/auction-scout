@@ -96,6 +96,10 @@ class AuctionOut(BaseModel):
     imported_at: Optional[datetime] = None
 
 
+class EnrichBatchRequest(BaseModel):
+    lot_ids: list[str]
+
+
 class ScanRequest(BaseModel):
     zip: Optional[str] = None
     radius_miles: Optional[int] = None

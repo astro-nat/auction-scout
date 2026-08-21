@@ -78,15 +78,27 @@ def clean_title(title: str) -> str:
 
 
 def query_variants(title: str) -> list[str]:
-    """Progressively shorter queries (6 → 4 → 3 words). eBay returns zero results
-    for very long queries; 4-6 words is the sweet spot."""
+    """Progressively shorter queries. eBay returns zero results for very long
+    queries; 4-6 words is the sweet spot. When truncating, always keep the
+    LAST word — enriched titles end with the item-type noun ("...Ironwood 18
+    Head Statue"), and dropping it comps a statue against generic 'vintage
+    african' listings."""
     cleaned = clean_title(title)
+    words = cleaned.split()
     variants, seen = [], set()
-    for cap in _QUERY_WORD_CAPS:
-        v = " ".join(cleaned.split()[:cap])
+
+    def add(tokens):
+        v = " ".join(tokens)
         if len(v) >= 5 and v.lower() not in seen:
             seen.add(v.lower())
             variants.append(v)
+
+    add(words[:8])  # near-full title first — most specific match wins
+    for cap in _QUERY_WORD_CAPS:
+        if len(words) > cap:
+            add(words[:cap - 1] + words[-1:])  # keep the head noun
+        else:
+            add(words[:cap])
     return variants
 
 
@@ -98,9 +110,11 @@ def _tokens(text: str) -> set[str]:
 
 
 def _relevant(query: str, comp_title: str) -> bool:
-    """Comp counts only if a majority of query tokens (prefix-)match its title.
+    """Comp counts only if enough query tokens (prefix-)match its title.
     Consistently-priced-but-WRONG comps are invisible to variance checks —
-    this filter is what catches them."""
+    this filter is what catches them. Specific queries (4+ meaningful words,
+    e.g. enriched vision titles) demand a 2/3 match; short ones settle for
+    half, or they'd never match anything."""
     if not comp_title:
         return True
     q, c = _tokens(query), _tokens(comp_title)
@@ -108,7 +122,8 @@ def _relevant(query: str, comp_title: str) -> bool:
         return True
     hits = sum(1 for qt in q
                if any(ct.startswith(qt) or qt.startswith(ct) for ct in c))
-    return hits >= math.ceil(len(q) / 2)
+    needed = math.ceil(len(q) * 2 / 3) if len(q) >= 4 else math.ceil(len(q) / 2)
+    return hits >= needed
 
 
 def _quantity_match(query: str, comp_title: str) -> bool:

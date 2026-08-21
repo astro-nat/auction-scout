@@ -30,6 +30,13 @@ export function inspectLot(lotId) {
   return request(`/lots/${lotId}/inspect`, { method: 'POST' })
 }
 
+export function enrichBatch(lotIds) {
+  return request('/lots/enrich-batch', {
+    method: 'POST',
+    body: JSON.stringify({ lot_ids: lotIds }),
+  })
+}
+
 export function patchEnrichment(lotId, changes) {
   return request(`/lots/${lotId}/enrichment`, {
     method: 'PATCH',

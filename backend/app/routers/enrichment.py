@@ -24,6 +24,28 @@ def enrich_lot(lot_id: str, background_tasks: BackgroundTasks, db: Session = Dep
     return {"lot_id": lot_id, "status": "queued"}
 
 
+@router.post("/enrich-batch", status_code=202)
+def enrich_batch(payload: schemas.EnrichBatchRequest,
+                 background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """Queue enrichment for an explicit, ordered list of lots — the frontend
+    sends what's visible on screen, top row first, so the user's current view
+    gets processed before anything else. Already-successful lots are skipped."""
+    rows = (
+        db.query(models.Lot).join(models.Enrichment)
+        .filter(models.Lot.lot_id.in_(payload.lot_ids),
+                models.Enrichment.status.in_(["pending", "failed"]))
+        .all()
+    )
+    by_id = {l.lot_id: l for l in rows}
+    ordered = [by_id[i] for i in payload.lot_ids if i in by_id]
+    for lot in ordered:
+        lot.enrichment.status = "queued"
+    db.commit()
+    for lot in ordered:
+        background_tasks.add_task(run_enrichment, lot.id)
+    return {"queued": len(ordered)}
+
+
 @router.post("/{lot_id}/inspect", status_code=202)
 def inspect_lot(lot_id: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Itemized vision pass for mixed lots — identify and price each item in

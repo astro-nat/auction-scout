@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { enrichLot, inspectLot, fetchLot, patchEnrichment } from '../api'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { enrichLot, inspectLot, fetchLot, patchEnrichment, enrichBatch } from '../api'
 
 const cell = { padding: '4px 10px', borderBottom: '1px solid #ddd' }
 
@@ -100,10 +100,31 @@ function EditableCell({ display, rawValue, onSave, options, inputType = 'text', 
   )
 }
 
-export default function LotTable({ lots, onLotUpdated }) {
+export default function LotTable({ lots, onLotUpdated, onRefresh }) {
   const [pollingIds, setPollingIds] = useState(new Set())
   const [sort, setSort] = useState({ key: null, dir: 1 })
   const [colFilters, setColFilters] = useState({})
+  const [batchPolling, setBatchPolling] = useState(false)
+  const seenQueued = useRef(false)
+
+  // While a batch is running, refresh the whole table every 5s; stop once
+  // the queue drains (we've seen queued lots, and now there are none).
+  useEffect(() => {
+    if (!batchPolling || !onRefresh) return
+    const interval = setInterval(onRefresh, 5000)
+    return () => clearInterval(interval)
+  }, [batchPolling, onRefresh])
+
+  useEffect(() => {
+    if (!batchPolling) return
+    const anyQueued = lots.some((l) => l.enrichment?.status === 'queued')
+    if (anyQueued) {
+      seenQueued.current = true
+    } else if (seenQueued.current) {
+      setBatchPolling(false)
+      seenQueued.current = false
+    }
+  }, [lots, batchPolling])
 
   const distinctValues = useMemo(() => {
     const out = {}
@@ -175,9 +196,32 @@ export default function LotTable({ lots, onLotUpdated }) {
     }, 3000)
   }
 
+  async function handleEnrichVisible() {
+    const ids = sorted
+      .filter((l) => !['success', 'queued'].includes(l.enrichment?.status))
+      .map((l) => l.lot_id)
+    if (!ids.length) return
+    const r = await enrichBatch(ids)
+    seenQueued.current = false
+    setBatchPolling(true)
+    onRefresh?.()
+    alert(`Queued ${r.queued} visible lots — top of the table first`)
+  }
+
   if (!lots.length) return <p>No lots yet — scan auctions and import one above.</p>
 
+  const enrichableCount = sorted.filter(
+    (l) => !['success', 'queued'].includes(l.enrichment?.status)
+  ).length
+
   return (
+    <>
+    <div style={{ marginBottom: '0.5rem' }}>
+      <button onClick={handleEnrichVisible} disabled={!enrichableCount}>
+        Enrich visible ({enrichableCount})
+      </button>
+      {batchPolling && <span style={{ marginLeft: '0.75rem' }}>enriching… table refreshes every 5s</span>}
+    </div>
     <table style={{ borderCollapse: 'collapse', fontSize: 14 }}>
       <thead>
         <tr>
@@ -310,5 +354,6 @@ export default function LotTable({ lots, onLotUpdated }) {
         })}
       </tbody>
     </table>
+    </>
   )
 }
