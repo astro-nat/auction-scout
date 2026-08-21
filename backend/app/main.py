@@ -14,7 +14,10 @@ app = FastAPI(title="AuctionScout")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Vite dev server
+    # Vite dev server — from the laptop (localhost) or a phone on the same
+    # LAN (the laptop's 192.168.x.x / 10.x.x.x address). Dev-only looseness;
+    # lock this down to the real domain at deploy time.
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+):5173",
     allow_methods=["*"],
     allow_headers=["*"],
 )
