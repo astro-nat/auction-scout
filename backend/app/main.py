@@ -12,11 +12,19 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="AuctionScout")
 
+import os
+
+# Deployed frontend origin(s), comma-separated — e.g.
+# FRONTEND_ORIGIN=https://auctionscout-frontend.up.railway.app
+_frontend_origins = [
+    o.strip() for o in os.environ.get("FRONTEND_ORIGIN", "").split(",") if o.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    # Vite dev server — from the laptop (localhost) or a phone on the same
-    # LAN (the laptop's 192.168.x.x / 10.x.x.x address). Dev-only looseness;
-    # lock this down to the real domain at deploy time.
+    allow_origins=_frontend_origins,
+    # Dev looseness: the Vite dev server from the laptop (localhost) or a
+    # phone on the same LAN. Either this regex OR the origins list may match.
     allow_origin_regex=r"http://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+):5173",
     allow_methods=["*"],
     allow_headers=["*"],

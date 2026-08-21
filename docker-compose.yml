@@ -24,6 +24,8 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql+psycopg2://htown:devpassword@postgres:5432/auction_scout
+    # Dev-only override of the production CMD: live-reload, capped drain
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --timeout-graceful-shutdown 5
     ports:
       - "8000:8000"
     volumes:
@@ -33,7 +35,9 @@ services:
         condition: service_healthy
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      target: dev   # Vite dev server; the Dockerfile's final stage is the prod nginx build
     restart: unless-stopped
     ports:
       - "5173:5173"

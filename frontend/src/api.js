@@ -1,6 +1,8 @@
-// Use whatever host the page was loaded from — localhost on the laptop, the
-// laptop's LAN IP when opened from a phone on the same Wi-Fi.
-const API_BASE = `http://${window.location.hostname}:8000`
+// Deployed builds bake in the backend's public URL via VITE_API_BASE.
+// In dev there's no env var, so fall back to whatever host the page was
+// loaded from — localhost on the laptop, the laptop's LAN IP from a phone.
+const API_BASE =
+  import.meta.env.VITE_API_BASE || `http://${window.location.hostname}:8000`
 
 async function request(path, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
