@@ -131,7 +131,10 @@ _BOLO_MATCH_CACHE_PATH = _CACHE_DIR / "bolo_match_cache.json"
 #   v3 (2026-08-04): decimal hallmarks (".925" etc.) require their literal
 #      period, so bare "925" in a price ("$925.00") no longer matches
 #      Sterling silver (vacation-package false positive).
-_MATCHER_LOGIC_VERSION = "3"
+#   v4 (2026-08-22): PC cases dropped from computer-parts BOLO (bulky
+#      freight); NZXT / Cooler Master rebuilt as cooler-only entries and
+#      Kraken aliases moved out of premium-water-cooling.
+_MATCHER_LOGIC_VERSION = "4"
 # How many writes to absorb before flushing the in-memory cache to
 # disk. Tuned for "scan 14k lots" use case — flushing every 500 misses
 # means ~30 disk writes during a full scan, each ~50ms (negligible
@@ -2214,7 +2217,11 @@ _BRAND_ALIASES: Dict[str, List[str]] = {
         "cbl-pwex",
     ],
     "Mini-ITX motherboards": [
-        "mini-itx", "mini itx", "itx motherboard",
+        # Bare "mini itx" removed 2026-08-22 — it matched ITX cases /
+        # prebuilts too (was masked while case entries claimed those
+        # titles first). Motherboard-qualified forms only.
+        "mini-itx motherboard", "mini itx motherboard", "itx motherboard",
+        "mini-itx mobo", "mini itx mobo",
         "celeron j1900", "celeron j3160", "celeron j4125",
         "celeron n5105", "atom n270", "atom n450",
         "ga-j1900n", "ga-n3150n", "ga-n3160n",
@@ -2312,7 +2319,7 @@ _BRAND_ALIASES: Dict[str, List[str]] = {
         "apple 980w", "apple imac",
     ],
     # Premium custom water cooling — EKWB / Alphacool / XSPC /
-    # Hardware Labs / Bitspower / NZXT Kraken / Lian Li Galahad.
+    # Hardware Labs / Bitspower / Lian Li Galahad.
     "Premium custom water cooling": [
         "ekwb", "ek water blocks", "ek-quantum",
         "ek quantum surface", "ek quantum velocity",
@@ -2351,10 +2358,8 @@ _BRAND_ALIASES: Dict[str, List[str]] = {
         "singularity computers",
         "aquacomputer aqualis", "aquacomputer aquaero",
         "aquacomputer octo", "aquacomputer ultitube",
-        "nzxt kraken x53", "nzxt kraken x63", "nzxt kraken x73",
-        "nzxt kraken z53", "nzxt kraken z63", "nzxt kraken z73",
-        "nzxt kraken elite", "nzxt kraken 240", "nzxt kraken 280",
-        "nzxt kraken 360", "nzxt kraken 420",
+        # NZXT Kraken aliases moved to the dedicated
+        # "NZXT Kraken coolers" entry (2026-08-22).
         "lian li galahad", "lian li galahad ii",
         "lian li galahad ii trinity", "lian li galahad ii performance",
         "deepcool lt720", "deepcool ls720", "deepcool ls520",
@@ -2645,23 +2650,18 @@ _BRAND_ALIASES: Dict[str, List[str]] = {
         "be quiet", "bequiet", "dark power", "dark rock",
         "pure power", "straight power", "silent loop",
     ],
-    "Fractal Design Cases": [
-        "fractal design", "fractal define", "fractal torrent",
-        "fractal meshify", "fractal north", "fractal pop",
+    # PC cases removed 2026-08-22 (user: bulky freight eats the margin) —
+    # Fractal Design / Lian Li / NZXT H-series / Cooler Master case
+    # aliases dropped with their JSON entries. NZXT and Cooler Master
+    # survive as cooler-only entries; aliases stay product-specific
+    # (no bare "cooler master") so their cases can't route here.
+    "NZXT Kraken coolers": [
+        "nzxt kraken",
     ],
-    "Lian Li Cases": [
-        "lian li", "lian-li",
-        "o11 dynamic", "lancool", "dan a4-sfx", "dan-a4",
-    ],
-    "NZXT Cases": [
-        "nzxt h7", "nzxt h6", "nzxt h5", "nzxt h1", "nzxt h510",
-        "nzxt phantom", "nzxt source", "nzxt kraken",
-        "nzxt cam",
-    ],
-    "Cooler Master Cases": [
-        "cooler master", "coolermaster",
-        "mastercase", "haf 700", "haf 922", "haf x",
-        "cosmos c700", "nr200",
+    "Cooler Master coolers": [
+        "hyper 212", "hyper 622",
+        "masterliquid", "master liquid",
+        "masterair", "cooler master v8",
     ],
     "Noctua": ["noctua"],
     "Thermalright": [

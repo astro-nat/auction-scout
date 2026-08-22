@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "domain": "computer_parts",
-  "last_updated": "2026-05-04",
+  "last_updated": "2026-08-22",
   "summary": "PC components and parts. eBay is the dominant marketplace — buyers search by exact model number (RTX 3080, Ryzen 7 5800X3D, Samsung 990 PRO, etc.). Generation matters enormously: a current-gen GPU is worth 5-10x its previous generation. Working condition is mandatory; lots described as 'untested' or 'no display' lose 50%+ unless they're a known easy fix (re-paste, BIOS reflash). For estate-auction and shop-cleanout finds, the hidden-gem case is older premium-tier hardware (Noctua coolers, Seasonic PSUs, vintage-tier GPUs) that the seller doesn't know is still desirable.",
   "field_workflow": [
     "ALWAYS verify model number on the part itself — boxes alone aren't enough",
@@ -13,6 +13,7 @@
     "Working / tested status doubles value — 'powered on, no further testing' is the worst middle ground"
   ],
   "skip_list": [
+    "PC cases / towers (any brand) — bulky freight eats the margin",
     "Refurbished / refurb (without warranty)",
     "Aftermarket / clone / fake",
     "OEM bulk pull-from-Dell / pull-from-HP (these are mass-produced and don't comp well)",
@@ -456,15 +457,13 @@
     },
     {
       "brand": "Corsair PC components",
-      "category": "ram_psu_case_cooler",
+      "category": "ram_psu_cooler",
       "tier": 2,
       "models": [
         "Vengeance LPX", "Vengeance Pro", "Vengeance RGB Pro",
         "Vengeance RGB", "Dominator Platinum", "Dominator Titanium",
         "RM850x", "RM1000x", "HX1000", "HX1500i", "AX1600i",
         "RM Series", "RMx Shift", "HXi Series", "AX Titanium",
-        "iCUE 4000X", "iCUE 5000X", "iCUE 7000X",
-        "Crystal 280X", "Crystal 570X", "Obsidian 1000D",
         "H100i", "H115i", "H150i", "iCUE H170i",
         "iCUE Elite Capellix", "Hydro X"
       ],
@@ -480,7 +479,6 @@
         {"item": "Vengeance DDR4 32GB 3600 kit", "low": 60, "high": 130},
         {"item": "RM850x / RM1000x PSU", "low": 110, "high": 220},
         {"item": "AX1600i Titanium PSU", "low": 350, "high": 600},
-        {"item": "iCUE 5000X / 7000X case", "low": 130, "high": 300},
         {"item": "iCUE H150i / H170i AIO cooler", "low": 100, "high": 220}
       ],
       "target_buy_usd": {"low": 5, "high": 80},
@@ -488,7 +486,7 @@
       "platform_secondary": null,
       "comp_query_template": "corsair {model}",
       "ship_class": "medium_box",
-      "notes": "Corsair spans RAM, PSUs, cases, and AIO coolers — verify which product before listing. AX series PSUs (Platinum/Titanium) hold value well. RGB lighting working = factor (broken RGB = -30%).",
+      "notes": "Corsair spans RAM, PSUs, and AIO coolers — verify which product before listing. AX series PSUs (Platinum/Titanium) hold value well. RGB lighting working = factor (broken RGB = -30%). Corsair cases deliberately excluded — bulky, low value-to-freight.",
       "condition_critical": true
     },
     {
@@ -820,125 +818,65 @@
       "condition_critical": true
     },
     {
-      "brand": "Fractal Design Cases",
-      "category": "case",
+      "brand": "NZXT Kraken coolers",
+      "category": "cooler",
       "tier": 2,
       "models": [
-        "Define R7", "Define 7", "Define 7 XL", "Define 7 Compact",
-        "Torrent", "Torrent Compact", "Torrent Nano",
-        "Meshify 2", "Meshify 2 XL", "Meshify 2 Compact",
-        "Pop XL", "North", "North XL", "Era 2"
-      ],
-      "era_markers": [
-        "Fractal Design branding (Sweden)",
-        "Tempered glass side vs solid (premium silent vs visible)",
-        "Original retail box",
-        "North series wood front panel (collectible)"
-      ],
-      "comp_ranges_usd": [
-        {"item": "Torrent / Define 7 XL flagship", "low": 150, "high": 320},
-        {"item": "North wood-front", "low": 150, "high": 280},
-        {"item": "Meshify 2 / Define 7 standard", "low": 100, "high": 200},
-        {"item": "Torrent Nano / Compact ITX", "low": 110, "high": 220}
-      ],
-      "target_buy_usd": {"low": 10, "high": 100},
-      "platform_primary": "eBay",
-      "platform_secondary": null,
-      "comp_query_template": "fractal design {model}",
-      "ship_class": "large_box",
-      "notes": "North series is iconic for warm-wood aesthetic — strong appeal to creator/photographer demographics. Define 7 and Meshify 2 are workhorse premium ATX cases. Note: cases are heavy and hard to ship — only worth it if margin justifies the large_box freight.",
-      "condition_critical": true
-    },
-    {
-      "brand": "Lian Li Cases",
-      "category": "case",
-      "tier": 2,
-      "models": [
-        "O11 Dynamic", "O11 Dynamic Evo", "O11 Dynamic Evo XL",
-        "O11 Air Mini", "O11 Vision", "Lancool 216",
-        "Lancool 215", "Dynamic Mini", "PC-O11",
-        "A4-H2O", "A3-mATX", "Q58", "DAN A4-SFX"
-      ],
-      "era_markers": [
-        "Lian Li branding (Taiwan)",
-        "Dual-chamber layout (O11 series signature)",
-        "Aluminum panels on premium models",
-        "Original packaging w/ accessory baggies"
-      ],
-      "comp_ranges_usd": [
-        {"item": "O11 Dynamic Evo XL", "low": 200, "high": 380},
-        {"item": "O11 Dynamic Evo standard", "low": 130, "high": 220},
-        {"item": "O11 Vision (showcase)", "low": 200, "high": 350},
-        {"item": "DAN A4-SFX / A4-H2O ITX", "low": 180, "high": 380}
-      ],
-      "target_buy_usd": {"low": 10, "high": 120},
-      "platform_primary": "eBay",
-      "platform_secondary": null,
-      "comp_query_template": "lian li {model}",
-      "ship_class": "large_box",
-      "notes": "Lian Li O11 Dynamic IS the showcase-build case — every modder/streamer running RGB has one. Strong resale even years after original release. SFX (small form factor) cases like DAN A4 trade premium because Lian Li discontinues runs frequently.",
-      "condition_critical": true
-    },
-    {
-      "brand": "NZXT Cases",
-      "category": "case",
-      "tier": 2,
-      "models": [
-        "H7 Flow", "H7 Elite", "H6 Flow", "H5 Flow",
-        "H1 Mini-ITX", "H510i", "H510 Elite", "H510 Flow",
-        "H440", "Phantom 410", "Source 530",
         "Kraken X53", "Kraken X63", "Kraken X73",
-        "Kraken Z53", "Kraken Z63", "Kraken Z73", "Kraken Elite"
+        "Kraken Z53", "Kraken Z63", "Kraken Z73",
+        "Kraken Elite", "Kraken Plus", "Kraken 240", "Kraken 360"
       ],
       "era_markers": [
-        "NZXT branding with H-series number",
-        "Flow / Elite suffix indicates airflow vs glass-window variant",
-        "H1 ITX has integrated PSU/cooler (collectible)",
-        "Older Phantom / Source series = legacy"
+        "NZXT branding on pump cap (infinity-mirror on X, LCD screen on Z / Elite)",
+        "Radiator size in model number suffix (53=240mm, 63=280mm, 73=360mm)",
+        "CAM-software USB header on pump cable",
+        "Newer Elite / Plus naming replaces X / Z lines"
       ],
       "comp_ranges_usd": [
-        {"item": "H7 Elite / H7 Flow", "low": 130, "high": 240},
-        {"item": "H1 ITX (rare)", "low": 250, "high": 480},
-        {"item": "Kraken Z73 / Elite AIO", "low": 200, "high": 380},
-        {"item": "Kraken X53 / X63 AIO", "low": 100, "high": 180}
+        {"item": "Kraken Z73 / Elite 360 (LCD)", "low": 200, "high": 380},
+        {"item": "Kraken Z53 / Z63 (LCD)", "low": 120, "high": 220},
+        {"item": "Kraken X53 / X63 AIO", "low": 100, "high": 180},
+        {"item": "Kraken X73 AIO", "low": 110, "high": 190}
       ],
-      "target_buy_usd": {"low": 8, "high": 100},
+      "target_buy_usd": {"low": 8, "high": 90},
       "platform_primary": "eBay",
       "platform_secondary": null,
       "comp_query_template": "nzxt {model}",
-      "ship_class": "large_box",
-      "notes": "NZXT H1 (compact ITX with built-in PSU/cooler) had a recall but the redesigned version is sought-after. Kraken Z (with LCD display) commands big premium over X (no display).",
+      "ship_class": "medium_box",
+      "notes": "Kraken Z (with LCD display) commands big premium over X (no display) — the LCD is the whole draw. AIO coolers have a pump lifespan, so 'working, no leaks' matters; check manufacture date. NZXT cases deliberately excluded — bulky, low value-to-freight.",
       "condition_critical": true
     },
     {
-      "brand": "Cooler Master Cases",
-      "category": "case",
+      "brand": "Cooler Master coolers",
+      "category": "cooler",
       "tier": 2,
       "models": [
-        "MasterCase H500", "MasterCase H500 Mesh",
-        "MasterCase H500P Mesh ARGB", "NR200", "NR200P",
-        "NR200P V2", "HAF 700 EVO", "HAF 700",
-        "HAF 922", "HAF X", "Cosmos C700M",
-        "Stryker", "Trooper"
+        "Hyper 212", "Hyper 212 EVO", "Hyper 212 Black Edition",
+        "Hyper 212 Halo", "Hyper 622 Halo",
+        "MasterLiquid ML240L", "MasterLiquid ML360L",
+        "MasterLiquid ML240", "MasterLiquid ML360",
+        "MasterLiquid PL360 Flux", "MasterLiquid 360 Atmos",
+        "MasterAir MA824", "V8 GTS", "V8 3DVC"
       ],
       "era_markers": [
-        "Cooler Master branding with Master/HAF/Cosmos line",
-        "HAF series = high-airflow flagship line",
-        "Cosmos = top-tier showcase case",
-        "NR200 / NR200P = popular SFF-ITX"
+        "Cooler Master branding with Hyper / MasterLiquid / MasterAir line",
+        "Hyper 212 = the best-selling budget air cooler of all time (many revisions)",
+        "MasterLiquid L suffix = budget AIO tier, Flux/Atmos = premium",
+        "V8 series = legacy showpiece air cooler (engine-block styling)"
       ],
       "comp_ranges_usd": [
-        {"item": "Cosmos C700M flagship", "low": 280, "high": 580},
-        {"item": "HAF 700 EVO", "low": 380, "high": 680},
-        {"item": "NR200P / V2 ITX", "low": 110, "high": 220},
-        {"item": "MasterCase H500P Mesh", "low": 150, "high": 280}
+        {"item": "MasterLiquid PL360 Flux / 360 Atmos", "low": 80, "high": 150},
+        {"item": "MasterLiquid ML240L / ML360L AIO", "low": 40, "high": 90},
+        {"item": "V8 GTS / V8 3DVC (legacy collectible)", "low": 60, "high": 120},
+        {"item": "Hyper 212 (any revision)", "low": 15, "high": 35}
       ],
-      "target_buy_usd": {"low": 10, "high": 130},
+      "target_buy_usd": {"low": 3, "high": 50},
       "platform_primary": "eBay",
       "platform_secondary": null,
       "comp_query_template": "cooler master {model}",
-      "ship_class": "large_box",
-      "notes": "NR200 / NR200P is the dominant ITX case at its price point — discontinued runs trade close to retail. Cosmos C700M and HAF 700 EVO are showpiece flagships. Older HAF (922/X) has a vintage-modder following."
+      "ship_class": "medium_box",
+      "notes": "Hyper 212 is a volume mover, not a margin play — only worth it under ~$10 in. AIOs need 'working, no leaks' verification. V8-series legacy coolers have a modder-collector following. Cooler Master cases deliberately excluded — bulky, low value-to-freight.",
+      "condition_critical": true
     },
     {
       "brand": "Noctua",
