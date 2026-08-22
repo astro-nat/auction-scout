@@ -1,3 +1,4 @@
+import threading
 import time
 
 from fastapi import FastAPI
@@ -24,20 +25,58 @@ _MIGRATIONS = [
     "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS category_count_for INTEGER",
 ]
 
+def _run_migrations() -> list[str]:
+    """Apply pending migrations, returning the ones that didn't land.
+
+    Each ALTER needs an ACCESS EXCLUSIVE lock. During a rolling deploy the
+    previous container still holds connections to these tables, so the lock
+    can't be taken — wait forever and the new server never binds its port
+    (a 502 that reports as a successful deploy). Cap the wait instead and
+    report what's still pending.
+    """
+    pending = []
+    for stmt in _MIGRATIONS:
+        try:
+            with engine.begin() as conn:
+                conn.execute(text("SET lock_timeout = '5000ms'"))
+                conn.execute(text(stmt))
+        except Exception as exc:  # noqa: BLE001
+            pending.append(stmt)
+            print(f"Migration pending: {stmt[:70]}… — {exc}")
+    return pending
+
+
+def _retry_migrations_in_background(pending: list[str]) -> None:
+    """Keep retrying until they land. The blocker (the old container) goes
+    away within a minute of a deploy, so this converges — and until it does
+    the server is at least up and serving the endpoints that do work."""
+    def worker():
+        remaining = list(pending)
+        for _ in range(60):          # ~10 minutes of patience
+            time.sleep(10)
+            still = []
+            for stmt in remaining:
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text("SET lock_timeout = '5000ms'"))
+                        conn.execute(text(stmt))
+                    print(f"Migration applied on retry: {stmt[:70]}…")
+                except Exception:  # noqa: BLE001
+                    still.append(stmt)
+            remaining = still
+            if not remaining:
+                return
+        print(f"MIGRATIONS STILL PENDING after retries: {remaining}")
+
+    threading.Thread(target=worker, daemon=True).start()
+
+
 for attempt in range(10):
     try:
         Base.metadata.create_all(bind=engine)
-        # Each ALTER needs an exclusive table lock; if another connection
-        # holds the table (e.g. the previous deploy's pool), waiting forever
-        # here silently blocks the server from ever starting. Give each
-        # statement 5s, then skip — it'll succeed on a later boot.
-        for stmt in _MIGRATIONS:
-            try:
-                with engine.begin() as conn:
-                    conn.execute(text("SET lock_timeout = '5000ms'"))
-                    conn.execute(text(stmt))
-            except Exception as mig_exc:  # noqa: BLE001
-                print(f"Migration skipped (will retry next boot): {stmt[:60]}… — {mig_exc}")
+        _pending = _run_migrations()
+        if _pending:
+            _retry_migrations_in_background(_pending)
         break
     except Exception as exc:  # noqa: BLE001
         if attempt == 9:
