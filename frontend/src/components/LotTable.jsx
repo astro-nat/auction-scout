@@ -116,6 +116,9 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
   const [pollingIds, setPollingIds] = useState(new Set())
   const [sort, setSort] = useState({ key: null, dir: 1 })
   const [colFilters, setColFilters] = useState({})
+  // Render cap: building thousands of DOM rows eats real browser memory.
+  // All lots stay loaded for filtering/sorting; we just paint them in pages.
+  const [renderLimit, setRenderLimit] = useState(150)
 
   // Whenever ANY lot is queued — no matter which client or button started the
   // batch — refresh the table every 5s until the queue drains, so background
@@ -252,7 +255,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
           </button>
           {anyQueued && <span style={{ flexBasis: '100%' }}><span className="spinner" />enriching in the background… auto-refreshing</span>}
         </div>
-        {sorted.map((lot) => {
+        {sorted.slice(0, renderLimit).map((lot) => {
           const e = lot.enrichment || {}
           const gold = e.roi_status === 'GOLD MINE'
           return (
@@ -310,6 +313,12 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
             </div>
           )
         })}
+        {sorted.length > renderLimit && (
+          <button style={{ width: '100%', padding: 10, marginTop: 4 }}
+                  onClick={() => setRenderLimit((n) => n + 150)}>
+            Show more ({sorted.length - renderLimit} hidden)
+          </button>
+        )}
       </>
     )
   }
@@ -370,7 +379,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
         </tr>
       </thead>
       <tbody>
-        {sorted.map((lot) => {
+        {sorted.slice(0, renderLimit).map((lot) => {
           const e = lot.enrichment || {}
           const gold = e.roi_status === 'GOLD MINE'
           const edited = new Set(e.user_overrides || [])
@@ -462,6 +471,12 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
         })}
       </tbody>
     </table>
+    {sorted.length > renderLimit && (
+      <button style={{ marginTop: 6, padding: '6px 14px' }}
+              onClick={() => setRenderLimit((n) => n + 150)}>
+        Show more ({sorted.length - renderLimit} hidden)
+      </button>
+    )}
     </>
   )
 }
