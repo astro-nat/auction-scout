@@ -14,7 +14,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 
 from .. import models, schemas
 from ..database import get_db
-from ..services import hibid
+from ..services import hibid, jobs
 from ..workers.enrich import run_enrichment
 from sqlalchemy.orm import Session
 
@@ -57,16 +57,20 @@ async def list_categories():
 @router.post("/scan", response_model=List[schemas.AuctionOut])
 async def scan_auctions(payload: schemas.ScanRequest, db: Session = Depends(get_db)):
     """Discover open auctions near the configured zip and store them."""
-    found = await hibid.discover_auctions(
-        zip_code=payload.zip,
-        radius_miles=payload.radius_miles,
-        closing_within_days=payload.closing_within_days,
-        include_nationwide=payload.include_nationwide,
-        search_text=payload.search_text,
-        category_id=payload.category_id,
-        auction_type=payload.auction_type,
-        status=payload.status,
-    )
+    job = jobs.start("scan", "Scanning HiBid for auctions…")
+    try:
+        found = await hibid.discover_auctions(
+            zip_code=payload.zip,
+            radius_miles=payload.radius_miles,
+            closing_within_days=payload.closing_within_days,
+            include_nationwide=payload.include_nationwide,
+            search_text=payload.search_text,
+            category_id=payload.category_id,
+            auction_type=payload.auction_type,
+            status=payload.status,
+        )
+    finally:
+        jobs.finish(job)
     stored = []
     for a in found:
         row = db.query(models.Auction).filter(
@@ -83,8 +87,13 @@ async def scan_auctions(payload: schemas.ScanRequest, db: Session = Depends(get_
     # When scanning within a category, annotate each auction with how many of
     # its lots actually match — so the UI can offer "import just those".
     if payload.category_id and payload.category_id != -1:
-        counts = await hibid.count_matching_lots(
-            [r.hibid_id for r in stored if r.hibid_id], payload.category_id)
+        cjob = jobs.start("scan", f"Counting matching lots in {len(stored)} auctions…",
+                          total=len(stored))
+        try:
+            counts = await hibid.count_matching_lots(
+                [r.hibid_id for r in stored if r.hibid_id], payload.category_id)
+        finally:
+            jobs.finish(cjob)
         for r in stored:
             r.category_lot_count = counts.get(r.hibid_id)
     return stored
@@ -107,11 +116,24 @@ async def import_lots(auction_id: int, category_id: int = -1,
         auction.cond_ship = auction_meta.get("cond_ship", False)
 
     ctx = {"premium_mult": auction.buyer_premium_mult, "source": auction.source}
-    lots = await hibid.fetch_lots(auction.hibid_id, auction_ctx=ctx,
-                                  category_id=category_id)
+    job = jobs.start("import", f"Fetching lots from {auction.name}")
+    try:
+        lots = await hibid.fetch_lots(
+            auction.hibid_id, auction_ctx=ctx, category_id=category_id,
+            on_progress=lambda fetched, total: jobs.update(
+                job, current=fetched, total=total,
+                label=f"Fetching lots from {auction.name}"),
+        )
+        jobs.update(job, current=0, total=len(lots),
+                    label=f"Saving lots from {auction.name}")
+    except Exception:
+        jobs.finish(job)
+        raise
 
     created = updated = 0
-    for data in lots:
+    for i, data in enumerate(lots, 1):
+        if i % 10 == 0 or i == len(lots):
+            jobs.update(job, current=i)
         row = db.query(models.Lot).filter(models.Lot.lot_id == data["lot_id"]).first()
         if row:
             # bids/status/time-left always come fresh; analysis fields stay
@@ -128,6 +150,7 @@ async def import_lots(auction_id: int, category_id: int = -1,
             created += 1
     auction.imported_at = datetime.now(timezone.utc)
     db.commit()
+    jobs.finish(job)
     return {"auction_id": auction_id, "fetched": len(lots),
             "created": created, "updated": updated}
 

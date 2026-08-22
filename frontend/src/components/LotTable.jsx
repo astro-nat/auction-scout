@@ -306,8 +306,10 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
               )}
               <div style={{ display: 'flex', gap: 8 }}>
                 <button style={{ flex: 1, padding: 8 }} disabled={isWorking(lot)}
+                        title="Enrich: match the lot against the BOLO brand list, have AI read the description (or the photo) to build a searchable title and judge condition, look up eBay comps, then compute max bid and ROI."
                         onClick={() => handleEnrich(lot.lot_id)}>Enrich</button>
                 <button style={{ flex: 1, padding: 8 }} disabled={isWorking(lot)}
+                        title="Inspect: for mixed lots (a box of CDs, a tray of tools) — AI reads the full-size photo, lists each item it can identify, prices them individually, and totals them. Slower and costs more than Enrich."
                         onClick={() => handleInspect(lot.lot_id)}>Inspect</button>
               </div>
             </div>
@@ -460,9 +462,10 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
                 )}
               </td>
               <td style={{ ...cell, whiteSpace: 'nowrap' }}>
-                <button disabled={isWorking(lot)} onClick={() => handleEnrich(lot.lot_id)}>Enrich</button>{' '}
-                <button disabled={isWorking(lot)} onClick={() => handleInspect(lot.lot_id)}
-                        title="Identify and price each item in the photo individually">
+                <button disabled={isWorking(lot)} title="Enrich: match the lot against the BOLO brand list, have AI read the description (or the photo) to build a searchable title and judge condition, look up eBay comps, then compute max bid and ROI."
+                        onClick={() => handleEnrich(lot.lot_id)}>Enrich</button>{' '}
+                <button disabled={isWorking(lot)} title="Inspect: for mixed lots (a box of CDs, a tray of tools) — AI reads the full-size photo, lists each item it can identify, prices them individually, and totals them. Slower and costs more than Enrich."
+                        onClick={() => handleInspect(lot.lot_id)}>
                   Inspect
                 </button>
               </td>

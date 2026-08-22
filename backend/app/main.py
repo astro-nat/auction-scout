@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .database import Base, engine
 from . import models  # noqa: F401 — import registers models on Base before create_all
-from .routers import lots, enrichment, auctions
+from .routers import lots, enrichment, auctions, status
 
 # Dev convenience only — creates tables from models if they don't exist.
 # Once this is a real app with data you care about, replace this with Alembic
@@ -66,6 +66,7 @@ app.add_middleware(
 app.include_router(lots.router)
 app.include_router(enrichment.router)
 app.include_router(auctions.router)
+app.include_router(status.router)
 
 
 @app.on_event("startup")

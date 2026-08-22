@@ -49,6 +49,10 @@ export function patchEnrichment(lotId, changes) {
   })
 }
 
+export function fetchStatus() {
+  return request('/status')
+}
+
 export function fetchAuctions() {
   return request('/auctions')
 }

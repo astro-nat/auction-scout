@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { fetchLots, fetchAuctions, fetchCategories, scanAuctions, importLots, enrichAll } from './api'
 import LotTable from './components/LotTable'
+import StatusBar from './components/StatusBar'
 import useMediaQuery from './useMediaQuery'
 
 export default function App() {
@@ -45,6 +46,13 @@ export default function App() {
     } catch (e) { alert(e.message) } finally { setBusy('') }
   }
 
+  // Called when the status bar sees the server go idle — pull fresh data so
+  // finished imports/enrichments appear without a manual refresh.
+  const refreshAll = useCallback(() => {
+    fetchAuctions().then(setAuctions).catch(console.error)
+    loadLots()
+  }, [loadLots])
+
   function setScanField(field, value) {
     setScan((prev) => ({ ...prev, [field]: value }))
   }
@@ -55,7 +63,11 @@ export default function App() {
 
   function importLabel(a) {
     if (scanCategoryId !== -1 && a.category_lot_count != null) {
-      return `Import ${a.category_lot_count} ${scanCategoryName ?? 'matching'}`
+      // Keep it short on phones — the full category name blew the button
+      // out of the card and pushed it off screen.
+      return isMobile
+        ? `Import ${a.category_lot_count}`
+        : `Import ${a.category_lot_count} ${scanCategoryName ?? 'matching'}`
     }
     return 'Import'
   }
@@ -112,7 +124,9 @@ export default function App() {
   const hiddenCount = lots.length - visibleLots.length
 
   return (
-    <div style={{ padding: isMobile ? '0.75rem' : '2rem', fontFamily: 'system-ui' }}>
+    <div style={{ fontFamily: 'system-ui' }}>
+      <StatusBar onQuiet={refreshAll} />
+      <div style={{ padding: isMobile ? '0.75rem' : '2rem' }}>
       <h1 style={{ fontSize: isMobile ? 24 : undefined }}>AuctionScout</h1>
 
       <section style={{ marginBottom: '1.5rem' }}>
@@ -196,8 +210,10 @@ export default function App() {
                   </button>
                   {a.imported_at && (
                     <>
-                      <button style={{ flex: 1, padding: 8 }} onClick={() => setSelectedAuction(a.id)}>View</button>
-                      <button style={{ flex: 1, padding: 8 }} onClick={() => handleEnrichAll(a.id)}>Enrich all</button>
+                      <button style={{ flex: '1 1 70px', minWidth: 70, padding: 8 }}
+                              onClick={() => setSelectedAuction(a.id)}>View</button>
+                      <button style={{ flex: '1 1 90px', minWidth: 90, padding: 8 }}
+                              onClick={() => handleEnrichAll(a.id)}>Enrich all</button>
                     </>
                   )}
                 </div>
@@ -302,6 +318,7 @@ export default function App() {
       </section>
 
       <LotTable lots={visibleLots} onLotUpdated={handleLotUpdated} onRefresh={loadLots} />
+      </div>
     </div>
   )
 }

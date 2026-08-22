@@ -345,9 +345,13 @@ def _process_lot(raw: dict, auction_ctx: dict) -> dict:
 
 
 async def fetch_lots(hibid_auction_id: int, auction_ctx: dict | None = None,
-                     search_text: str = "", category_id: int = -1) -> list[dict]:
+                     search_text: str = "", category_id: int = -1,
+                     on_progress=None) -> list[dict]:
     """All open lots for one auction, optionally filtered to one HiBid
-    category server-side. Paginates at the server-fixed 100/page."""
+    category server-side. Paginates at the server-fixed 100/page.
+
+    on_progress(fetched, total) is called after each page so callers can
+    report live counts to the UI."""
     ctx = auction_ctx or {}
     lots: list[dict] = []
     async with httpx.AsyncClient() as client:
@@ -365,6 +369,8 @@ async def fetch_lots(hibid_auction_id: int, auction_ctx: dict | None = None,
             if not batch:
                 break
             lots.extend(_process_lot(r, ctx) for r in batch)
+            if on_progress:
+                on_progress(len(lots), total)
             if len(lots) >= total:
                 break
             page += 1
