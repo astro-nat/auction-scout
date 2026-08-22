@@ -64,8 +64,9 @@ export function scanAuctions(filters = {}) {
   })
 }
 
-export function importLots(auctionId) {
-  return request(`/auctions/${auctionId}/import`, { method: 'POST' })
+export function importLots(auctionId, categoryId = -1) {
+  const q = categoryId && categoryId !== -1 ? `?category_id=${categoryId}` : ''
+  return request(`/auctions/${auctionId}/import${q}`, { method: 'POST' })
 }
 
 export function enrichAll(auctionId) {

@@ -92,8 +92,8 @@ query AuctionMeta($eventIds: [Int!]) {
 """
 
 LOT_SEARCH_QUERY = """
-query LotSearch($auctionId: Int!, $pageNumber: Int!, $searchText: String!) {
-  lotSearch(input: {auctionId: $auctionId, searchText: $searchText}, pageNumber: $pageNumber) {
+query LotSearch($auctionId: Int!, $pageNumber: Int!, $searchText: String!, $category: CategoryId) {
+  lotSearch(input: {auctionId: $auctionId, searchText: $searchText, category: $category}, pageNumber: $pageNumber) {
     pagedResults {
       totalCount pageNumber
       results {
@@ -345,8 +345,9 @@ def _process_lot(raw: dict, auction_ctx: dict) -> dict:
 
 
 async def fetch_lots(hibid_auction_id: int, auction_ctx: dict | None = None,
-                     search_text: str = "") -> list[dict]:
-    """All open lots for one auction. Paginates at the server-fixed 100/page."""
+                     search_text: str = "", category_id: int = -1) -> list[dict]:
+    """All open lots for one auction, optionally filtered to one HiBid
+    category server-side. Paginates at the server-fixed 100/page."""
     ctx = auction_ctx or {}
     lots: list[dict] = []
     async with httpx.AsyncClient() as client:
@@ -355,7 +356,7 @@ async def fetch_lots(hibid_auction_id: int, auction_ctx: dict | None = None,
         while page <= MAX_LOT_PAGES:
             data = await _graphql(client, "LotSearch", LOT_SEARCH_QUERY, {
                 "auctionId": hibid_auction_id, "pageNumber": page,
-                "searchText": search_text,
+                "searchText": search_text, "category": category_id,
             })
             paged = (data.get("lotSearch") or {}).get("pagedResults") or {}
             batch = paged.get("results") or []
@@ -387,3 +388,32 @@ async def download_image(url: str) -> Optional[bytes]:
     except Exception:
         pass
     return None
+
+
+COUNT_QUERY = """
+query LotCount($auctionId: Int!, $category: CategoryId) {
+  lotSearch(input: {auctionId: $auctionId, searchText: "", category: $category}, pageNumber: 1) {
+    pagedResults { totalCount }
+  }
+}
+"""
+
+
+async def count_matching_lots(hibid_ids: list[int], category_id: int) -> dict[int, int]:
+    """How many lots in each auction match a HiBid category — one cheap call
+    per auction, batched concurrently. Failures just omit the auction."""
+    out: dict[int, int] = {}
+
+    async def one(client: httpx.AsyncClient, aid: int) -> None:
+        try:
+            data = await _graphql(client, "LotCount", COUNT_QUERY,
+                                  {"auctionId": aid, "category": category_id})
+            out[aid] = ((data.get("lotSearch") or {}).get("pagedResults") or {}).get("totalCount", 0)
+        except Exception as exc:
+            logger.warning("lot count failed for auction %s: %s", aid, exc)
+
+    async with httpx.AsyncClient() as client:
+        for i in range(0, len(hibid_ids), AUCTION_BATCH):
+            batch = hibid_ids[i:i + AUCTION_BATCH]
+            await asyncio.gather(*(one(client, aid) for aid in batch))
+    return out

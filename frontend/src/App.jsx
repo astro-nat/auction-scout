@@ -49,10 +49,21 @@ export default function App() {
     setScan((prev) => ({ ...prev, [field]: value }))
   }
 
+  // When the scan had a category filter, Import pulls only matching lots.
+  const scanCategoryId = Number(scan.category_id)
+  const scanCategoryName = categories.find((c) => c.id === scanCategoryId)?.name
+
+  function importLabel(a) {
+    if (scanCategoryId !== -1 && a.category_lot_count != null) {
+      return `Import ${a.category_lot_count} ${scanCategoryName ?? 'matching'}`
+    }
+    return 'Import'
+  }
+
   async function handleImport(auctionId) {
     setBusy('Importing lots…')
     try {
-      const r = await importLots(auctionId)
+      const r = await importLots(auctionId, scanCategoryId)
       setBusy('')
       setSelectedAuction(auctionId)
       alert(`Imported ${r.created} new lots (${r.updated} updated) of ${r.fetched} fetched`)
@@ -215,12 +226,17 @@ export default function App() {
                     )}
                   </td>
                   <td style={{ paddingRight: 12 }}>{a.city}, {a.state} ({a.source})</td>
-                  <td style={{ textAlign: 'center' }}>{a.lot_count ?? '—'}</td>
+                  <td style={{ textAlign: 'center' }}>
+                    {a.lot_count ?? '—'}
+                    {a.category_lot_count != null && scanCategoryId !== -1 && (
+                      <div style={{ fontSize: 11, color: 'var(--muted)' }}>{a.category_lot_count} match</div>
+                    )}
+                  </td>
                   <td>{a.closing_date ? new Date(a.closing_date).toLocaleDateString() : '—'}</td>
                   <td style={{ textAlign: 'center' }}>
                     {a.buyer_premium_mult ? `${Math.round((a.buyer_premium_mult - 1) * 100)}%` : '—'}
                   </td>
-                  <td><button onClick={() => handleImport(a.id)} disabled={!!busy}>Import lots</button></td>
+                  <td><button onClick={() => handleImport(a.id)} disabled={!!busy}>{importLabel(a)}</button></td>
                   <td>
                     {a.imported_at && (
                       <>

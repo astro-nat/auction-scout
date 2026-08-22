@@ -79,12 +79,22 @@ async def scan_auctions(payload: schemas.ScanRequest, db: Session = Depends(get_
             db.add(row)
         stored.append(row)
     db.commit()
+
+    # When scanning within a category, annotate each auction with how many of
+    # its lots actually match — so the UI can offer "import just those".
+    if payload.category_id and payload.category_id != -1:
+        counts = await hibid.count_matching_lots(
+            [r.hibid_id for r in stored if r.hibid_id], payload.category_id)
+        for r in stored:
+            r.category_lot_count = counts.get(r.hibid_id)
     return stored
 
 
 @router.post("/{auction_id}/import")
-async def import_lots(auction_id: int, db: Session = Depends(get_db)):
-    """Pull every open lot for one auction into Postgres (idempotent upsert)."""
+async def import_lots(auction_id: int, category_id: int = -1,
+                      db: Session = Depends(get_db)):
+    """Pull open lots for one auction into Postgres (idempotent upsert).
+    category_id limits the import to one HiBid category server-side."""
     auction = db.query(models.Auction).filter(models.Auction.id == auction_id).first()
     if not auction or not auction.hibid_id:
         raise HTTPException(status_code=404, detail="Auction not found")
@@ -97,7 +107,8 @@ async def import_lots(auction_id: int, db: Session = Depends(get_db)):
         auction.cond_ship = auction_meta.get("cond_ship", False)
 
     ctx = {"premium_mult": auction.buyer_premium_mult, "source": auction.source}
-    lots = await hibid.fetch_lots(auction.hibid_id, auction_ctx=ctx)
+    lots = await hibid.fetch_lots(auction.hibid_id, auction_ctx=ctx,
+                                  category_id=category_id)
 
     created = updated = 0
     for data in lots:
