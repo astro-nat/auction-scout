@@ -13,12 +13,15 @@ Pipeline per lot (cheapest signal first):
   3. Comps            — SoldComps / eBay Browse via services.pricing. Free-ish.
   4. ROI              — pure math via services.financials.
 
-For now this runs via FastAPI BackgroundTasks (see routers/enrichment.py). When you
-outgrow that (need real concurrency limits, retry visibility, or to survive a backend
-restart mid-job), swap the call site for an Arq/Celery task — this function's body
-barely has to change.
+These workers run via FastAPI BackgroundTasks (see routers/enrichment.py), which
+die with the process — so everything long-running leaves its plan in the DB and
+survives a deploy: batch runs (run_reprice, run_ship_analysis) persist a jobs-table
+row holding their id list and a `current` checkpoint, and per-lot work rides the
+'queued' status on the enrichment table. workers/resume.py picks all of it back up
+at startup.
 """
 
+import asyncio
 import json
 import base64
 import logging
@@ -30,7 +33,7 @@ from sqlalchemy.orm import Session
 
 from ..database import SessionLocal
 from .. import models, config
-from ..services import financials, jobs, pricing
+from ..services import financials, hibid, jobs, pricing
 from ..services.bolo import BoloMatcher
 from ..services.hibid import classify_logistics
 
@@ -314,6 +317,12 @@ def run_inspection(lot_db_id: int) -> None:
         if not lot:
             return
         e = lot.enrichment
+        # Same contract as run_enrichment: cancelling flips queued lots back
+        # to 'pending', so anything no longer queued was cancelled before its
+        # turn came up (this matters for resumed orphans, which can wait a
+        # while — the live path runs within seconds of being queued).
+        if e.status != "queued":
+            return
         e.last_attempted_at = datetime.now(timezone.utc)
         try:
             _inspect(lot, e, db)
@@ -453,86 +462,127 @@ def _download_image(url: str | None) -> bytes | None:
     return None
 
 
-def run_reprice(lot_db_ids: list[int]) -> None:
+def run_reprice(lot_db_ids: list[int], resume_job_id: str | None = None) -> None:
     """Recompute comps + ROI for already-enriched lots, reusing the AI title
     and verdict we already paid for.
 
     Pricing rules change (realization factor, condition multipliers, comp
     filters) far more often than an item's identity does — this applies them
     without spending anything on the model again.
+
+    The full id list is persisted on the job row and `current` is the resume
+    checkpoint: a deploy mid-run leaves the row behind, and startup calls back
+    in with resume_job_id to continue where it stopped. Repricing is
+    idempotent, so the one lot in flight at the kill just runs twice.
     """
     db: Session = SessionLocal()
-    job = jobs.start("reprice", "Re-pricing lots with current comp rules",
-                     total=len(lot_db_ids))
+    if resume_job_id:
+        job = resume_job_id
+        row = jobs.get(job)
+        start_at = (row or {}).get("current") or 0
+    else:
+        job = jobs.start("reprice", "Re-pricing lots with current comp rules",
+                         total=len(lot_db_ids), payload={"lot_ids": lot_db_ids})
+        start_at = 0
     repriced = skipped = 0
     try:
-        for i, lot_db_id in enumerate(lot_db_ids, 1):
+        for i, lot_db_id in enumerate(lot_db_ids[start_at:], start_at + 1):
             if jobs.is_cancelled(job):
                 print(f"Reprice cancelled after {i - 1} lots")
                 break
             lot = db.query(models.Lot).filter(models.Lot.id == lot_db_id).first()
-            if not lot or not lot.enrichment:
-                continue
-            e = lot.enrichment
-            if "est_resale" in set(e.user_overrides or []):
+            e = lot.enrichment if lot else None
+            if e and "est_resale" in set(e.user_overrides or []):
                 skipped += 1            # never overwrite a hand-corrected price
-                continue
-            try:
-                # Reclassify ship tier with the current regex rules — free,
-                # and ship-rule fixes should reach old lots the same way
-                # pricing-rule fixes do. Hand-set tiers ("logistics_ease")
-                # and AI-set tiers ("logistics_ease_ai" sentinel) survive.
-                marks = set(e.user_overrides or [])
-                if not marks & {"logistics_ease", "logistics_ease_ai"}:
-                    lot.logistics_ease = classify_logistics(
-                        lot.title or "", lot.category or "", lot.description or "")
-                comps = pricing.lookup_comps(e.enriched_title or lot.title)
-                mult = CONDITION_MULTIPLIER.get(e.verdict, 1.0)
-                e.est_resale = (round(float(comps["est_resale"]) * mult, 2)
-                                if comps["est_resale"] else None)
-                e.price_low = (round(float(comps["price_low"]) * mult, 2)
-                               if comps["price_low"] else None)
-                e.price_high = (round(float(comps["price_high"]) * mult, 2)
-                                if comps["price_high"] else None)
-                e.comp_count = comps["comp_count"]
-                e.price_source = comps["price_source"]
-                if mult != 1.0 and comps["price_source"]:
-                    e.price_source += f" ×{mult:g} condition"
-                _apply_roi(lot, e)
-                db.commit()
-                repriced += 1
-            except Exception as exc:  # noqa: BLE001 — one bad lot must not stop the run
-                logger.warning("Reprice failed for lot %s: %s", lot_db_id, exc)
-            jobs.update(job, current=i, detail=(lot.title or "")[:40])
+                e = None
+            if e:
+                try:
+                    # Reclassify ship tier with the current regex rules — free,
+                    # and ship-rule fixes should reach old lots the same way
+                    # pricing-rule fixes do. Hand-set tiers ("logistics_ease")
+                    # and AI-set tiers ("logistics_ease_ai" sentinel) survive.
+                    marks = set(e.user_overrides or [])
+                    if not marks & {"logistics_ease", "logistics_ease_ai"}:
+                        lot.logistics_ease = classify_logistics(
+                            lot.title or "", lot.category or "", lot.description or "")
+                    comps = pricing.lookup_comps(e.enriched_title or lot.title)
+                    mult = CONDITION_MULTIPLIER.get(e.verdict, 1.0)
+                    e.est_resale = (round(float(comps["est_resale"]) * mult, 2)
+                                    if comps["est_resale"] else None)
+                    e.price_low = (round(float(comps["price_low"]) * mult, 2)
+                                   if comps["price_low"] else None)
+                    e.price_high = (round(float(comps["price_high"]) * mult, 2)
+                                    if comps["price_high"] else None)
+                    e.comp_count = comps["comp_count"]
+                    e.price_source = comps["price_source"]
+                    if mult != 1.0 and comps["price_source"]:
+                        e.price_source += f" ×{mult:g} condition"
+                    _apply_roi(lot, e)
+                    db.commit()
+                    repriced += 1
+                except Exception as exc:  # noqa: BLE001 — one bad lot must not stop the run
+                    logger.warning("Reprice failed for lot %s: %s", lot_db_id, exc)
+            # `current` must advance on every lot — skipped ones included —
+            # because it's the resume checkpoint, not just the progress bar.
+            jobs.update(job, current=i,
+                        detail=(lot.title or "")[:40] if lot else None)
     finally:
         jobs.finish(job)
         db.close()
     print(f"Reprice complete: {repriced} updated, {skipped} kept (hand-corrected)")
 
 
-def run_ship_analysis(items: list[dict]) -> None:
+def run_ship_analysis(auction_ids: list[int], resume_job_id: str | None = None) -> None:
     """AI-read each auction's shipping info + terms and store a rough
     per-item shipping cost estimate and a one-line policy summary.
 
-    ``items`` is [{"auction_id", "name", "ship_text", "terms_text"}, ...] —
-    the texts are fetched by the (async) route handler since this worker is
-    sync. Auctions with no text at all get a summary without an AI call.
+    Takes auction ids, not pre-fetched texts: the worker pulls the
+    shipping/terms blobs from HiBid itself (this is a sync thread with no
+    running event loop, so asyncio.run is safe). That keeps the enqueueing
+    request fast, keeps the job's persisted payload small, and lets a resumed
+    run re-fetch texts for just the auctions it hasn't done yet. The id list
+    rides the job row; `current` is the resume checkpoint. Auctions with no
+    text at all get a summary without an AI call.
     """
     db: Session = SessionLocal()
-    job = jobs.start("ship-analysis", "Reading shipping terms per auction",
-                     total=len(items))
+    if resume_job_id:
+        job = resume_job_id
+        row = jobs.get(job)
+        start_at = (row or {}).get("current") or 0
+    else:
+        job = jobs.start("ship-analysis", "Reading shipping terms per auction",
+                         total=len(auction_ids),
+                         payload={"auction_ids": auction_ids})
+        start_at = 0
     analyzed = no_info = 0
     try:
-        for i, item in enumerate(items, 1):
+        remaining = auction_ids[start_at:]
+        auctions = {a.id: a for a in
+                    db.query(models.Auction)
+                      .filter(models.Auction.id.in_(remaining)).all()} if remaining else {}
+        hibid_ids = [a.hibid_id for a in auctions.values() if a.hibid_id]
+        meta: dict[int, dict] = {}
+        if hibid_ids:
+            jobs.update(job, label="Fetching shipping terms from HiBid…")
+
+            async def _fetch_meta():
+                async with httpx.AsyncClient() as http:
+                    return await hibid.fetch_auction_meta(http, hibid_ids)
+
+            meta = asyncio.run(_fetch_meta())
+            jobs.update(job, label="Reading shipping terms per auction")
+
+        for i, auction_id in enumerate(remaining, start_at + 1):
             if jobs.is_cancelled(job):
                 print(f"Shipping analysis cancelled after {i - 1} auctions")
                 break
-            auction = (db.query(models.Auction)
-                         .filter(models.Auction.id == item["auction_id"]).first())
+            auction = auctions.get(auction_id)
             if not auction:
+                jobs.update(job, current=i)
                 continue
-            ship_text = (item.get("ship_text") or "").strip()
-            terms_text = (item.get("terms_text") or "").strip()
+            m = meta.get(auction.hibid_id) or {}
+            ship_text = (m.get("ship_text") or "").strip()
+            terms_text = (m.get("terms_text") or "").strip()
             try:
                 if not ship_text and not terms_text:
                     auction.ship_summary = "No shipping details posted"
@@ -558,9 +608,10 @@ def run_ship_analysis(items: list[dict]) -> None:
                 db.commit()
             except Exception as exc:  # noqa: BLE001 — one bad auction must not stop the run
                 logger.warning("Shipping analysis failed for auction %s: %s",
-                               item["auction_id"], exc)
+                               auction_id, exc)
                 db.rollback()
-            jobs.update(job, current=i, detail=(item.get("name") or "")[:40])
+            # `current` advances on every auction — it's the resume checkpoint.
+            jobs.update(job, current=i, detail=(auction.name or "")[:40])
     finally:
         jobs.finish(job)
         db.close()

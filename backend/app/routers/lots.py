@@ -115,6 +115,23 @@ def flush_closed(dry_run: bool = False, db: Session = Depends(get_db)):
     return {"lots": len(lot_ids), "auctions": auctions_removed, "dry_run": False}
 
 
+@router.post("/{lot_id}/watch", response_model=schemas.LotOut)
+def set_watch(lot_id: str, watched: bool = True, db: Session = Depends(get_db)):
+    """Toggle the closing-soon alert flag. Re-watching clears a previous
+    alert timestamp so the lot can alert again (e.g. after an extension)."""
+    lot = (db.query(models.Lot)
+             .options(joinedload(models.Lot.enrichment))
+             .filter(models.Lot.lot_id == lot_id).first())
+    if not lot:
+        raise HTTPException(status_code=404, detail="Lot not found")
+    lot.watched = watched
+    if watched:
+        lot.closing_alert_sent_at = None
+    db.commit()
+    db.refresh(lot)
+    return lot
+
+
 @router.get("/{lot_id}", response_model=schemas.LotOut)
 def get_lot(lot_id: str, db: Session = Depends(get_db)):
     lot = (

@@ -58,6 +58,11 @@ class Lot(Base):
     source = Column(String)           # Ship | Local Pickup (per-lot, beats auction-level)
     logistics_ease = Column(String)   # EASY | NEUTRAL | HARD
     unreachable_pickup = Column(Boolean, default=False)  # nationwide + pickup-only
+    # Watch flag: the closing-soon notifier (workers/notify.py) pushes a
+    # phone alert when a watched lot's auction closes within the window;
+    # the timestamp dedupes so each lot alerts exactly once.
+    watched = Column(Boolean, default=False)
+    closing_alert_sent_at = Column(DateTime)
     lot_link = Column(String)
     thumbnail_url = Column(String)
     hd_thumbnail_url = Column(String)
@@ -109,6 +114,9 @@ class Enrichment(Base):
     profit = Column(Numeric)
     roi_status = Column(String)        # GOLD MINE | PASS
 
+    # Which worker a 'queued' lot is waiting for ('enrich' | 'inspect') — how
+    # startup recovery knows what to run for lots orphaned by a deploy.
+    queued_task = Column(String)
     # Live play-by-play while the worker runs ("searching eBay comps…");
     # cleared when the lot finishes. The UI polls and shows it on the spinner.
     progress = Column(String)
@@ -118,3 +126,28 @@ class Enrichment(Base):
     user_overrides = Column(JSONB, default=list)
 
     lot = relationship("Lot", back_populates="enrichment")
+
+
+class Job(Base):
+    """A long-running operation the server is working on right now.
+
+    Persisted (rather than in-memory) so a deploy or crash mid-run leaves
+    evidence: at startup, workers/resume.py restarts the resumable kinds from
+    where `current` points. A finished job deletes its row — a row existing
+    means "active, or was active when the process died".
+    """
+    __tablename__ = "jobs"
+
+    # Short random hex id — part of the /status contract; the frontend's
+    # Cancel button posts it back.
+    id = Column(String, primary_key=True)
+    kind = Column(String, nullable=False)   # scan | import | reprice | ship-analysis
+    label = Column(String, nullable=False)  # what the user reads in the status bar
+    current = Column(Integer, default=0)    # progress — and the resume checkpoint
+    total = Column(Integer)
+    detail = Column(String)
+    cancelled = Column(Boolean, default=False)
+    # Everything a resumable job needs to restart after a deploy/crash
+    # (e.g. {"lot_ids": [...]} for reprice). None for request-scoped kinds.
+    payload = Column(JSONB)
+    started_at = Column(DateTime, server_default=func.now())

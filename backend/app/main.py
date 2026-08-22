@@ -26,6 +26,9 @@ _MIGRATIONS = [
     "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS ship_cost_estimate FLOAT",
     "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS ship_summary VARCHAR",
     "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS ship_analyzed_at TIMESTAMP",
+    "ALTER TABLE enrichment ADD COLUMN IF NOT EXISTS queued_task VARCHAR",
+    "ALTER TABLE lots ADD COLUMN IF NOT EXISTS watched BOOLEAN DEFAULT FALSE",
+    "ALTER TABLE lots ADD COLUMN IF NOT EXISTS closing_alert_sent_at TIMESTAMP",
 ]
 
 def _run_migrations() -> list[str]:
@@ -115,23 +118,17 @@ app.include_router(status.router)
 
 @app.on_event("startup")
 def recover_orphaned_jobs():
-    """Reset lots stuck in 'queued' back to 'pending'. BackgroundTasks don't
-    survive a restart/reload, so anything still queued at startup was
-    interrupted mid-batch — make it re-runnable instead of stranded."""
-    from sqlalchemy import update
-    from .database import SessionLocal
-    db = SessionLocal()
-    try:
-        result = db.execute(
-            update(models.Enrichment)
-            .where(models.Enrichment.status == "queued")
-            .values(status="pending")
-        )
-        db.commit()
-        if result.rowcount:
-            print(f"Recovered {result.rowcount} enrichments orphaned by restart")
-    finally:
-        db.close()
+    """BackgroundTasks don't survive a restart/deploy, but the work they were
+    doing left its plan in the DB — jobs-table rows with payloads, lots still
+    marked 'queued'. Pick it all back up instead of stranding it (this once
+    lost 1,000+ auctions of a shipping-analysis run to a frontend deploy).
+    Imported here, not top-level: workers.enrich instantiates the Anthropic
+    client at import time, and module import order shouldn't depend on it."""
+    from .workers.resume import resume_interrupted_work
+    resume_interrupted_work()
+    # Phone alerts for watched lots closing soon (no-op without NTFY_TOPIC).
+    from .workers.notify import start_notifier
+    start_notifier()
 
 
 @app.get("/health")

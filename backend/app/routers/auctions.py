@@ -141,18 +141,11 @@ async def analyze_shipping(background_tasks: BackgroundTasks,
     if not targets:
         return {"auctions": 0, "queued": False}
 
-    # The worker is sync; fetch the shipping/terms text here in async land
-    # and hand it plain dicts.
-    async with httpx.AsyncClient() as client:
-        meta = await hibid.fetch_auction_meta(client, [a.hibid_id for a in targets])
-    items = [{
-        "auction_id": a.id,
-        "name": a.name,
-        "ship_text": meta.get(a.hibid_id, {}).get("ship_text", ""),
-        "terms_text": meta.get(a.hibid_id, {}).get("terms_text", ""),
-    } for a in targets]
-    background_tasks.add_task(run_ship_analysis, items)
-    return {"auctions": len(items), "queued": True}
+    # Hand the worker ids only — it fetches the shipping/terms text itself,
+    # which keeps this response instant and makes the run resumable (the id
+    # list persists on the job row; texts would bloat it).
+    background_tasks.add_task(run_ship_analysis, [a.id for a in targets])
+    return {"auctions": len(targets), "queued": True}
 
 
 @router.get("/categories")
@@ -301,7 +294,8 @@ def enrich_all(auction_id: int, background_tasks: BackgroundTasks,
         return {"auction_id": auction_id, "queued": 0}
     db.query(models.Enrichment).filter(
         models.Enrichment.lot_id.in_(lot_ids)
-    ).update({"status": "queued"}, synchronize_session=False)
+    ).update({"status": "queued", "queued_task": "enrich"},
+             synchronize_session=False)
     db.commit()
     for lid in lot_ids:
         background_tasks.add_task(run_enrichment, lid)

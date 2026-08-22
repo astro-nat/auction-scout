@@ -15,6 +15,7 @@ def enrich_lot(lot_id: str, background_tasks: BackgroundTasks, db: Session = Dep
         raise HTTPException(status_code=404, detail="Lot not found")
 
     lot.enrichment.status = "queued"
+    lot.enrichment.queued_task = "enrich"
     db.commit()
 
     # Returns immediately — the actual AI call happens after the response is sent.
@@ -40,6 +41,7 @@ def enrich_batch(payload: schemas.EnrichBatchRequest,
     ordered = [by_id[i] for i in payload.lot_ids if i in by_id]
     for lot in ordered:
         lot.enrichment.status = "queued"
+        lot.enrichment.queued_task = "enrich"
     db.commit()
     for lot in ordered:
         background_tasks.add_task(run_enrichment, lot.id)
@@ -77,6 +79,7 @@ def inspect_lot(lot_id: str, background_tasks: BackgroundTasks, db: Session = De
         raise HTTPException(status_code=422, detail="Lot has no image to inspect")
 
     lot.enrichment.status = "queued"
+    lot.enrichment.queued_task = "inspect"
     db.commit()
     background_tasks.add_task(run_inspection, lot.id)
     return {"lot_id": lot_id, "status": "queued"}

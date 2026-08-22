@@ -64,6 +64,7 @@ class LotOut(BaseModel):
     source: Optional[str] = None
     logistics_ease: Optional[str] = None
     unreachable_pickup: bool = False
+    watched: bool = False
     lot_link: Optional[str] = None
     thumbnail_url: Optional[str] = None
     created_at: datetime
