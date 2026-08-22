@@ -25,6 +25,7 @@ def start(kind: str, label: str, total: Optional[int] = None) -> str:
         _jobs[job_id] = {
             "id": job_id, "kind": kind, "label": label,
             "current": 0, "total": total, "detail": None,
+            "cancelled": False,
         }
     return job_id
 
@@ -54,3 +55,21 @@ def finish(job_id: str) -> None:
 def active() -> list[dict]:
     with _lock:
         return list(_jobs.values())
+
+
+def cancel(job_id: str) -> bool:
+    """Ask a job to stop. Workers check is_cancelled() at safe points — the
+    work already done is kept, nothing is rolled back."""
+    with _lock:
+        job = _jobs.get(job_id)
+        if not job:
+            return False
+        job["cancelled"] = True
+        job["label"] = f"Stopping — {job['label']}"
+        return True
+
+
+def is_cancelled(job_id: str) -> bool:
+    with _lock:
+        job = _jobs.get(job_id)
+        return bool(job and job["cancelled"])

@@ -32,3 +32,22 @@ def get_status(db: Session = Depends(get_db)):
         enrichment["lot_title"] = working[1]
 
     return {"jobs": jobs.active(), "enrichment": enrichment}
+
+
+@router.post("/jobs/{job_id}/cancel")
+def cancel_job(job_id: str):
+    """Ask a running scan/import/reprice to stop. Work already saved stays."""
+    return {"cancelled": jobs.cancel(job_id)}
+
+
+@router.post("/enrichment/cancel")
+def cancel_enrichment(db: Session = Depends(get_db)):
+    """Drain the enrichment queue. Lots waiting their turn go back to
+    'pending' (re-runnable); the one mid-flight finishes — stopping it
+    halfway would burn the API call and save nothing."""
+    n = (db.query(models.Enrichment)
+           .filter(models.Enrichment.status == "queued")
+           .update({"status": "pending", "progress": None},
+                   synchronize_session=False))
+    db.commit()
+    return {"cancelled": n}

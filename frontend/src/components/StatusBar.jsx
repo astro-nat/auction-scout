@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fetchStatus } from '../api'
+import { cancelEnrichment, cancelJob, fetchStatus } from '../api'
 
 // Fixed bar across the very top: what the server is doing right now, with
 // real counts ("Importing 29 of 212"). Hidden entirely when nothing is
@@ -40,7 +40,10 @@ export default function StatusBar({ onQuiet }) {
     const text = job.total
       ? `${job.current} of ${job.total} · ${job.label}`
       : job.label
-    lines.push({ key: job.id, text, current: job.current, total: job.total })
+    lines.push({
+      key: job.id, text, current: job.current, total: job.total,
+      onCancel: job.cancelled ? null : () => cancelJob(job.id),
+    })
   }
 
   if (enrichment.queued > 0) {
@@ -49,6 +52,10 @@ export default function StatusBar({ onQuiet }) {
     lines.push({
       key: 'enrichment',
       text: `Enriching ${enrichment.queued} lot${enrichment.queued === 1 ? '' : 's'}${lot}${stage}`,
+      onCancel: async () => {
+        const r = await cancelEnrichment()
+        alert(`Stopped ${r.cancelled} queued lots. The one in progress will finish.`)
+      },
     })
   }
 
@@ -73,6 +80,12 @@ export default function StatusBar({ onQuiet }) {
               </span>
               {pct !== null && (
                 <strong style={{ flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{pct}%</strong>
+              )}
+              {l.onCancel && (
+                <button onClick={l.onCancel} title="Stop this — work already done is kept"
+                        style={{ flexShrink: 0, fontSize: 12, padding: '2px 8px' }}>
+                  Cancel
+                </button>
               )}
             </div>
             {pct !== null && (

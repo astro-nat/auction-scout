@@ -346,7 +346,7 @@ def _process_lot(raw: dict, auction_ctx: dict) -> dict:
 
 async def fetch_lots(hibid_auction_id: int, auction_ctx: dict | None = None,
                      search_text: str = "", category_id: int = -1,
-                     on_progress=None) -> list[dict]:
+                     on_progress=None, should_cancel=None) -> list[dict]:
     """All open lots for one auction, optionally filtered to one HiBid
     category server-side. Paginates at the server-fixed 100/page.
 
@@ -358,6 +358,8 @@ async def fetch_lots(hibid_auction_id: int, auction_ctx: dict | None = None,
         page = 1
         total = None
         while page <= MAX_LOT_PAGES:
+            if should_cancel and should_cancel():
+                break
             data = await _graphql(client, "LotSearch", LOT_SEARCH_QUERY, {
                 "auctionId": hibid_auction_id, "pageNumber": page,
                 "searchText": search_text, "category": category_id,

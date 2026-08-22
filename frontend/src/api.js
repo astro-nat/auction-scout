@@ -62,6 +62,14 @@ export function fetchStatus() {
   return request('/status')
 }
 
+export function cancelJob(jobId) {
+  return request(`/jobs/${jobId}/cancel`, { method: 'POST' })
+}
+
+export function cancelEnrichment() {
+  return request('/enrichment/cancel', { method: 'POST' })
+}
+
 export function fetchAuctions() {
   return request('/auctions')
 }

@@ -114,6 +114,10 @@ def run_enrichment(lot_db_id: int) -> None:
             return
 
         e = lot.enrichment
+        # Cancelling a batch flips queued lots back to 'pending'; anything
+        # not still queued was cancelled before its turn came up.
+        if e.status != "queued":
+            return
         e.last_attempted_at = datetime.now(timezone.utc)
 
         try:
@@ -399,6 +403,9 @@ def run_reprice(lot_db_ids: list[int]) -> None:
     repriced = skipped = 0
     try:
         for i, lot_db_id in enumerate(lot_db_ids, 1):
+            if jobs.is_cancelled(job):
+                print(f"Reprice cancelled after {i - 1} lots")
+                break
             lot = db.query(models.Lot).filter(models.Lot.id == lot_db_id).first()
             if not lot or not lot.enrichment:
                 continue

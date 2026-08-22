@@ -181,6 +181,7 @@ async def import_lots(auction_id: int, category_id: int = -1,
             on_progress=lambda fetched, total: jobs.update(
                 job, current=fetched, total=total,
                 label=f"Fetching lots from {auction.name}"),
+            should_cancel=lambda: jobs.is_cancelled(job),
         )
         jobs.update(job, current=0, total=len(lots),
                     label=f"Saving lots from {auction.name}")
@@ -189,8 +190,12 @@ async def import_lots(auction_id: int, category_id: int = -1,
         raise
 
     created = updated = 0
+    cancelled = False
     for i, data in enumerate(lots, 1):
         if i % 10 == 0 or i == len(lots):
+            if jobs.is_cancelled(job):
+                cancelled = True
+                break            # keep what's saved so far
             jobs.update(job, current=i)
         row = db.query(models.Lot).filter(models.Lot.lot_id == data["lot_id"]).first()
         if row:
@@ -210,7 +215,7 @@ async def import_lots(auction_id: int, category_id: int = -1,
     db.commit()
     jobs.finish(job)
     return {"auction_id": auction_id, "fetched": len(lots),
-            "created": created, "updated": updated}
+            "created": created, "updated": updated, "cancelled": cancelled}
 
 
 @router.post("/{auction_id}/enrich-all", status_code=202)
