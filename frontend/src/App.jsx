@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, scanAuctions, importLots, enrichAll, flushClosed } from './api'
+import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, scanAuctions, importLots, enrichAll, flushClosed, analyzeShipping } from './api'
 import LotTable from './components/LotTable'
 import StatusBar from './components/StatusBar'
 import useMediaQuery from './useMediaQuery'
@@ -159,6 +159,21 @@ They're listed below — use "Enrich" to price them.`)
     } catch (e) { alert(e.message); setBusy('') }
   }
 
+  async function handleAnalyzeShipping() {
+    try {
+      const peek = await analyzeShipping(true)
+      if (!peek.auctions) { alert('Every open auction already has a shipping estimate.'); return }
+      const cost = (peek.auctions * 0.003).toFixed(2)
+      const msg = `Read shipping terms for ${peek.auctions} auctions?\n\n`
+        + `The AI reads each auction's shipping policy and estimates what a `
+        + `typical small package costs to ship. Roughly $${cost} of API usage. `
+        + `Progress shows in the bar at the top.`
+      if (!window.confirm(msg)) return
+      const r = await analyzeShipping()
+      if (!r.queued) alert('Nothing to analyze.')
+    } catch (e) { alert(e.message) }
+  }
+
   function openAuctionItems(auctionId) {
     setSelectedAuction(auctionId)
     setView('items')
@@ -236,6 +251,19 @@ Skipping ${hard} HARD-to-ship lots.`
   function enrichAllLabel(a) {
     const todo = a.lots_pending + a.lots_failed
     return todo ? `Enrich ${todo}` : 'All enriched'
+  }
+
+  // AI-read shipping estimate, as a compact row tag. Tooltip carries the
+  // full policy sentence.
+  function shipBadge(a) {
+    if (a.ship_cost_estimate != null) {
+      return { text: `📦 ~$${Math.round(a.ship_cost_estimate)}/item ship`, tip: a.ship_summary }
+    }
+    if (a.ship_summary) {
+      const noShip = /pickup only|no shipping/i.test(a.ship_summary)
+      return { text: noShip ? '🚫 no ship' : '📦 ship: see terms', tip: a.ship_summary }
+    }
+    return null
   }
 
   // An auction is "hot" when its gold-mine lots add up to real money.
@@ -341,6 +369,12 @@ Skipping ${hard} HARD-to-ship lots.`
                 style={isMobile ? { width: '100%', padding: 10, fontSize: 15 } : undefined}>
           Scan auctions
         </button>
+        <button type="button" onClick={handleAnalyzeShipping} disabled={!!busy}
+                title="AI reads each auction's shipping terms and estimates the cost to ship a typical item (asks first)"
+                style={isMobile ? { width: '100%', padding: 10, fontSize: 15, marginTop: 6 }
+                                : { marginLeft: 8 }}>
+          Estimate shipping
+        </button>
         </form>
         {busy && <span style={{ marginLeft: '1rem' }}>{busy}</span>}
         {auctions.length > 0 && (isMobile ? (
@@ -364,6 +398,7 @@ Skipping ${hard} HARD-to-ship lots.`
                   {a.buyer_premium_mult ? ` · ${Math.round((a.buyer_premium_mult - 1) * 100)}% premium` : ''}
                   {hasCategoryCount(a)
                     ? ` · ${a.category_lot_count} in ${scanCategoryName ?? 'category'}` : ''}
+                  {shipBadge(a) ? ` · ${shipBadge(a).text}` : ''}
                 </div>
                 {goldBadge(a) && (
                   <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{goldBadge(a)}</div>
@@ -427,6 +462,10 @@ Skipping ${hard} HARD-to-ship lots.`
                   <td style={{ paddingRight: 12 }}>
                     {isClosed(a) && <strong>⏹ CLOSED<br /></strong>}
                     {a.city}, {a.state} ({a.source})
+                    {shipBadge(a) && (
+                      <div style={{ fontSize: 11, color: 'var(--muted)' }}
+                           title={shipBadge(a).tip}>{shipBadge(a).text}</div>
+                    )}
                   </td>
                   <td style={{ textAlign: 'center' }}>
                     {a.lot_count ?? '—'}

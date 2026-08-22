@@ -15,7 +15,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from .. import models, schemas
 from ..database import get_db
 from ..services import hibid, jobs
-from ..workers.enrich import run_enrichment
+from ..workers.enrich import run_enrichment, run_ship_analysis
 from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/auctions", tags=["auctions"])
@@ -116,6 +116,43 @@ def purge_stale_auctions(db: Session) -> int:
 def purge_stale(db: Session = Depends(get_db)):
     """Manually drop closed auctions with no imported lots."""
     return {"removed": purge_stale_auctions(db)}
+
+
+@router.post("/analyze-shipping", status_code=202)
+async def analyze_shipping(background_tasks: BackgroundTasks,
+                           dry_run: bool = False,
+                           force: bool = False,
+                           db: Session = Depends(get_db)):
+    """AI-read each open auction's shipping info + terms and store a rough
+    per-item shipping cost estimate (see workers.enrich.run_ship_analysis).
+
+    dry_run=true only counts, so the UI can put a real number and cost in
+    its confirm dialog. force=true re-analyzes auctions already read.
+    """
+    q = (db.query(models.Auction)
+           .filter(models.Auction.hibid_id.isnot(None))
+           .filter((models.Auction.closing_date.is_(None))
+                   | (models.Auction.closing_date >= datetime.now())))
+    if not force:
+        q = q.filter(models.Auction.ship_analyzed_at.is_(None))
+    targets = q.all()
+    if dry_run:
+        return {"auctions": len(targets), "dry_run": True}
+    if not targets:
+        return {"auctions": 0, "queued": False}
+
+    # The worker is sync; fetch the shipping/terms text here in async land
+    # and hand it plain dicts.
+    async with httpx.AsyncClient() as client:
+        meta = await hibid.fetch_auction_meta(client, [a.hibid_id for a in targets])
+    items = [{
+        "auction_id": a.id,
+        "name": a.name,
+        "ship_text": meta.get(a.hibid_id, {}).get("ship_text", ""),
+        "terms_text": meta.get(a.hibid_id, {}).get("terms_text", ""),
+    } for a in targets]
+    background_tasks.add_task(run_ship_analysis, items)
+    return {"auctions": len(items), "queued": True}
 
 
 @router.get("/categories")

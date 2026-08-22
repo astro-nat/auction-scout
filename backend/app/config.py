@@ -25,21 +25,41 @@ EBAY_CERT_ID = os.environ.get("EBAY_CERT_ID", "")
 DEFAULT_BUYER_PREMIUM_PCT = float(os.environ.get("DEFAULT_BUYER_PREMIUM_PCT", "15.0"))
 
 # Items that are miserable/impossible to ship — HARD logistics.
-# "desk" excludes desk clock/lamp/fan (small desktop items, not furniture).
+# Matched against TITLE + CATEGORY only (never descriptions — auctioneer
+# boilerplate like "we sell furniture, vehicles... our moving truck..."
+# flagged entire auctions HARD). Lookarounds carve accessory phrases out of
+# the furniture/vehicle words: "table lamp", "under cabinet", "car charger",
+# "dishwasher safe" are small items, not the furniture the bare word implies.
+# Bare "large"/"heavy" removed — they're product adjectives ("heavy duty",
+# "large print") far more often than freight warnings.
 SHIP_KILLERS = (
-    r"\btable\b|\bdesks?\b(?!\s+(?:clock|lamp|fan))|sofa|couch|loveseat|recliner|\bchair\b|\bchairs\b|\bbed\b|\bbeds\b"
+    r"\btables?\b(?!\s+(?:lamps?|runners?|cloths?|linens?|top|tennis|book|clocks?|fans?|saw blade))"
+    r"|\bdesks?\b(?!\s+(?:clock|lamp|fan|organizers?|pads?|mats?|armrest|accessor))"
+    r"|sofa|couch|loveseat|recliner"
+    r"|(?<!camp )(?<!camping )\bchairs?\b(?!\s+(?:covers?|pads?|cushions?|legs?|mats?))"
+    r"|(?<!dog )(?<!pet )(?<!cat )\bbeds?\b(?!\s+(?:sheets?|pillows?|skirts?|rails?|liners?))"
     r"|bedframe|bed frame|mattress|box spring|headboard|dresser|armoire|wardrobe|\bhutch\b"
-    r"|bookcase|bookshelf|\bcabinet\b|credenza|buffet|sideboard|china cabinet|nightstand"
+    r"|bookcase|bookshelf|(?<!under )\bcabinets?\b(?!\s+(?:knobs?|pulls?|hardware|hinges?))"
+    r"|credenza|buffet|sideboard|china cabinet|nightstand"
     r"|end table|coffee table|dining set|office chair|mower|lawn mower|tractor|snow blower"
-    r"|generator|mirror|pickup only|furniture|crate|appliance"
-    r"|refrigerator|\bfridge\b|freezer|\bwasher\b|\bdryer\b|dishwasher|\bstove\b|\brange\b"
-    r"|\boven\b(?!\s*mitt)|microwave|ac unit|air conditioner|water heater|\bgrill\b|\bbbq\b|\bpiano\b"
-    r"|treadmill|elliptical|exercise bike|\bgym\b|\bsafe\b|\bvault\b|gun safe|toolbox"
-    r"|tool chest|workbench|\bladder\b|\bcar\b|\bcars\b|vehicle|\btruck\b|\bsuv\b|\bsedan\b"
+    r"|generator|(?<!compact )(?<!hand )(?<!makeup )(?<!side )\bmirrors?\b(?!\s*(?:finish|polish|image))"
+    r"|pickup only|(?<!doll )(?<!dollhouse )furniture|\bcrates?\b(?!\s*(?:&|and)\s*barrel)"
+    r"|(?<!small )appliances?\b"
+    r"|refrigerator|\bfridge\b|freezer|\bwasher\b|\bdryer\b|dishwasher(?![- ]safe)|\bstove\b"
+    r"|(?<!free )(?<!driving )\brange\b(?!\s*finder)"
+    r"|\boven\b(?!\s*mitt)|microwave|ac unit|air conditioner|water heater"
+    r"|\bgrills?\b(?!\s+(?:pans?|brush(?:es)?|covers?|mats?|scrapers?|tools?|gloves?|thermometers?))"
+    r"|\bbbq\b(?!\s+(?:tools?|brush|sauce|rub|gloves?))|\bpiano\b"
+    r"|treadmill|elliptical|exercise bike|\bgym\b(?!\s+(?:bags?|shorts|towels?))"
+    r"|(?<!dishwasher )(?<!microwave )(?<!oven )(?<!kid )(?<!child )(?<!food )(?<!skin )\bsafe\b"
+    r"|\bvault\b|gun safe|toolbox"
+    r"|tool chest|workbench|\bladder\b"
+    r"|(?<!rc )(?<!toy )(?<!slot )\bcars?\b(?!\s+(?:photo|chargers?|mounts?|keys?|covers?|mats?|seats?|wash|care|audio|stereo|holders?|organizers?|vacuums?|adapters?|fresheners?))"
+    r"|vehicle|(?<!rc )(?<!toy )\btrucks?\b(?!\s+bed liner)|\bsuv\b|\bsedan\b"
     r"|motorcycle|\batv\b|\butv\b|\bboat\b|jet ski|\btrailer\b|\brv\b|\bcamper\b|motorhome"
     r"|\bhouse\b|real estate|\bproperty\b|\bland\b|\bacreage\b|\bcondo\b|\bshed\b|\bbarn\b"
     r"|\bfence\b|\bpallet\b|bulk lot|pool table|hot tub|aquarium|fish tank"
-    r"|\blarge\b|\bheavy\b|oversized"
+    r"|oversized"
 )
 
 # Small, dense, valuable — fits in a mailbox, ships cheap: EASY logistics.

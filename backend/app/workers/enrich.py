@@ -32,6 +32,7 @@ from ..database import SessionLocal
 from .. import models, config
 from ..services import financials, jobs, pricing
 from ..services.bolo import BoloMatcher
+from ..services.hibid import classify_logistics
 
 logger = logging.getLogger(__name__)
 
@@ -63,11 +64,29 @@ From the title and description, produce:
 - verdict: exactly one of "broken, damaged, or for parts" | "untested or unknown condition" | "mint condition or working perfectly" | "normal wear and tear"
 - confident: true only if brand AND specific product type are identifiable
 - notes: one sentence of resale-relevant context
+- ship: how hard this item is to ship, exactly one of "EASY" (fits a padded mailer or small box: clothing, media, jewelry, small electronics) | "NEUTRAL" (normal parcel) | "HARD" (furniture, appliances, oversized/freight, or pickup-only)
 
 Title: {title}
 Description: {description}
 
-Return ONLY valid JSON: {{"enriched_title": string, "verdict": string, "confident": boolean, "notes": string}}
+Return ONLY valid JSON: {{"enriched_title": string, "verdict": string, "confident": boolean, "notes": string, "ship": string}}
+"""
+
+SHIPPING_PROMPT = """You are helping an auction reseller decide whether it's worth having items shipped from this auction house.
+Read the auction's shipping info and terms below and work out what shipping actually costs the buyer.
+
+Shipping info:
+{ship_text}
+
+Terms and conditions (may repeat or contradict the shipping info — the more specific fee schedule wins):
+{terms_text}
+
+Produce:
+- ships: true if the auctioneer or a third party will ship, false if pickup-only, null if the text doesn't say
+- cost_estimate: your rough TOTAL cost in USD to ship one typical small-to-medium item (a shoebox-sized package): carrier postage + any handling/packing/per-item/flat fees mentioned. Use mid-range carrier rates (~$10-15 postage for such a package) when the text only gives fees on top. null ONLY when ships is false or null — if shipping exists but the fees are vague or "determined after packing", still commit to your best mid-range guess rather than null.
+- summary: one plain-English sentence a reseller can act on, e.g. "Ships in-house: $5/item handling + carrier rate, so roughly $18 for a small box" or "Third-party UPS Store — expect $25+ minimum" or "Pickup only, no shipping"
+
+Return ONLY valid JSON: {{"ships": boolean or null, "cost_estimate": number or null, "summary": string}}
 """
 
 VISION_PROMPT = """Identify this auction lot from its photo for an eBay search.
@@ -77,8 +96,9 @@ Mixed/bundled lots are never confident.
 
 Original listing title: {title}
 
-Return ONLY valid JSON: {{"enriched_title": string, "verdict": string, "confident": boolean, "notes": string}}
+Return ONLY valid JSON: {{"enriched_title": string, "verdict": string, "confident": boolean, "notes": string, "ship": string}}
 verdict must be exactly one of "broken, damaged, or for parts" | "untested or unknown condition" | "mint condition or working perfectly" | "normal wear and tear"
+ship judges how hard the pictured item is to ship: exactly one of "EASY" (fits a padded mailer or small box) | "NEUTRAL" (normal parcel) | "HARD" (furniture, appliance, oversized/freight)
 """
 
 
@@ -94,6 +114,18 @@ def _parse_json_response(text: str) -> dict:
         raise ValueError(f"no JSON object in response: {text[:120]!r}")
     obj, _ = json.JSONDecoder().raw_decode(text[start:])
     return obj
+
+
+def _mark_ai_ship(e: models.Enrichment) -> None:
+    """Record that the AI (not the import-time title regex) set this lot's
+    ship tier, by riding the user_overrides JSON list with a sentinel. The
+    reprice pass reclassifies regex-set tiers with current rules but must
+    never clobber an AI judgment; the sentinel is how it tells them apart.
+    ("logistics_ease" itself in the list means the USER set it — that blocks
+    both the AI and the reprice.)"""
+    marks = set(e.user_overrides or [])
+    if "logistics_ease_ai" not in marks:
+        e.user_overrides = sorted(marks | {"logistics_ease_ai"})
 
 
 def _progress(db: Session, e: models.Enrichment, text: str | None) -> None:
@@ -185,6 +217,13 @@ def _enrich(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
         e.confidence = "strong" if ai.get("confident") else "weak"
         if "notes" not in protected:
             e.notes = ai.get("notes")
+        # The AI saw the actual item, so its ship-tier judgment beats the
+        # title-regex guess from import (which can't tell a table from a
+        # table lamp). Runs before ROI so the logistics penalty uses it.
+        ship = (ai.get("ship") or "").upper()
+        if ship in ("EASY", "NEUTRAL", "HARD") and "logistics_ease" not in protected:
+            lot.logistics_ease = ship
+            _mark_ai_ship(e)
     elif e.ai_source is None:
         e.ai_source = "none"
 
@@ -248,8 +287,9 @@ give an eBay-searchable title (under 60 chars). Skip anything you can't
 specifically identify — never guess or pad the list. Max 12 items.
 
 Return ONLY valid JSON:
-{{"items": [{{"title": string}}], "summary": string}}
+{{"items": [{{"title": string}}], "summary": string, "ship": string}}
 summary = one sentence on what the lot contains overall.
+ship = how hard the WHOLE lot is to ship, exactly one of "EASY" (fits a padded mailer or small box) | "NEUTRAL" (normal parcel or two) | "HARD" (furniture, appliance, oversized/freight)
 """
 
 MAX_INSPECT_ITEMS = 12
@@ -328,6 +368,11 @@ def _inspect(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
     if "notes" not in protected:
         e.notes = f"[inspected: {len(items)} items, {priced} priced] {summary}\n" + "\n".join(lines)
     e.ai_source = "vision-itemized"
+    # Vision saw the whole lot — trust its ship-tier call over the title regex.
+    ship = (result.get("ship") or "").upper()
+    if ship in ("EASY", "NEUTRAL", "HARD") and "logistics_ease" not in protected:
+        lot.logistics_ease = ship
+        _mark_ai_ship(e)
     if total > 0 and "est_resale" not in protected:
         e.est_resale = round(total, 2)
         e.price_low = None
@@ -420,6 +465,14 @@ def run_reprice(lot_db_ids: list[int]) -> None:
                 skipped += 1            # never overwrite a hand-corrected price
                 continue
             try:
+                # Reclassify ship tier with the current regex rules — free,
+                # and ship-rule fixes should reach old lots the same way
+                # pricing-rule fixes do. Hand-set tiers ("logistics_ease")
+                # and AI-set tiers ("logistics_ease_ai" sentinel) survive.
+                marks = set(e.user_overrides or [])
+                if not marks & {"logistics_ease", "logistics_ease_ai"}:
+                    lot.logistics_ease = classify_logistics(
+                        lot.title or "", lot.category or "", lot.description or "")
                 comps = pricing.lookup_comps(e.enriched_title or lot.title)
                 mult = CONDITION_MULTIPLIER.get(e.verdict, 1.0)
                 e.est_resale = (round(float(comps["est_resale"]) * mult, 2)
@@ -442,3 +495,60 @@ def run_reprice(lot_db_ids: list[int]) -> None:
         jobs.finish(job)
         db.close()
     print(f"Reprice complete: {repriced} updated, {skipped} kept (hand-corrected)")
+
+
+def run_ship_analysis(items: list[dict]) -> None:
+    """AI-read each auction's shipping info + terms and store a rough
+    per-item shipping cost estimate and a one-line policy summary.
+
+    ``items`` is [{"auction_id", "name", "ship_text", "terms_text"}, ...] —
+    the texts are fetched by the (async) route handler since this worker is
+    sync. Auctions with no text at all get a summary without an AI call.
+    """
+    db: Session = SessionLocal()
+    job = jobs.start("ship-analysis", "Reading shipping terms per auction",
+                     total=len(items))
+    analyzed = no_info = 0
+    try:
+        for i, item in enumerate(items, 1):
+            if jobs.is_cancelled(job):
+                print(f"Shipping analysis cancelled after {i - 1} auctions")
+                break
+            auction = (db.query(models.Auction)
+                         .filter(models.Auction.id == item["auction_id"]).first())
+            if not auction:
+                continue
+            ship_text = (item.get("ship_text") or "").strip()
+            terms_text = (item.get("terms_text") or "").strip()
+            try:
+                if not ship_text and not terms_text:
+                    auction.ship_summary = "No shipping details posted"
+                    auction.ship_cost_estimate = None
+                    no_info += 1
+                else:
+                    result = _call_with_retry(lambda: client.messages.create(
+                        model=MODEL,
+                        max_tokens=300,
+                        messages=[{"role": "user",
+                                   "content": SHIPPING_PROMPT.format(
+                                       ship_text=ship_text[:4000] or "(none posted)",
+                                       terms_text=terms_text[:6000] or "(none posted)")}],
+                    ))
+                    if result is None:
+                        raise RuntimeError("shipping AI call failed")
+                    cost = result.get("cost_estimate")
+                    auction.ship_cost_estimate = (round(float(cost), 2)
+                                                  if isinstance(cost, (int, float)) else None)
+                    auction.ship_summary = (result.get("summary") or "")[:500] or None
+                    analyzed += 1
+                auction.ship_analyzed_at = datetime.now(timezone.utc).replace(tzinfo=None)
+                db.commit()
+            except Exception as exc:  # noqa: BLE001 — one bad auction must not stop the run
+                logger.warning("Shipping analysis failed for auction %s: %s",
+                               item["auction_id"], exc)
+                db.rollback()
+            jobs.update(job, current=i, detail=(item.get("name") or "")[:40])
+    finally:
+        jobs.finish(job)
+        db.close()
+    print(f"Shipping analysis complete: {analyzed} read, {no_info} had no info posted")

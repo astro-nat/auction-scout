@@ -99,3 +99,8 @@ export function flushClosed(dryRun = false) {
   const q = dryRun ? '?dry_run=true' : ''
   return request(`/lots/flush-closed${q}`, { method: 'POST' })
 }
+
+export function analyzeShipping(dryRun = false) {
+  const q = dryRun ? '?dry_run=true' : ''
+  return request(`/auctions/analyze-shipping${q}`, { method: 'POST' })
+}

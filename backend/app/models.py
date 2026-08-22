@@ -29,6 +29,12 @@ class Auction(Base):
     # so the "Import N <category>" button survives a page refresh.
     category_lot_count = Column(Integer)
     category_count_for = Column(Integer)
+    # AI-read shipping policy: rough $ to ship a typical small/medium item
+    # (fees + handling), a one-line plain-English summary of the policy, and
+    # when the analysis ran (so re-runs skip auctions already read).
+    ship_cost_estimate = Column(Float)
+    ship_summary = Column(String)
+    ship_analyzed_at = Column(DateTime)
     created_at = Column(DateTime, server_default=func.now())
 
     lots = relationship("Lot", back_populates="auction")

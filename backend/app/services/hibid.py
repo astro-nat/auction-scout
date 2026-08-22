@@ -272,6 +272,10 @@ async def fetch_auction_meta(client: httpx.AsyncClient, hibid_ids: list[int]) ->
             out[a["id"]] = {
                 "premium_mult": _parse_buyer_premium(a),
                 "cond_ship": bool(_COND_SHIP_RE.search(ship_text)),
+                # Raw text for the AI shipping-cost analysis — the fee
+                # schedule usually hides in one of these two blobs.
+                "ship_text": ship_text,
+                "terms_text": a.get("termsAndConditions") or "",
             }
     return out
 
@@ -298,9 +302,18 @@ def _logistics_ease(title: str, category: str, description: str) -> str:
         return "EASY"
     if _MAILBOX_RE.search(hay):
         return "EASY"
-    if _SHIP_KILLERS_RE.search(f"{hay} {description or ''}"):
+    # Killers check the TITLE + CATEGORY only. Descriptions carry auctioneer
+    # boilerplate ("we sell furniture, vehicles... our moving truck can come
+    # to you") that flagged every lot in an auction HARD. The only description
+    # signal we trust is the explicit pickup-only phrase above.
+    if _SHIP_KILLERS_RE.search(hay):
         return "HARD"
     return "NEUTRAL"
+
+
+# Public name for callers outside the import pipeline (reprice worker):
+# reclassify a lot's ship tier from its stored fields.
+classify_logistics = _logistics_ease
 
 
 def _process_lot(raw: dict, auction_ctx: dict) -> dict:
