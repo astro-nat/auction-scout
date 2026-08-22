@@ -35,9 +35,10 @@ export default function StatusBar({ onQuiet }) {
   const lines = []
 
   for (const job of jobs) {
-    const verb = job.kind === 'import' ? 'Importing' : ''
+    // Counts first: on a phone the auction name is long and the tail gets
+    // ellipsised, which is exactly where the numbers used to live.
     const text = job.total
-      ? `${job.label} — ${verb ? `${verb} ` : ''}${job.current} of ${job.total}`
+      ? `${job.current} of ${job.total} · ${job.label}`
       : job.label
     lines.push({ key: job.id, text, current: job.current, total: job.total })
   }
@@ -59,26 +60,37 @@ export default function StatusBar({ onQuiet }) {
       background: 'var(--card-bg)', borderBottom: '1px solid var(--border)',
       padding: '6px 10px', fontSize: 13, boxShadow: '0 1px 4px rgba(0,0,0,0.25)',
     }}>
-      {lines.map((l) => (
-        <div key={l.key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span className="spinner" />
-          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {l.text}
-          </span>
-          {l.total > 0 && (
-            <span style={{
-              width: 90, height: 6, borderRadius: 3, background: 'var(--badge-bg)',
-              overflow: 'hidden', flexShrink: 0,
-            }}>
-              <span style={{
-                display: 'block', height: '100%',
-                width: `${Math.min(100, Math.round((l.current / l.total) * 100))}%`,
-                background: 'var(--link)',
-              }} />
-            </span>
-          )}
-        </div>
-      ))}
+      {lines.map((l) => {
+        const pct = l.total > 0
+          ? Math.min(100, Math.round((l.current / l.total) * 100))
+          : null
+        return (
+          <div key={l.key} style={{ marginBottom: lines.length > 1 ? 6 : 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span className="spinner" />
+              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {l.text}
+              </span>
+              {pct !== null && (
+                <strong style={{ flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{pct}%</strong>
+              )}
+            </div>
+            {pct !== null && (
+              // Full-width track under the text — a 90px sliver at the far
+              // right was easy to miss, especially on a phone.
+              <div style={{
+                height: 8, borderRadius: 4, background: 'var(--badge-bg)',
+                overflow: 'hidden', marginTop: 4,
+              }}>
+                <div style={{
+                  height: '100%', width: `${pct}%`, background: 'var(--link)',
+                  transition: 'width 0.4s ease',
+                }} />
+              </div>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
