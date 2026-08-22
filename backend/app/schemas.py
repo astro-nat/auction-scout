@@ -67,6 +67,8 @@ class LotOut(BaseModel):
     lot_link: Optional[str] = None
     thumbnail_url: Optional[str] = None
     created_at: datetime
+    auction_name: Optional[str] = None
+    auction_closed: bool = False
     enrichment: Optional[EnrichmentOut] = None
 
 

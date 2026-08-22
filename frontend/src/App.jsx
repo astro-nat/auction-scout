@@ -184,6 +184,7 @@ They're listed below — use "Enrich" to price them.`)
   }
 
   // An auction is "hot" when its gold-mine lots add up to real money.
+  const isClosed = (a) => a.closing_date && new Date(a.closing_date) < new Date()
   const isHotAuction = (a) => Number(a.gold_profit ?? 0) >= 100
   const goldBadge = (a) =>
     a.gold_count > 0
@@ -198,7 +199,7 @@ They're listed below — use "Enrich" to price them.`)
       if (hideHardShip && l.logistics_ease === 'HARD') return false
       return true
     })
-    .map((l) => ({ ...l, auction_name: auctionNames[l.auction_id] ?? '—' }))
+    .map((l) => ({ ...l, auction_name: l.auction_name ?? auctionNames[l.auction_id] ?? '—' }))
   const hiddenCount = lots.length - visibleLots.length
 
   return (
@@ -299,7 +300,7 @@ They're listed below — use "Enrich" to price them.`)
                   <a href={a.source_url} target="_blank" rel="noreferrer">{a.name}</a>
                 </div>
                 <div style={{ fontSize: 13, color: 'var(--muted)', margin: '4px 0' }}>
-                  {a.city}, {a.state} · {a.lot_count ?? '—'} lots
+                  {isClosed(a) ? '⏹ CLOSED · ' : ''}{a.city}, {a.state} · {a.lot_count ?? '—'} lots
                   · closes {a.closing_date ? new Date(a.closing_date).toLocaleDateString() : '—'}
                   {a.buyer_premium_mult ? ` · ${Math.round((a.buyer_premium_mult - 1) * 100)}% premium` : ''}
                   {hasCategoryCount(a)
@@ -364,7 +365,10 @@ They're listed below — use "Enrich" to price them.`)
                     )}
                     <div style={{ fontSize: 11, color: 'var(--muted)' }}>{auctionState(a).text}</div>
                   </td>
-                  <td style={{ paddingRight: 12 }}>{a.city}, {a.state} ({a.source})</td>
+                  <td style={{ paddingRight: 12 }}>
+                    {isClosed(a) && <strong>⏹ CLOSED<br /></strong>}
+                    {a.city}, {a.state} ({a.source})
+                  </td>
                   <td style={{ textAlign: 'center' }}>
                     {a.lot_count ?? '—'}
                     {hasCategoryCount(a) && (

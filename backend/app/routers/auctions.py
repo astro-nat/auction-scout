@@ -29,8 +29,14 @@ def list_auctions(include_closed: bool = False, db: Session = Depends(get_db)):
     from sqlalchemy import func, or_
     q = db.query(models.Auction)
     if not include_closed:
+        # Hide closed auctions — unless you imported lots from them, in which
+        # case the card has to stay or your items look orphaned.
+        imported = (db.query(models.Lot.auction_id)
+                      .filter(models.Lot.auction_id.isnot(None))
+                      .distinct())
         q = q.filter(or_(models.Auction.closing_date.is_(None),
-                         models.Auction.closing_date >= datetime.now()))
+                         models.Auction.closing_date >= datetime.now(),
+                         models.Auction.id.in_(imported)))
     auctions = q.order_by(models.Auction.closing_date).all()
     gold = dict()
     rows = (

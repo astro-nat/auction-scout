@@ -21,13 +21,6 @@ def count_lots(
     """How many lots match these filters — so the UI can say 'showing 2000 of
     10,559' instead of implying the page size is the whole database."""
     q = db.query(models.Lot)
-    if not include_closed:
-        from datetime import datetime
-        from sqlalchemy import or_
-        q = (q.outerjoin(models.Auction)
-              .filter(or_(models.Lot.auction_id.is_(None),
-                          models.Auction.closing_date.is_(None),
-                          models.Auction.closing_date >= datetime.now())))
     if category:
         q = q.filter(models.Lot.category == category)
     if auction_id:
@@ -55,16 +48,12 @@ def list_lots(
     offset: int = 0,
     db: Session = Depends(get_db),
 ):
-    q = db.query(models.Lot).options(joinedload(models.Lot.enrichment))
-    if not include_closed:
-        # Hide lots from auctions that already closed. Outer join keeps
-        # manually created lots (no auction) visible.
-        from datetime import datetime
-        from sqlalchemy import or_
-        q = (q.outerjoin(models.Auction)
-              .filter(or_(models.Lot.auction_id.is_(None),
-                          models.Auction.closing_date.is_(None),
-                          models.Auction.closing_date >= datetime.now())))
+    # Imported lots are kept visible even after their auction closes — the
+    # enrichment work is yours, and a vanished lot looks like data loss. The
+    # row is marked closed instead (see auction_closed below).
+    q = (db.query(models.Lot)
+           .options(joinedload(models.Lot.enrichment),
+                    joinedload(models.Lot.auction)))
     if category:
         q = q.filter(models.Lot.category == category)
     if auction_id:
@@ -77,7 +66,18 @@ def list_lots(
         q = q.filter(models.Enrichment.roi_status == roi_status)
     if bolo_only:
         q = q.filter(models.Enrichment.bolo_brand.isnot(None))
-    return q.offset(offset).limit(limit).all()
+
+    from datetime import datetime
+    now = datetime.now()
+    rows = q.offset(offset).limit(limit).all()
+    for lot in rows:
+        # Serve the auction's name and closed-state with the lot, so the UI
+        # never has to guess from a separately-fetched auction list.
+        lot.auction_name = lot.auction.name if lot.auction else None
+        lot.auction_closed = bool(
+            lot.auction and lot.auction.closing_date
+            and lot.auction.closing_date < now)
+    return rows
 
 
 @router.get("/{lot_id}", response_model=schemas.LotOut)

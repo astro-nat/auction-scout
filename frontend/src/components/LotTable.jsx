@@ -293,7 +293,9 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
               <div style={{ fontWeight: 600 }}>
                 <a href={lot.lot_link} target="_blank" rel="noreferrer">{lot.title}</a>
               </div>
-              <div style={{ color: 'var(--muted)', fontSize: 12 }}>{lot.auction_name}</div>
+              <div style={{ color: 'var(--muted)', fontSize: 12 }}>
+                {lot.auction_closed ? '⏹ closed · ' : ''}{lot.auction_name}
+              </div>
               {e.enriched_title && e.enriched_title !== lot.title && (
                 <div style={{ color: 'var(--muted)', fontSize: 13 }}>→ {e.enriched_title}</div>
               )}
@@ -433,7 +435,10 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
                   </details>
                 )}
               </td>
-              <td style={{ ...cell, fontSize: 12, maxWidth: 140 }}>{lot.auction_name}</td>
+              <td style={{ ...cell, fontSize: 12, maxWidth: 140 }}>
+                {lot.auction_closed && <div><strong>⏹ closed</strong></div>}
+                {lot.auction_name}
+              </td>
               <td style={cell}>{lot.category}</td>
               <td style={cell}>{money(lot.current_bid)} / {money(lot.next_bid)}</td>
               <td style={cell}>{money(lot.est_cost)}</td>
