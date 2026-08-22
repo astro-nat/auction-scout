@@ -230,8 +230,14 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
         e.est_roi = lead.roi
         e.profit = lead.profit
         e.roi_status = "PASS" if (red_flag or lot.unreachable_pickup) else lead.status
-    elif red_flag or lot.unreachable_pickup:
-        e.roi_status = "PASS"
+    else:
+        # No usable price means no usable verdict. Leaving the previous run's
+        # numbers in place is how a lot whose comps were just rejected stayed
+        # the app's top "gold mine" at $3252 profit.
+        e.max_bid = None
+        e.profit = None
+        e.est_roi = None
+        e.roi_status = "PASS" if (red_flag or lot.unreachable_pickup) else None
 
 
 INSPECT_PROMPT = """This is a photo of a multi-item auction lot titled: {title}
