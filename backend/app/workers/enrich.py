@@ -47,6 +47,16 @@ MIN_DESC_FOR_TEXT_PASS = 80     # below this the description carries no signal
 # not a real shipping quote.
 LOGISTICS_PENALTY = {"EASY": 15.0, "NEUTRAL": 25.0, "HARD": 60.0}
 
+# Comps mostly describe working/complete examples — often brand new. What the
+# AI saw in the photo has to move the number, or a broken unit inherits a
+# working unit's price.
+CONDITION_MULTIPLIER = {
+    "broken, damaged, or for parts": 0.25,
+    "untested or unknown condition": 0.70,
+    "normal wear and tear": 1.00,
+    "mint condition or working perfectly": 1.00,
+}
+
 TEXT_PROMPT = """You are enriching a resale-auction lot for a reseller.
 From the title and description, produce:
 - enriched_title: the most specific eBay-searchable title (brand, model, era, product type; under 80 chars; no fluff or condition words)
@@ -179,11 +189,17 @@ def _enrich(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
         _progress(db, e, "searching eBay for comparable sales…")
         search_title = e.enriched_title or title
         comps = pricing.lookup_comps(search_title)
-        e.est_resale = comps["est_resale"]
-        e.price_low = comps["price_low"]
-        e.price_high = comps["price_high"]
+        mult = CONDITION_MULTIPLIER.get(e.verdict, 1.0)
+        e.est_resale = (round(float(comps["est_resale"]) * mult, 2)
+                        if comps["est_resale"] else None)
+        e.price_low = (round(float(comps["price_low"]) * mult, 2)
+                       if comps["price_low"] else None)
+        e.price_high = (round(float(comps["price_high"]) * mult, 2)
+                        if comps["price_high"] else None)
         e.comp_count = comps["comp_count"]
         e.price_source = comps["price_source"]
+        if mult != 1.0 and comps["price_source"]:
+            e.price_source += f" ×{mult:g} condition"
 
     # --- 4. ROI ---
     _progress(db, e, "computing max bid and ROI…")

@@ -27,6 +27,13 @@ logger = logging.getLogger(__name__)
 
 SOLDCOMPS_API_KEY = os.environ.get("SOLDCOMPS_API_KEY", "")
 
+# Active eBay listings are ASKING prices — what sellers hope for, often for
+# new stock — while we're valuing a used lot from an auction. Realized sale
+# prices run well below asking, so discount them. Sold-price sources
+# (SoldComps) are already realized and get no discount.
+# Tune with ACTIVE_REALIZATION; 1.0 disables the adjustment.
+ACTIVE_REALIZATION = float(os.environ.get("ACTIVE_REALIZATION", "0.65"))
+
 _PRICE_MIN, _PRICE_MAX = 0.99, 50000.0
 _MIN_FULL_COMPS = 3
 _QUERY_WORD_CAPS = (6, 4, 3)
@@ -219,11 +226,13 @@ def lookup_comps(title: str) -> dict:
     comps = [(p, t) for p, t in comps if _relevant(variants[-1], t)]
     prices = _iqr_filter([p for p, _ in comps])
     if prices:
-        return _finalize(title, prices, "active (eBay)", result)
+        return _finalize(title, prices, "active (eBay)", result,
+                         realization=ACTIVE_REALIZATION)
     return result
 
 
-def _finalize(title: str, prices: list[float], source: str, result: dict) -> dict:
+def _finalize(title: str, prices: list[float], source: str, result: dict,
+              realization: float = 1.0) -> dict:
     median = round(statistics.median(prices), 2)
     if len(prices) >= 4:
         q1, _, q3 = statistics.quantiles(prices, n=4)
@@ -243,6 +252,12 @@ def _finalize(title: str, prices: list[float], source: str, result: dict) -> dic
     if len(prices) == 1 and median > 100 and not _SPECIFIC_RE.search(title):
         median = low
         source += " ⚠ generic-title single-comp"
+
+    if realization != 1.0:
+        median = round(median * realization, 2)
+        low = round(low * realization, 2)
+        high = round(high * realization, 2)
+        source += f" ×{realization:g} asking→sold"
 
     result.update(est_resale=median, price_low=min(low, median),
                   price_high=max(high, median), comp_count=len(prices),
