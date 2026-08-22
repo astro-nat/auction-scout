@@ -274,6 +274,16 @@ Skipping ${hard} HARD-to-ship lots.`
     && /pickup only|no shipping/i.test(a.ship_summary)
     && a.source !== 'Local Pickup'
 
+  // What the auction actually does, not which scan found it. `source` only
+  // records scan geography ("Local Pickup" = inside your radius), so a
+  // Houston auction that's actually ship-only was labeled "(Local Pickup)".
+  // Once the AI has read the terms, its answer wins.
+  const fulfillment = (a) => {
+    if (a.ship_cost_estimate != null) return 'Ships'
+    if (a.ship_summary && /pickup only|no shipping/i.test(a.ship_summary)) return 'Pickup only'
+    return a.source
+  }
+
   const visibleAuctions = hideUnshippable
     ? auctions.filter((a) => !isUnshippable(a))
     : auctions
@@ -489,7 +499,7 @@ Skipping ${hard} HARD-to-ship lots.`
                   </td>
                   <td style={{ paddingRight: 12 }}>
                     {isClosed(a) && <strong>⏹ CLOSED<br /></strong>}
-                    {a.city}, {a.state} ({a.source})
+                    {a.city}, {a.state} ({fulfillment(a)})
                     {shipBadge(a) && (
                       <div style={{ fontSize: 11, color: 'var(--muted)' }}
                            title={shipBadge(a).tip}>{shipBadge(a).text}</div>

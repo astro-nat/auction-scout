@@ -24,6 +24,15 @@ EBAY_CERT_ID = os.environ.get("EBAY_CERT_ID", "")
 # --- default commercial assumptions when an auction doesn't specify ---
 DEFAULT_BUYER_PREMIUM_PCT = float(os.environ.get("DEFAULT_BUYER_PREMIUM_PCT", "15.0"))
 
+# --- watched-lot closing alerts (phone push via ntfy) ---
+# Setup: install the ntfy app (ntfy.sh, free, no account), subscribe to a
+# topic name nobody would guess (it's effectively a password), and set that
+# name here. Empty disables the notifier entirely.
+NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "")
+NTFY_URL = os.environ.get("NTFY_URL", "https://ntfy.sh")
+# Alert when a watched lot's auction closes within this many hours.
+WATCH_ALERT_HOURS = float(os.environ.get("WATCH_ALERT_HOURS", "2"))
+
 # Items that are miserable/impossible to ship — HARD logistics.
 # Matched against TITLE + CATEGORY only (never descriptions — auctioneer
 # boilerplate like "we sell furniture, vehicles... our moving truck..."

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { enrichLot, inspectLot, fetchLot, patchEnrichment, enrichBatch } from '../api'
+import { enrichLot, inspectLot, fetchLot, patchEnrichment, enrichBatch, setWatch } from '../api'
 import useMediaQuery from '../useMediaQuery'
 
 const cell = { padding: '4px 10px', borderBottom: '1px solid var(--border)' }
@@ -198,6 +198,11 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
 
   async function handleCorrect(lotId, field, value) {
     const updated = await patchEnrichment(lotId, { [field]: value === '' ? null : value })
+    onLotUpdated(updated)
+  }
+
+  async function handleWatch(lotId, watched) {
+    const updated = await setWatch(lotId, watched)
     onLotUpdated(updated)
   }
 
@@ -424,6 +429,16 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
           return (
             <tr key={lot.lot_id} style={gold ? { background: 'var(--gold-bg)' } : undefined}>
               <td style={cell}>
+                <button
+                  onClick={() => handleWatch(lot.lot_id, !lot.watched)}
+                  title={lot.watched
+                    ? 'Watching — you get a phone alert when this closes within 2 hours (click to stop)'
+                    : 'Watch: get a phone alert when this lot closes within 2 hours'}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer',
+                           fontSize: 15, padding: '0 4px 0 0',
+                           opacity: lot.watched ? 1 : 0.45 }}>
+                  {lot.watched ? '★' : '☆'}
+                </button>
                 <a href={lot.lot_link} target="_blank" rel="noreferrer">{lot.title}</a>
                 <div style={{ color: 'var(--muted)', fontSize: 12 }}>
                   →{' '}

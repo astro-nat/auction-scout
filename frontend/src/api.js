@@ -104,3 +104,7 @@ export function analyzeShipping(dryRun = false) {
   const q = dryRun ? '?dry_run=true' : ''
   return request(`/auctions/analyze-shipping${q}`, { method: 'POST' })
 }
+
+export function setWatch(lotId, watched) {
+  return request(`/lots/${lotId}/watch?watched=${watched}`, { method: 'POST' })
+}
