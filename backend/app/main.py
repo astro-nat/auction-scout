@@ -25,9 +25,17 @@ _MIGRATIONS = [
 for attempt in range(10):
     try:
         Base.metadata.create_all(bind=engine)
-        with engine.begin() as conn:
-            for stmt in _MIGRATIONS:
-                conn.execute(text(stmt))
+        # Each ALTER needs an exclusive table lock; if another connection
+        # holds the table (e.g. the previous deploy's pool), waiting forever
+        # here silently blocks the server from ever starting. Give each
+        # statement 5s, then skip — it'll succeed on a later boot.
+        for stmt in _MIGRATIONS:
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text("SET lock_timeout = '5000ms'"))
+                    conn.execute(text(stmt))
+            except Exception as mig_exc:  # noqa: BLE001
+                print(f"Migration skipped (will retry next boot): {stmt[:60]}… — {mig_exc}")
         break
     except Exception as exc:  # noqa: BLE001
         if attempt == 9:
