@@ -8,6 +8,41 @@ from ..database import get_db
 router = APIRouter(prefix="/lots", tags=["lots"])
 
 
+@router.get("/count")
+def count_lots(
+    category: Optional[str] = None,
+    status: Optional[str] = None,
+    auction_id: Optional[int] = None,
+    roi_status: Optional[str] = None,
+    bolo_only: bool = False,
+    include_closed: bool = False,
+    db: Session = Depends(get_db),
+):
+    """How many lots match these filters — so the UI can say 'showing 2000 of
+    10,559' instead of implying the page size is the whole database."""
+    q = db.query(models.Lot)
+    if not include_closed:
+        from datetime import datetime
+        from sqlalchemy import or_
+        q = (q.outerjoin(models.Auction)
+              .filter(or_(models.Lot.auction_id.is_(None),
+                          models.Auction.closing_date.is_(None),
+                          models.Auction.closing_date >= datetime.now())))
+    if category:
+        q = q.filter(models.Lot.category == category)
+    if auction_id:
+        q = q.filter(models.Lot.auction_id == auction_id)
+    if status or roi_status or bolo_only:
+        q = q.join(models.Enrichment)
+    if status:
+        q = q.filter(models.Enrichment.status == status)
+    if roi_status:
+        q = q.filter(models.Enrichment.roi_status == roi_status)
+    if bolo_only:
+        q = q.filter(models.Enrichment.bolo_brand.isnot(None))
+    return {"total": q.count()}
+
+
 @router.get("", response_model=List[schemas.LotOut])
 def list_lots(
     category: Optional[str] = None,

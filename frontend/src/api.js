@@ -15,7 +15,7 @@ async function request(path, options = {}) {
 
 export function fetchLots({ auctionId, status, roiStatus, boloOnly } = {}) {
   const params = new URLSearchParams()
-  params.set('limit', '2000')
+  params.set('limit', auctionId ? '6000' : '2000')
   if (auctionId) params.set('auction_id', auctionId)
   if (status) params.set('status', status)
   if (roiStatus) params.set('roi_status', roiStatus)
@@ -47,6 +47,15 @@ export function patchEnrichment(lotId, changes) {
     method: 'PATCH',
     body: JSON.stringify(changes),
   })
+}
+
+export function fetchLotCount({ auctionId, status, roiStatus, boloOnly } = {}) {
+  const params = new URLSearchParams()
+  if (auctionId) params.set('auction_id', auctionId)
+  if (status) params.set('status', status)
+  if (roiStatus) params.set('roi_status', roiStatus)
+  if (boloOnly) params.set('bolo_only', 'true')
+  return request(`/lots/count?${params}`)
 }
 
 export function fetchStatus() {

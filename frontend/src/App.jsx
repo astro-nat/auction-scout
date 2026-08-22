@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
-import { fetchLots, fetchAuctions, fetchCategories, scanAuctions, importLots, enrichAll } from './api'
+import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, scanAuctions, importLots, enrichAll } from './api'
 import LotTable from './components/LotTable'
 import StatusBar from './components/StatusBar'
 import useMediaQuery from './useMediaQuery'
 
 export default function App() {
   const isMobile = useMediaQuery('(max-width: 768px)')
+  // Two jobs, two screens: finding auctions vs working through what you've
+  // imported. Mixing them on one page made both harder to read.
+  const [view, setView] = useState('auctions')
   const [auctions, setAuctions] = useState([])
   const [selectedAuction, setSelectedAuction] = useState(null)
   const [lots, setLots] = useState([])
@@ -26,12 +29,18 @@ export default function App() {
     status: 'OPEN', zip: '', radius_miles: 25,
   })
 
+  const [lotTotal, setLotTotal] = useState(0)
+
   const loadLots = useCallback(() => {
-    fetchLots({
+    const args = {
       auctionId: selectedAuction,
       boloOnly: filters.boloOnly,
       roiStatus: filters.roiStatus || undefined,
-    }).then(setLots).catch(console.error)
+    }
+    fetchLots(args).then(setLots).catch(console.error)
+    // The fetch is capped for the browser's sake; the real total comes from
+    // the database so the UI never passes off a page size as the whole set.
+    fetchLotCount(args).then((r) => setLotTotal(r.total)).catch(console.error)
   }, [selectedAuction, filters])
 
   const rememberAuctions = useCallback((list) => {
@@ -114,6 +123,7 @@ export default function App() {
       const r = await importLots(auctionId, scanCategoryId)
       setBusy('')
       setSelectedAuction(auctionId)
+      setView('items')
       await syncAuctionStats()
       alert(`Imported ${r.created} new lots into the database`
             + (r.updated ? ` (${r.updated} already there, refreshed)` : '')
@@ -121,6 +131,11 @@ export default function App() {
 
 They're listed below — use "Enrich" to price them.`)
     } catch (e) { alert(e.message); setBusy('') }
+  }
+
+  function openAuctionItems(auctionId) {
+    setSelectedAuction(auctionId)
+    setView('items')
   }
 
   async function handleEnrichAll(auctionId) {
@@ -190,8 +205,32 @@ They're listed below — use "Enrich" to price them.`)
     <div style={{ fontFamily: 'system-ui' }}>
       <StatusBar onQuiet={refreshAll} />
       <div style={{ padding: isMobile ? '0.75rem' : '2rem' }}>
-      <h1 style={{ fontSize: isMobile ? 24 : undefined }}>AuctionScout</h1>
+      <h1 style={{ fontSize: isMobile ? 24 : undefined, marginBottom: 8 }}>AuctionScout</h1>
 
+      <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--border)',
+                    marginBottom: '1rem' }}>
+        {[
+          { key: 'auctions', label: `Auctions (${auctions.length})` },
+          { key: 'items', label: `My items (${lotTotal || lots.length})` },
+        ].map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setView(t.key)}
+            style={{
+              padding: isMobile ? '10px 12px' : '8px 16px',
+              fontSize: isMobile ? 15 : 14,
+              border: 'none', background: 'none', cursor: 'pointer',
+              color: view === t.key ? 'var(--text)' : 'var(--muted)',
+              fontWeight: view === t.key ? 700 : 400,
+              borderBottom: view === t.key ? '2px solid var(--link)' : '2px solid transparent',
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {view === 'auctions' && (
       <section style={{ marginBottom: '1.5rem' }}>
         {/* Form wrapper: pressing Enter in any filter field runs the scan */}
         <form onSubmit={(ev) => { ev.preventDefault(); handleScan() }}>
@@ -287,7 +326,7 @@ They're listed below — use "Enrich" to price them.`)
                   {a.imported_at && (
                     <>
                       <button style={{ flex: '1 1 70px', minWidth: 70, padding: 8 }}
-                              onClick={() => setSelectedAuction(a.id)}>View</button>
+                              onClick={() => openAuctionItems(a.id)}>View</button>
                       <button style={{ flex: '1 1 90px', minWidth: 90, padding: 8 }}
                               disabled={!(a.lots_pending + a.lots_failed)}
                               onClick={() => handleEnrichAll(a.id)}>{enrichAllLabel(a)}</button>
@@ -340,7 +379,7 @@ They're listed below — use "Enrich" to price them.`)
                   <td>
                     {a.imported_at && (
                       <>
-                        <button onClick={() => setSelectedAuction(a.id)}>View</button>{' '}
+                        <button onClick={() => openAuctionItems(a.id)}>View</button>{' '}
                         <button disabled={!(a.lots_pending + a.lots_failed)}
                                 onClick={() => handleEnrichAll(a.id)}>{enrichAllLabel(a)}</button>
                       </>
@@ -357,7 +396,9 @@ They're listed below — use "Enrich" to price them.`)
           </button>
         )}
       </section>
+      )}
 
+      {view === 'items' && (<>
       <section style={{ marginBottom: '0.75rem' }}>
         <label>
           <input
@@ -403,20 +444,44 @@ They're listed below — use "Enrich" to price them.`)
         <button style={{ marginLeft: '1rem' }} onClick={loadLots}>Refresh</button>
       </section>
 
-      {selectedAuction && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
-          background: 'var(--highlight)', border: '1px solid var(--border)',
-          borderRadius: 6, padding: '8px 10px', marginBottom: 10,
-        }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+        background: 'var(--highlight)', border: '1px solid var(--border)',
+        borderRadius: 6, padding: '8px 10px', marginBottom: 10,
+      }}>
+        {selectedAuction ? (
+          <>
+            <span>
+              Catalogue of <strong>{auctionNames[selectedAuction] ?? 'this auction'}</strong>
+              {' '}— {lotTotal || lots.length} lot{(lotTotal || lots.length) === 1 ? '' : 's'} imported
+            </span>
+            <button onClick={() => setSelectedAuction(null)}>Show items from every auction</button>
+          </>
+        ) : (
           <span>
-            Viewing <strong>{auctionNames[selectedAuction] ?? 'this auction'}</strong>
-            {' '}— {lots.length} lot{lots.length === 1 ? '' : 's'}
+            <strong>{lotTotal.toLocaleString()} items</strong> imported across
+            {' '}{new Set(lots.map((l) => l.auction_id)).size} auctions
+            {lotTotal > lots.length && (
+              <em style={{ color: 'var(--muted)' }}>
+                {' '}— showing the first {lots.length.toLocaleString()}; open one
+                auction, or filter, to narrow it down
+              </em>
+            )}
           </span>
-          <button onClick={() => setSelectedAuction(null)}>Show all auctions</button>
-        </div>
+        )}
+        <button onClick={() => setView('auctions')} style={{ marginLeft: 'auto' }}>
+          ← Back to auctions
+        </button>
+      </div>
+      {lots.length === 0 ? (
+        <p style={{ color: 'var(--muted)' }}>
+          Nothing imported yet. Go to <strong>Auctions</strong>, find an auction,
+          and press <strong>Import</strong> — its lots land here.
+        </p>
+      ) : (
+        <LotTable lots={visibleLots} onLotUpdated={handleLotUpdated} onRefresh={loadLots} />
       )}
-      <LotTable lots={visibleLots} onLotUpdated={handleLotUpdated} onRefresh={loadLots} />
+      </>)}
       </div>
     </div>
   )
