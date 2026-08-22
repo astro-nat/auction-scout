@@ -49,7 +49,10 @@ _CONDITION_NOISE = re.compile(
 )
 _BULK_RE = re.compile(
     r"lot of \d+|\d+\s*(pcs|pieces|cars|count)\b|collection|bundle|huge lot"
-    r"|large lot|case of|wholesale|dealer lot|estate lot",
+    r"|large lot|case of|wholesale|dealer lot|estate lot"
+    # Multi-packs: a "3 Pack" wheeled-hamper listing was setting the price of
+    # a single laundry basket.
+    r"|\d+\s*-?\s*pack\b|pack of \d+|set of \d+|\bpair of\b|\b\d+x\s",
     re.IGNORECASE,
 )
 _NOS_RE = re.compile(
@@ -133,6 +136,29 @@ def _relevant(query: str, comp_title: str) -> bool:
     return hits >= needed
 
 
+# Model codes mix letters and digits (U818A, F181W, HS290, 505-626) and ARE
+# the product's identity — a "Holy Stone U818A" priced off an F181W, or a
+# "Grand Gourmet" roaster priced off "Gourmet Standard", is a wrong comp.
+# Dimensions (10x10, 8x10) and short capacity tags (53L, 14L) are excluded.
+_MODEL_RE = re.compile(
+    r"\b(?![\d]+x[\d]+\b)(?=[a-z0-9-]*[a-z])(?=[a-z0-9-]*\d)[a-z0-9][a-z0-9-]{3,}\b",
+    re.IGNORECASE,
+)
+
+
+def _model_codes(text: str) -> set[str]:
+    return {m.group(0).lower() for m in _MODEL_RE.finditer(text or "")}
+
+
+def _model_match(query: str, comp_title: str) -> bool:
+    """If the query names a specific model, the comp has to name it too."""
+    codes = _model_codes(query)
+    if not codes:
+        return True
+    comp = (comp_title or "").lower()
+    return any(c in comp for c in codes)
+
+
 def _quantity_match(query: str, comp_title: str) -> bool:
     return bool(_BULK_RE.search(query)) == bool(_BULK_RE.search(comp_title or ""))
 
@@ -211,7 +237,8 @@ def lookup_comps(title: str) -> dict:
         if not comps:
             continue
         comps = [(p, t) for p, t in comps
-                 if _relevant(query, t) and _quantity_match(title, t)]
+                 if _relevant(query, t) and _quantity_match(title, t)
+                 and _model_match(query, t)]
         prices = _iqr_filter([p for p, _ in comps])
         if len(prices) >= _MIN_FULL_COMPS:
             return _finalize(title, prices, source, result)
@@ -223,7 +250,9 @@ def lookup_comps(title: str) -> dict:
 
     # Active-listing fallback with the shortest variant
     comps = _active_lookup(variants[-1])
-    comps = [(p, t) for p, t in comps if _relevant(variants[-1], t)]
+    comps = [(p, t) for p, t in comps
+             if _relevant(variants[-1], t) and _quantity_match(title, t)
+             and _model_match(title, t)]
     prices = _iqr_filter([p for p, _ in comps])
     if prices:
         return _finalize(title, prices, "active (eBay)", result,
