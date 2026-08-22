@@ -49,3 +49,18 @@ MAILBOX_WINNERS = (
     r"\b(jewelry|watch(es)?|camera|cards?|games?|gold|silver|nintendo|apple|ink"
     r"|pens?|coins?|currency|stamps?|numismatic)\b"
 )
+
+# Clothing/apparel: soft, foldable, light — always cheap to ship regardless
+# of the item itself, so it overrides even the HARD-ship keyword list (a
+# "leather trench coat" shouldn't flag HARD just because "coat" isn't on any
+# killer list — the point is apparel as a category is never the problem).
+CLOTHING = (
+    r"\b(clothing|apparel|garments?|outfits?|wardrobe|wearables?"
+    r"|shirts?|blouses?|dress(es)?|jackets?|coats?|jeans|pants|trousers"
+    r"|skirts?|sweaters?|hoodies?|suits?|vests?|denim|rompers?|jumpsuits?"
+    r"|overalls|cardigans?|blazers?|tunics?|sportswear|activewear"
+    r"|underwear|lingerie|pajamas|bathrobes?|shorts|t-?shirts?|polo shirts?"
+    r"|tank tops?|socks?|gloves?|scarf|scarves|beanies?|neckties?"
+    r"|gowns?|kimonos?|ponchos?|parkas?|windbreakers?|raincoats?"
+    r"|swimsuits?|bikinis?|leggings|joggers|sweatpants|uniforms?)\b"
+)

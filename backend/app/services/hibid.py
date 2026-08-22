@@ -110,6 +110,7 @@ query LotSearch($auctionId: Int!, $pageNumber: Int!, $searchText: String!, $cate
 
 _SHIP_KILLERS_RE = re.compile(config.SHIP_KILLERS, re.IGNORECASE)
 _MAILBOX_RE = re.compile(config.MAILBOX_WINNERS, re.IGNORECASE)
+_CLOTHING_RE = re.compile(config.CLOTHING, re.IGNORECASE)
 _PICKUP_ONLY_RE = re.compile(r"local pickup only|pickup only|no shipping", re.IGNORECASE)
 _COND_SHIP_RE = re.compile(
     r"not available on all lots|contact .{0,30}prior to bidding|do not assume all items",
@@ -290,6 +291,11 @@ def _logistics_ease(title: str, category: str, description: str) -> str:
     if _PICKUP_ONLY_RE.search(description or ""):
         return "HARD"
     hay = f"{title} {category or ''}"
+    # Clothing is soft and light — always cheap to ship, so it overrides even
+    # the HARD-keyword list (a "leather trench coat" isn't a HARD lot just
+    # because a stray word elsewhere in the title matched something).
+    if _CLOTHING_RE.search(hay):
+        return "EASY"
     if _MAILBOX_RE.search(hay):
         return "EASY"
     if _SHIP_KILLERS_RE.search(f"{hay} {description or ''}"):
