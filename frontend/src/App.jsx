@@ -142,8 +142,37 @@ They're listed below — use "Enrich" to price them.`)
   }
 
   async function handleEnrichAll(auctionId) {
+    const a = auctions.find((x) => x.id === auctionId)
+    const todo = (a?.lots_pending ?? 0) + (a?.lots_failed ?? 0)
+    const hard = a?.lots_hard_pending ?? 0
+    const willDo = hideHardShip ? todo - hard : todo
+    const cost = (willDo * 0.005).toFixed(2)
+
+    let msg = `Enrich ${willDo} lots from "${a?.name ?? 'this auction'}"?
+
+`
+             + `Roughly $${cost} of API usage. Progress shows in the bar at the top.`
+    if (hard > 0 && !hideHardShip) {
+      // Enriching a sofa costs the same as enriching a Rolex and almost never
+      // pays — make that explicit before the money is spent.
+      msg = `⚠ ${hard} of these ${todo} lots are HARD to ship (furniture, `
+          + `appliances, pickup-only). They cost the same to enrich and rarely `
+          + `clear your ROI bar.
+
+`
+          + `Tick "Hide HARD ship" in My items first and they'll be skipped.
+
+`
+          + `Enrich all ${todo} anyway? Roughly $${cost} of API usage.`
+    } else if (hard > 0 && hideHardShip) {
+      msg += `
+
+Skipping ${hard} HARD-to-ship lots.`
+    }
+    if (!window.confirm(msg)) return
+
     try {
-      const r = await enrichAll(auctionId)
+      const r = await enrichAll(auctionId, hideHardShip)
       alert(r.queued
         ? `Queued ${r.queued} lots. Progress shows in the bar at the top; each lot's status updates as it finishes.`
         : 'Nothing to enrich — every lot in this auction is already done.')

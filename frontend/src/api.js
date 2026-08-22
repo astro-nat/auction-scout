@@ -90,6 +90,7 @@ export function importLots(auctionId, categoryId = -1) {
   return request(`/auctions/${auctionId}/import${q}`, { method: 'POST' })
 }
 
-export function enrichAll(auctionId) {
-  return request(`/auctions/${auctionId}/enrich-all`, { method: 'POST' })
+export function enrichAll(auctionId, skipHard = false) {
+  const q = skipHard ? '?skip_hard=true' : ''
+  return request(`/auctions/${auctionId}/enrich-all${q}`, { method: 'POST' })
 }

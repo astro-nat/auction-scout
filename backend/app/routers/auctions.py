@@ -60,6 +60,8 @@ def list_auctions(include_closed: bool = False, db: Session = Depends(get_db)):
             func.count(case((models.Enrichment.status.in_(["pending", "queued"]), 1))),
             func.count(case((models.Enrichment.status == "failed", 1))),
             func.count(case((models.Enrichment.ai_source == "vision-itemized", 1))),
+            func.count(case(((models.Lot.logistics_ease == "HARD")
+                             & models.Enrichment.status.in_(["pending", "failed"]), 1))),
         )
         .outerjoin(models.Enrichment, models.Enrichment.lot_id == models.Lot.id)
         .group_by(models.Lot.auction_id)
@@ -70,7 +72,8 @@ def list_auctions(include_closed: bool = False, db: Session = Depends(get_db)):
     for a in auctions:
         a.gold_count, a.gold_profit = gold.get(a.id, (0, 0))
         (a.lots_imported, a.lots_enriched, a.lots_pending,
-         a.lots_failed, a.lots_inspected) = stats.get(a.id, (0, 0, 0, 0, 0))
+         a.lots_failed, a.lots_inspected,
+         a.lots_hard_pending) = stats.get(a.id, (0, 0, 0, 0, 0, 0))
     return auctions
 
 
@@ -226,16 +229,17 @@ async def import_lots(auction_id: int, category_id: int = -1,
 
 @router.post("/{auction_id}/enrich-all", status_code=202)
 def enrich_all(auction_id: int, background_tasks: BackgroundTasks,
-               db: Session = Depends(get_db)):
+               skip_hard: bool = False, db: Session = Depends(get_db)):
     """Queue enrichment for every pending/failed lot in an auction. Safe to
-    re-run — already-successful lots are skipped."""
-    lot_ids = [
-        lot.id for lot in
-        db.query(models.Lot).join(models.Enrichment)
-          .filter(models.Lot.auction_id == auction_id,
-                  models.Enrichment.status.in_(["pending", "failed"]))
-          .all()
-    ]
+    re-run — already-successful lots are skipped. skip_hard leaves out
+    HARD-to-ship lots, which rarely clear the ROI bar and cost the same to
+    enrich as anything else."""
+    q = (db.query(models.Lot).join(models.Enrichment)
+           .filter(models.Lot.auction_id == auction_id,
+                   models.Enrichment.status.in_(["pending", "failed"])))
+    if skip_hard:
+        q = q.filter(models.Lot.logistics_ease != "HARD")
+    lot_ids = [lot.id for lot in q.all()]
     if not lot_ids:
         return {"auction_id": auction_id, "queued": 0}
     db.query(models.Enrichment).filter(

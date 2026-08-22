@@ -108,6 +108,7 @@ class AuctionOut(BaseModel):
     lots_pending: int = 0
     lots_failed: int = 0
     lots_inspected: int = 0
+    lots_hard_pending: int = 0   # HARD-to-ship lots still awaiting enrichment
 
 
 class EnrichBatchRequest(BaseModel):
