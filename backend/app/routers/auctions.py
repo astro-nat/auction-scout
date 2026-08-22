@@ -48,6 +48,37 @@ def list_auctions(include_closed: bool = False, db: Session = Depends(get_db)):
     return auctions
 
 
+def purge_stale_auctions(db: Session) -> int:
+    """Delete closed auctions we never imported any lots from.
+
+    Every scan appends whatever HiBid returns, so the table grows without
+    bound. An auction that has closed AND has no lots holds nothing worth
+    keeping — no enrichment, no corrections, no history. Auctions with lots
+    are always kept, closed or not.
+    """
+    stale_ids = [
+        row[0] for row in
+        db.query(models.Auction.id)
+          .outerjoin(models.Lot, models.Lot.auction_id == models.Auction.id)
+          .filter(models.Auction.closing_date.isnot(None),
+                  models.Auction.closing_date < datetime.now(),
+                  models.Lot.id.is_(None))
+          .all()
+    ]
+    if stale_ids:
+        (db.query(models.Auction)
+           .filter(models.Auction.id.in_(stale_ids))
+           .delete(synchronize_session=False))
+        db.commit()
+    return len(stale_ids)
+
+
+@router.post("/purge-stale")
+def purge_stale(db: Session = Depends(get_db)):
+    """Manually drop closed auctions with no imported lots."""
+    return {"removed": purge_stale_auctions(db)}
+
+
 @router.get("/categories")
 async def list_categories():
     """HiBid's top-level category tree, for the scan filter dropdown."""
@@ -57,6 +88,11 @@ async def list_categories():
 @router.post("/scan", response_model=List[schemas.AuctionOut])
 async def scan_auctions(payload: schemas.ScanRequest, db: Session = Depends(get_db)):
     """Discover open auctions near the configured zip and store them."""
+    # Keep the table from growing without bound — every scan appends.
+    removed = purge_stale_auctions(db)
+    if removed:
+        print(f"Purged {removed} closed auctions with no imported lots")
+
     job = jobs.start("scan", "Scanning HiBid for auctions…")
     try:
         found = await hibid.discover_auctions(
