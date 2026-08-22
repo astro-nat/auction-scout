@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, scanAuctions, importLots, enrichAll } from './api'
+import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, scanAuctions, importLots, enrichAll, flushClosed } from './api'
 import LotTable from './components/LotTable'
 import StatusBar from './components/StatusBar'
 import useMediaQuery from './useMediaQuery'
@@ -138,6 +138,24 @@ export default function App() {
             + `.
 
 They're listed below — use "Enrich" to price them.`)
+    } catch (e) { alert(e.message); setBusy('') }
+  }
+
+  async function handleFlushClosed() {
+    try {
+      const peek = await flushClosed(true)
+      if (!peek.lots) { alert('No items from closed auctions to flush.'); return }
+      const msg = `Permanently delete ${peek.lots} items from closed auctions?\n\n`
+        + `Their enrichment results (the AI calls you paid for) are deleted `
+        + `with them. This can't be undone.`
+      if (!window.confirm(msg)) return
+      setBusy('Flushing closed items…')
+      const r = await flushClosed()
+      setBusy('')
+      alert(`Flushed ${r.lots} items`
+            + (r.auctions ? ` and removed ${r.auctions} empty closed auctions` : '')
+            + '.')
+      refreshAll()
     } catch (e) { alert(e.message); setBusy('') }
   }
 
@@ -494,6 +512,10 @@ Skipping ${hard} HARD-to-ship lots.`
         )}
 
         <button style={{ marginLeft: '1rem' }} onClick={loadLots}>Refresh</button>
+        <button style={{ marginLeft: '0.5rem' }} onClick={handleFlushClosed}
+                title="Permanently delete all items whose auction has closed (asks first)">
+          Flush closed items
+        </button>
       </section>
 
       <div style={{

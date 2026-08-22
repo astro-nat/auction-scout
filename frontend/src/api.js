@@ -94,3 +94,8 @@ export function enrichAll(auctionId, skipHard = false) {
   const q = skipHard ? '?skip_hard=true' : ''
   return request(`/auctions/${auctionId}/enrich-all${q}`, { method: 'POST' })
 }
+
+export function flushClosed(dryRun = false) {
+  const q = dryRun ? '?dry_run=true' : ''
+  return request(`/lots/flush-closed${q}`, { method: 'POST' })
+}

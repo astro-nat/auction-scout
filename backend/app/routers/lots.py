@@ -80,6 +80,41 @@ def list_lots(
     return rows
 
 
+@router.post("/flush-closed")
+def flush_closed(dry_run: bool = False, db: Session = Depends(get_db)):
+    """Delete every imported lot whose auction has closed, then drop the
+    now-empty closed auctions from the list.
+
+    dry_run=true only counts, so the UI can put a real number in its
+    confirm dialog. The delete is permanent — enrichment results (the
+    paid AI calls) go with the lots.
+    """
+    from datetime import datetime
+    from .auctions import purge_stale_auctions
+
+    lot_ids = [
+        row[0] for row in
+        db.query(models.Lot.id)
+          .join(models.Auction, models.Lot.auction_id == models.Auction.id)
+          .filter(models.Auction.closing_date.isnot(None),
+                  models.Auction.closing_date < datetime.now())
+          .all()
+    ]
+    if dry_run:
+        return {"lots": len(lot_ids), "dry_run": True}
+    if lot_ids:
+        # No delete-cascade on the models, so enrichments go first.
+        (db.query(models.Enrichment)
+           .filter(models.Enrichment.lot_id.in_(lot_ids))
+           .delete(synchronize_session=False))
+        (db.query(models.Lot)
+           .filter(models.Lot.id.in_(lot_ids))
+           .delete(synchronize_session=False))
+        db.commit()
+    auctions_removed = purge_stale_auctions(db)
+    return {"lots": len(lot_ids), "auctions": auctions_removed, "dry_run": False}
+
+
 @router.get("/{lot_id}", response_model=schemas.LotOut)
 def get_lot(lot_id: str, db: Session = Depends(get_db)):
     lot = (
