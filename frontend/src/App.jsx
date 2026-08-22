@@ -16,6 +16,9 @@ export default function App() {
   const [hideLowValue, setHideLowValue] = useState(true)
   const [lowValueCutoff, setLowValueCutoff] = useState(25)
   const [hideHardShip, setHideHardShip] = useState(false)
+  // Closed auctions can't be bid on — hide their lots by default, but
+  // keep them reachable: the enrichment work is still useful history.
+  const [hideClosed, setHideClosed] = useState(true)
   const [busy, setBusy] = useState('')
   // Scan filters — mirrors hibid.com's own search options
   const [categories, setCategories] = useState([])
@@ -197,6 +200,7 @@ They're listed below — use "Enrich" to price them.`)
     .filter((l) => {
       if (hideLowValue && isConfirmedLowValue(l)) return false
       if (hideHardShip && l.logistics_ease === 'HARD') return false
+      if (hideClosed && l.auction_closed) return false
       return true
     })
     .map((l) => ({ ...l, auction_name: l.auction_name ?? auctionNames[l.auction_id] ?? '—' }))
@@ -439,7 +443,14 @@ They're listed below — use "Enrich" to price them.`)
             onChange={(ev) => setHideHardShip(ev.target.checked)}
           /> Hide HARD ship
         </label>
-        {(hideLowValue || hideHardShip) && hiddenCount > 0 && (
+        <label style={{ marginLeft: '1rem' }}>
+          <input
+            type="checkbox"
+            checked={hideClosed}
+            onChange={(ev) => setHideClosed(ev.target.checked)}
+          /> Hide closed auctions
+        </label>
+        {(hideLowValue || hideHardShip || hideClosed) && hiddenCount > 0 && (
           <span style={{ marginLeft: '0.5rem', color: 'var(--muted)' }}>
             {hiddenCount} hidden
           </span>
