@@ -122,6 +122,13 @@ async def scan_auctions(payload: schemas.ScanRequest, db: Session = Depends(get_
     if removed:
         print(f"Purged {removed} closed auctions with no imported lots")
 
+    # A nationwide ("Anywhere") scan with no status limit would return every
+    # open auction on HiBid — enforced here too, not just in the UI, so it
+    # can't be bypassed by calling this endpoint directly.
+    status = payload.status
+    if payload.radius_miles == -1 and status not in ("CLOSING", "HOT"):
+        status = "CLOSING"
+
     job = jobs.start("scan", "Scanning HiBid for auctions…")
     try:
         found = await hibid.discover_auctions(
@@ -132,7 +139,7 @@ async def scan_auctions(payload: schemas.ScanRequest, db: Session = Depends(get_
             search_text=payload.search_text,
             category_id=payload.category_id,
             auction_type=payload.auction_type,
-            status=payload.status,
+            status=status,
         )
     finally:
         jobs.finish(job)

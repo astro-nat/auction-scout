@@ -61,6 +61,8 @@ export default function App() {
   useEffect(() => { fetchCategories().then(setCategories).catch(console.error) }, [])
   useEffect(() => { loadLots() }, [loadLots])
 
+  const scanIsAnywhere = Number(scan.radius_miles) === -1
+
   async function handleScan() {
     setBusy('Scanning HiBid…')
     try {
@@ -69,6 +71,9 @@ export default function App() {
         zip: scan.zip || undefined,
         category_id: Number(scan.category_id),
         radius_miles: Number(scan.radius_miles),
+        // "Anywhere" without a status limit returns every auction on HiBid —
+        // keep it bounded to auctions closing soon instead.
+        status: scanIsAnywhere ? 'CLOSING' : scan.status,
       })
       rememberAuctions(found)
       setAuctions(found)
@@ -288,7 +293,10 @@ Skipping ${hard} HARD-to-ship lots.`
             <option value="ABSENTEE">Absentee</option>
             <option value="LISTING">Listing Only</option>
           </select>
-          <select value={scan.status} onChange={(ev) => setScanField('status', ev.target.value)}
+          <select value={scanIsAnywhere ? 'CLOSING' : scan.status}
+                  onChange={(ev) => setScanField('status', ev.target.value)}
+                  disabled={scanIsAnywhere}
+                  title={scanIsAnywhere ? 'Anywhere is locked to "Closing soon" so it can\'t return every auction on HiBid' : undefined}
                   style={{ flex: 1, padding: 6, fontSize: 14, minWidth: 110 }}>
             <option value="OPEN">Open</option>
             <option value="CLOSING">Closing soon</option>
