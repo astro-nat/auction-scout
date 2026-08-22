@@ -365,7 +365,12 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
       {anyQueued && <span style={{ marginLeft: '0.75rem' }}><span className="spinner" />{lots.filter((l) => l.enrichment?.status === 'queued').length} lots in the queue… auto-refreshing</span>}
     </div>
     <table style={{ borderCollapse: 'collapse', fontSize: 14 }}>
-      <thead>
+      {/* Sticks below the status bar when one is showing (see StatusBar's
+          --statusbar-h). Solid background or the rows scroll through it. */}
+      <thead style={{
+        position: 'sticky', top: 'var(--statusbar-h, 0px)', zIndex: 10,
+        background: 'var(--bg)', boxShadow: '0 1px 0 var(--border)',
+      }}>
         <tr>
           {COLUMNS.map((c) => (
             <th

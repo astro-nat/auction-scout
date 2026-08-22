@@ -1,11 +1,26 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { cancelEnrichment, cancelJob, fetchStatus } from '../api'
+
+// Publish the bar's current height as a CSS variable so sticky table
+// headers can offset themselves below it instead of hiding under it.
+// Runs after every render; when the bar isn't rendered the ref is null
+// and the offset collapses to 0px.
+function useStatusBarHeightVar() {
+  const ref = useRef(null)
+  useEffect(() => {
+    const h = ref.current ? ref.current.offsetHeight : 0
+    document.documentElement.style.setProperty('--statusbar-h', `${h}px`)
+    return () => document.documentElement.style.setProperty('--statusbar-h', '0px')
+  })
+  return ref
+}
 
 // Fixed bar across the very top: what the server is doing right now, with
 // real counts ("Importing 29 of 212"). Hidden entirely when nothing is
 // running, so it never steals space from the app.
 export default function StatusBar({ onQuiet }) {
   const [status, setStatus] = useState(null)
+  const barRef = useStatusBarHeightVar()
 
   useEffect(() => {
     let alive = true
@@ -62,7 +77,7 @@ export default function StatusBar({ onQuiet }) {
   if (!lines.length) return null
 
   return (
-    <div style={{
+    <div ref={barRef} style={{
       position: 'sticky', top: 0, zIndex: 1000,
       background: 'var(--card-bg)', borderBottom: '1px solid var(--border)',
       padding: '6px 10px', fontSize: 13, boxShadow: '0 1px 4px rgba(0,0,0,0.25)',

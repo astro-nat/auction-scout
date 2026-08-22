@@ -439,7 +439,10 @@ Skipping ${hard} HARD-to-ship lots.`
           </details>
         ) : (
           <table style={{ marginTop: '0.75rem', borderCollapse: 'collapse' }}>
-            <thead>
+            <thead style={{
+              position: 'sticky', top: 'var(--statusbar-h, 0px)', zIndex: 10,
+              background: 'var(--bg)', boxShadow: '0 1px 0 var(--border)',
+            }}>
               <tr>
                 <th style={{ textAlign: 'left', paddingRight: 12 }}>Auction</th>
                 <th style={{ textAlign: 'left', paddingRight: 12 }}>Where</th>
