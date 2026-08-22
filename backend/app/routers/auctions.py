@@ -38,6 +38,17 @@ def list_auctions(include_closed: bool = False, db: Session = Depends(get_db)):
                          models.Auction.closing_date >= datetime.now(),
                          models.Auction.id.in_(imported)))
     auctions = q.order_by(models.Auction.closing_date).all()
+    return _attach_stats(db, auctions)
+
+
+def _attach_stats(db: Session, auctions: list) -> list:
+    """Annotate auction rows with gold-mine tallies and pipeline counts.
+
+    Every endpoint that returns AuctionOut rows must go through here — a
+    response with the schema's default zeros reads as "Not imported yet"
+    in the UI even when the auction has a thousand lots in the database.
+    """
+    from sqlalchemy import case, func
     gold = dict()
     rows = (
         db.query(models.Lot.auction_id, func.count(models.Enrichment.id),
@@ -51,7 +62,6 @@ def list_auctions(include_closed: bool = False, db: Session = Depends(get_db)):
         gold[auction_id] = (count, profit)
 
     # Per-auction pipeline state, so a card can say what's actually in the DB.
-    from sqlalchemy import case
     stat_rows = (
         db.query(
             models.Lot.auction_id,
@@ -170,7 +180,10 @@ async def scan_auctions(payload: schemas.ScanRequest, db: Session = Depends(get_
             r.category_lot_count = counts.get(r.hibid_id)
             r.category_count_for = payload.category_id
         db.commit()   # persist so a page refresh keeps the "Import N" button
-    return stored
+    # Attach the same stats GET /auctions serves — without this, previously
+    # imported auctions come back with zeroed counts and the UI shows them
+    # as "Not imported yet" until the next idle refresh.
+    return _attach_stats(db, stored)
 
 
 @router.post("/{auction_id}/import")
