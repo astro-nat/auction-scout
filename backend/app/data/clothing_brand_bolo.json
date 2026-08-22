@@ -652,6 +652,150 @@
       "comp_query_template": "{model} {colorway} {size}",
       "ship_class": "medium_box",
       "notes": "Always check StockX for current resale value. Buy depends on hype level."
+    },
+    {
+      "brand": "Y2K fashion (Ed Hardy/Von Dutch/JNCO/Juicy Couture...)",
+      "category": "y2k",
+      "tier": 2,
+      "models": [
+        "Ed Hardy rhinestone tee", "Ed Hardy hoodie", "Von Dutch trucker hat",
+        "JNCO jeans", "Juicy Couture velour tracksuit", "True Religion jeans",
+        "Baby Phat jacket", "Apple Bottoms jeans", "Miss Sixty jeans",
+        "Affliction tee", "Christian Audigier", "Phat Farm", "FUBU jersey",
+        "Rocawear", "Sean John velour", "Bebe rhinestone top"
+      ],
+      "era_markers": [
+        "2000s-era tags and logos (rhinestones, foil prints, heavy embroidery)",
+        "JNCO leg-opening width printed on tag (23\"-50\" — wider = more valuable)",
+        "Juicy velour sets need matching top + bottom for the strong comps",
+        "True Religion horseshoe stitch pockets; Big T stitching",
+        "'Y2K' as an eBay/Depop search term is the demand signal itself"
+      ],
+      "comp_ranges_usd": [
+        {"item": "JNCO jeans (wide-leg)", "low": 100, "high": 400},
+        {"item": "Von Dutch trucker hat", "low": 40, "high": 150},
+        {"item": "Juicy Couture velour set", "low": 40, "high": 120},
+        {"item": "Ed Hardy / Affliction tees & hoodies", "low": 25, "high": 90},
+        {"item": "True Religion / Miss Sixty / Apple Bottoms denim", "low": 30, "high": 90},
+        {"item": "Baby Phat / FUBU / Phat Farm / Rocawear", "low": 25, "high": 80}
+      ],
+      "target_buy_usd": {"low": 3, "high": 25},
+      "platform_primary": "Depop",
+      "platform_secondary": "eBay",
+      "comp_query_template": "y2k {brand} {item} {size}",
+      "ship_class": "poly_mailer",
+      "notes": "Gen Z-driven Y2K revival: the exact brands thrifted for nothing a decade ago. Condition of prints/rhinestones matters; deadstock or matching sets command the top of range."
+    },
+    {
+      "brand": "Graphic tees (modern & unsorted)",
+      "category": "graphic_tees",
+      "tier": 2,
+      "models": [
+        "single stitch tee", "tour shirt", "band tee",
+        "movie promo tee", "anime tee", "nascar tee",
+        "harley tee", "big print tee"
+      ],
+      "era_markers": [
+        "Single-stitch hem/sleeves = pre-2000 (instant flip signal even unsorted)",
+        "Copyright year printed near the graphic",
+        "Tag brand dates the shirt (Hanes BEEFY-T, Screen Stars, Brockum, Giant, Anvil, Delta)",
+        "Front-AND-back graphics on modern reprints; originals often front-only"
+      ],
+      "comp_ranges_usd": [
+        {"item": "single-stitch vintage (unsorted find)", "low": 30, "high": 300},
+        {"item": "nascar / harley / anime graphic tees", "low": 20, "high": 120},
+        {"item": "modern graphic tees (branded)", "low": 10, "high": 40}
+      ],
+      "target_buy_usd": {"low": 2, "high": 20},
+      "platform_primary": "eBay",
+      "platform_secondary": "Depop",
+      "comp_query_template": "vintage {graphic} t shirt {size} single stitch",
+      "ship_class": "poly_mailer",
+      "notes": "Catch-all for graphic-tee lots the band/movie-specific entries miss. Always check the hem stitch and copyright year before pricing — the same graphic is $12 modern and $150 single-stitch."
+    },
+    {
+      "brand": "Plus-size brands (Eloquii/City Chic/Universal Standard...)",
+      "category": "plus_size",
+      "tier": 2,
+      "models": [
+        "Eloquii dress", "City Chic dress", "Universal Standard",
+        "Ashley Stewart", "Lane Bryant", "Cacique bra",
+        "Her Universe fandom apparel"
+      ],
+      "era_markers": [
+        "Plus sizing on tag (14+-32, 1X-6X, 00-6 for Torrid-style sizing)",
+        "Cacique = Lane Bryant's intimates line (sets/bras outsell the clothing)",
+        "Her Universe = licensed fandom (Disney/Star Wars collabs command a premium)"
+      ],
+      "comp_ranges_usd": [
+        {"item": "Eloquii / City Chic / Universal Standard dresses", "low": 25, "high": 70},
+        {"item": "Her Universe licensed pieces", "low": 25, "high": 80},
+        {"item": "Lane Bryant / Ashley Stewart", "low": 15, "high": 40},
+        {"item": "Cacique bras & sets (NWT)", "low": 15, "high": 40}
+      ],
+      "target_buy_usd": {"low": 2, "high": 12},
+      "platform_primary": "Poshmark",
+      "platform_secondary": "eBay",
+      "comp_query_template": "{brand} {item} plus size {size}",
+      "ship_class": "poly_mailer",
+      "notes": "Underserved buyer base pays reliably — plus sizes sell faster and closer to ask than straight sizes from the same brands. Complements the existing Torrid entry."
+    },
+    {
+      "brand": "Luxury outerwear & streetwear (Moncler/Canada Goose/Balenciaga...)",
+      "category": "luxury",
+      "tier": 3,
+      "models": [
+        "Moncler puffer", "Canada Goose parka", "Stone Island badge knit",
+        "Off-White", "Balenciaga", "Golden Goose sneakers",
+        "Rick Owens", "Amiri jeans"
+      ],
+      "era_markers": [
+        "Moncler: QR/NFC certilogo tag inside (scannable) — no tag, assume fake",
+        "Canada Goose: hologram tag + fur ruff quality",
+        "Stone Island: detachable compass badge with buttons",
+        "Golden Goose: intentional distressing is factory, not wear",
+        "All of these are heavily replicated — authenticate before pricing"
+      ],
+      "comp_ranges_usd": [
+        {"item": "Moncler / Canada Goose outerwear", "low": 200, "high": 900},
+        {"item": "Balenciaga / Off-White / Rick Owens pieces", "low": 100, "high": 600},
+        {"item": "Stone Island knits & jackets", "low": 80, "high": 400},
+        {"item": "Golden Goose sneakers", "low": 80, "high": 300}
+      ],
+      "target_buy_usd": {"low": 15, "high": 120},
+      "platform_primary": "eBay",
+      "platform_secondary": "Grailed",
+      "comp_query_template": "{brand} {item} {size}",
+      "ship_class": "small_box",
+      "notes": "Authentication-gated like the designer-luxury group — a $40 'Moncler' is a replica until the certilogo scans. Estate and storage auctions surface real ones mislabeled as generic coats."
+    },
+    {
+      "brand": "Contemporary designer women's (Ganni/Zimmermann/Johnny Was...)",
+      "category": "premium_contemporary",
+      "tier": 2,
+      "models": [
+        "Ganni dress", "Zimmermann dress", "Johnny Was embroidered",
+        "Farm Rio print dress", "Veronica Beard blazer",
+        "Ulla Johnson", "Sezane", "Staud bag"
+      ],
+      "era_markers": [
+        "Johnny Was: signature all-over embroidery on rayon/silk",
+        "Zimmermann: Australian sizing (0-4 maps to US 2-10)",
+        "Farm Rio: loud tropical prints, Brazil label",
+        "Veronica Beard: dickey-compatible blazer buttons"
+      ],
+      "comp_ranges_usd": [
+        {"item": "Zimmermann dresses", "low": 80, "high": 350},
+        {"item": "Veronica Beard blazers", "low": 60, "high": 200},
+        {"item": "Ganni / Ulla Johnson / Sezane", "low": 40, "high": 150},
+        {"item": "Johnny Was / Farm Rio / Staud", "low": 35, "high": 130}
+      ],
+      "target_buy_usd": {"low": 5, "high": 40},
+      "platform_primary": "Poshmark",
+      "platform_secondary": "eBay",
+      "comp_query_template": "{brand} {item} {size}",
+      "ship_class": "poly_mailer",
+      "notes": "The 'quiet expensive' brands estate auctions misprice constantly — a Zimmermann dress reads as a generic floral dress to auctioneers."
     }
   ],
   "skip_list": [

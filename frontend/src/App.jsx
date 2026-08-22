@@ -31,6 +31,7 @@ export default function App() {
     search_text: '', category_id: -1, auction_type: 'ALL',
     status: 'OPEN', zip: '', radius_miles: 25,
   })
+  const [hideUnshippable, setHideUnshippable] = useState(true)
 
   const [lotTotal, setLotTotal] = useState(0)
 
@@ -266,6 +267,17 @@ Skipping ${hard} HARD-to-ship lots.`
     return null
   }
 
+  // Shipping analysis said "no shipping" — worthless unless it's local
+  // enough to pick up (source tells us which scan geography found it).
+  const isUnshippable = (a) =>
+    a.ship_summary && a.ship_cost_estimate == null
+    && /pickup only|no shipping/i.test(a.ship_summary)
+    && a.source !== 'Local Pickup'
+
+  const visibleAuctions = hideUnshippable
+    ? auctions.filter((a) => !isUnshippable(a))
+    : auctions
+
   // An auction is "hot" when its gold-mine lots add up to real money.
   const isClosed = (a) => a.closing_date && new Date(a.closing_date) < new Date()
   const isHotAuction = (a) => Number(a.gold_profit ?? 0) >= 100
@@ -377,12 +389,25 @@ Skipping ${hard} HARD-to-ship lots.`
         </button>
         </form>
         {busy && <span style={{ marginLeft: '1rem' }}>{busy}</span>}
-        {auctions.length > 0 && (isMobile ? (
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 6, fontSize: 13 }}
+               title="Shipping analysis found these don't ship, and they're outside your pickup radius — nothing you could actually buy">
+          <input
+            type="checkbox"
+            checked={hideUnshippable}
+            onChange={(ev) => setHideUnshippable(ev.target.checked)}
+          /> Hide no-ship auctions outside my radius
+          {hideUnshippable && auctions.length - visibleAuctions.length > 0 && (
+            <span style={{ color: 'var(--muted)' }}>
+              ({auctions.length - visibleAuctions.length} hidden)
+            </span>
+          )}
+        </label>
+        {visibleAuctions.length > 0 && (isMobile ? (
           <details style={{ marginTop: '0.75rem' }} open={!selectedAuction}>
             <summary style={{ fontWeight: 600, padding: '4px 0' }}>
-              Auctions ({auctions.length})
+              Auctions ({visibleAuctions.length})
             </summary>
-            {auctions.slice(0, auctionLimit).map((a) => (
+            {visibleAuctions.slice(0, auctionLimit).map((a) => (
               <div key={a.id} style={{
                 border: isHotAuction(a) ? '2px solid #2e9e4f' : '1px solid var(--border)',
                 borderRadius: 8, padding: 10, marginTop: 8,
@@ -430,10 +455,10 @@ Skipping ${hard} HARD-to-ship lots.`
                 </div>
               </div>
             ))}
-            {auctions.length > auctionLimit && (
+            {visibleAuctions.length > auctionLimit && (
               <button style={{ width: '100%', padding: 8, marginTop: 8 }}
                       onClick={() => setAuctionLimit((n) => n + 50)}>
-                Show more auctions ({auctions.length - auctionLimit} more)
+                Show more auctions ({visibleAuctions.length - auctionLimit} more)
               </button>
             )}
           </details>
@@ -450,7 +475,7 @@ Skipping ${hard} HARD-to-ship lots.`
               </tr>
             </thead>
             <tbody>
-              {auctions.slice(0, auctionLimit).map((a) => (
+              {visibleAuctions.slice(0, auctionLimit).map((a) => (
                 <tr key={a.id} style={{
                   background: isHotAuction(a) ? 'var(--gold-bg)'
                     : selectedAuction === a.id ? 'var(--highlight)' : undefined,
@@ -495,9 +520,9 @@ Skipping ${hard} HARD-to-ship lots.`
             </tbody>
           </table>
         ))}
-        {!isMobile && auctions.length > auctionLimit && (
+        {!isMobile && visibleAuctions.length > auctionLimit && (
           <button style={{ marginTop: 8 }} onClick={() => setAuctionLimit((n) => n + 50)}>
-            Show more auctions ({auctions.length - auctionLimit} more)
+            Show more auctions ({visibleAuctions.length - auctionLimit} more)
           </button>
         )}
       </section>

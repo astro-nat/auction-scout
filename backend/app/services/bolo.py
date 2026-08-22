@@ -134,7 +134,10 @@ _BOLO_MATCH_CACHE_PATH = _CACHE_DIR / "bolo_match_cache.json"
 #   v4 (2026-08-22): PC cases dropped from computer-parts BOLO (bulky
 #      freight); NZXT / Cooler Master rebuilt as cooler-only entries and
 #      Kraken aliases moved out of premium-water-cooling.
-_MATCHER_LOGIC_VERSION = "4"
+#   v5 (2026-08-22): clothing additions — Y2K brands, graphic tees,
+#      plus-size brands, luxury outerwear/streetwear, contemporary
+#      designer women's (with collision-gated compound aliases).
+_MATCHER_LOGIC_VERSION = "5"
 # How many writes to absorb before flushing the in-memory cache to
 # disk. Tuned for "scan 14k lots" use case — flushing every 500 misses
 # means ~30 disk writes during a full scan, each ~50ms (negligible
@@ -1422,6 +1425,46 @@ _BRAND_ALIASES: Dict[str, List[str]] = {
     ],
     "Vintage band tees (high-value music)":   [],   # model-only matches
     "Vintage movie/TV/brand promo tees":      [],   # model-only matches
+    "Y2K fashion (Ed Hardy/Von Dutch/JNCO/Juicy Couture...)": [
+        "y2k", "ed hardy", "von dutch", "jnco",
+        "juicy couture", "true religion", "baby phat",
+        "apple bottoms", "miss sixty", "affliction",
+        "christian audigier", "phat farm", "fubu",
+        "rocawear", "sean john", "bebe",
+    ],
+    "Graphic tees (modern & unsorted)": [
+        "graphic tee", "graphic tees", "graphic t-shirt",
+        "graphic t shirt", "graphic tshirt",
+        "single stitch", "single-stitch",
+        "tour shirt", "tour tee", "band tee", "band t-shirt",
+        "nascar tee", "nascar shirt", "nascar t-shirt",
+        "harley davidson t-shirt", "harley davidson tee",
+        "harley davidson shirt", "harley tee",
+    ],
+    "Plus-size brands (Eloquii/City Chic/Universal Standard...)": [
+        "eloquii", "city chic", "universal standard",
+        "ashley stewart", "lane bryant", "cacique",
+        "her universe",
+    ],
+    # Compound aliases where the bare brand collides with non-fashion lots:
+    # "off white" is a color, "canada goose"/"golden goose" match hunting
+    # decoys and decor, "zimmermann" is also a German piano maker.
+    "Luxury outerwear & streetwear (Moncler/Canada Goose/Balenciaga...)": [
+        "moncler",
+        "canada goose jacket", "canada goose parka", "canada goose coat",
+        "canada goose vest", "canada goose expedition",
+        "stone island", "balenciaga", "rick owens", "amiri",
+        "off-white c/o", "off white c/o", "virgil abloh",
+        "golden goose sneakers", "golden goose shoes",
+        "golden goose superstar", "golden goose trainers",
+    ],
+    "Contemporary designer women's (Ganni/Zimmermann/Johnny Was...)": [
+        "ganni", "johnny was", "farm rio", "veronica beard",
+        "ulla johnson", "sezane", "staud",
+        "zimmermann dress", "zimmermann top", "zimmermann silk",
+        "zimmermann skirt", "zimmermann blouse", "zimmermann gown",
+        "zimmermann swim",
+    ],
     # Bare " starter " false-matched "NEW STARTER UNKNOWN VEHICLE"
     # (automotive starter motor). Gate to clothing context.
     "Vintage sports/college (Champion/Nike/Starter/Salem)": [
