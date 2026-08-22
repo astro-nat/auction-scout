@@ -318,14 +318,23 @@ export default function App() {
             {hiddenCount} hidden
           </span>
         )}
-        {selectedAuction && (
-          <button style={{ marginLeft: '1rem' }} onClick={() => setSelectedAuction(null)}>
-            Show all auctions' lots
-          </button>
-        )}
+
         <button style={{ marginLeft: '1rem' }} onClick={loadLots}>Refresh</button>
       </section>
 
+      {selectedAuction && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+          background: 'var(--highlight)', border: '1px solid var(--border)',
+          borderRadius: 6, padding: '8px 10px', marginBottom: 10,
+        }}>
+          <span>
+            Viewing <strong>{auctionNames[selectedAuction] ?? 'this auction'}</strong>
+            {' '}— {lots.length} lot{lots.length === 1 ? '' : 's'}
+          </span>
+          <button onClick={() => setSelectedAuction(null)}>Show all auctions</button>
+        </div>
+      )}
       <LotTable lots={visibleLots} onLotUpdated={handleLotUpdated} onRefresh={loadLots} />
       </div>
     </div>
