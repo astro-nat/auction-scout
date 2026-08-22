@@ -60,7 +60,7 @@ CONDITION_MULTIPLIER = {
 
 TEXT_PROMPT = """You are enriching a resale-auction lot for a reseller.
 From the title and description, produce:
-- enriched_title: the most specific eBay-searchable title (brand, model, era, product type; under 80 chars; no fluff or condition words)
+- enriched_title: the most specific eBay-searchable title (brand, model, era, product type; under 80 chars; no fluff or condition words). For apparel/shoes, ALWAYS carry the audience and size when stated (kids/youth/toddler/boys/girls/men's/women's, size) — a kids Nike hoodie priced against adult listings is a wrong price.
 - verdict: exactly one of "broken, damaged, or for parts" | "untested or unknown condition" | "mint condition or working perfectly" | "normal wear and tear"
 - confident: true only if brand AND specific product type are identifiable
 - notes: one sentence of resale-relevant context
@@ -91,10 +91,12 @@ Return ONLY valid JSON: {{"ships": boolean or null, "cost_estimate": number or n
 
 VISION_PROMPT = """Identify this auction lot from its photo for an eBay search.
 Produce the most specific searchable title you can (brand, model, material, era, product type; under 80 chars).
+For apparel/shoes, ALWAYS carry the audience and size when the photo, tags, listing title, or description show it (kids/youth/toddler/boys/girls/men's/women's, size) — a kids item priced against adult listings is a wrong price.
 A vintage/unbranded item is still confident if you can name 3+ visual specifics (material + color/pattern + form + era).
 Mixed/bundled lots are never confident.
 
 Original listing title: {title}
+Listing description (may be empty or boilerplate — trust the photo over it, but use its sizes/model numbers): {description}
 
 Return ONLY valid JSON: {{"enriched_title": string, "verdict": string, "confident": boolean, "notes": string, "ship": string}}
 verdict must be exactly one of "broken, damaged, or for parts" | "untested or unknown condition" | "mint condition or working perfectly" | "normal wear and tear"
@@ -205,7 +207,7 @@ def _enrich(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
         _progress(db, e, "AI examining the photo…")
         image_bytes = _download_image(lot.thumbnail_url or lot.hd_thumbnail_url)
         if image_bytes:
-            vision = _call_vision(title, image_bytes)
+            vision = _call_vision(title, image_bytes, description)
             if vision is not None and (ai is None or vision.get("confident")):
                 ai = vision
                 e.ai_source = "vision"
@@ -281,10 +283,17 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
 
 INSPECT_PROMPT = """This is a photo of a multi-item auction lot titled: {title}
 
+The listing description (may be empty or boilerplate — trust the photo over
+it, but use its sizes, model numbers, and quantities):
+{description}
+
 Identify each INDIVIDUALLY SELLABLE item you can actually read or recognize in
 the photo — CD/DVD/book spines, game boxes, branded products, etc. For each,
-give an eBay-searchable title (under 60 chars). Skip anything you can't
-specifically identify — never guess or pad the list. Max 12 items.
+give an eBay-searchable title (under 60 chars). For apparel/shoes, ALWAYS
+carry the audience and size when shown (kids/youth/toddler/boys/girls/men's/
+women's, size) — a kids item priced against adult listings is a wrong price.
+Skip anything you can't specifically identify — never guess or pad the list.
+Max 12 items.
 
 Return ONLY valid JSON:
 {{"items": [{{"title": string}}], "summary": string, "ship": string}}
@@ -339,7 +348,9 @@ def _inspect(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
                 {"type": "image", "source": {"type": "base64",
                                              "media_type": "image/jpeg",
                                              "data": b64}},
-                {"type": "text", "text": INSPECT_PROMPT.format(title=lot.title or "")},
+                {"type": "text", "text": INSPECT_PROMPT.format(
+                    title=lot.title or "",
+                    description=(lot.description or "")[:1500] or "(none)")},
             ],
         }],
     ))
@@ -406,7 +417,7 @@ def _call_text(title: str, description: str) -> dict | None:
     ))
 
 
-def _call_vision(title: str, image_bytes: bytes) -> dict | None:
+def _call_vision(title: str, image_bytes: bytes, description: str = "") -> dict | None:
     b64 = base64.b64encode(image_bytes).decode()
     return _call_with_retry(lambda: client.messages.create(
         model=MODEL,
@@ -417,7 +428,9 @@ def _call_vision(title: str, image_bytes: bytes) -> dict | None:
                 {"type": "image", "source": {"type": "base64",
                                              "media_type": "image/jpeg",
                                              "data": b64}},
-                {"type": "text", "text": VISION_PROMPT.format(title=title)},
+                {"type": "text", "text": VISION_PROMPT.format(
+                    title=title,
+                    description=(description or "")[:1500] or "(none)")},
             ],
         }],
     ))

@@ -163,6 +163,26 @@ def _quantity_match(query: str, comp_title: str) -> bool:
     return bool(_BULK_RE.search(query)) == bool(_BULK_RE.search(comp_title or ""))
 
 
+# Kids vs adult apparel price entirely differently — a kids Nike hoodie
+# priced off adult listings is a wrong comp. If the query declares an
+# audience, comps declaring the OPPOSITE audience are rejected; silent
+# comps still count (requiring the token would empty the comp pool).
+# "jr"/"junior" deliberately absent — sports cards ("Griffey Jr") collide.
+_KID_RE = re.compile(
+    r"\b(kids?|youth|toddlers?|infants?|baby|babies|boys?|girls?|child|childrens?)\b",
+    re.IGNORECASE)
+_ADULT_RE = re.compile(r"\b(men'?s?|women'?s?|ladies|adult)\b", re.IGNORECASE)
+
+
+def _audience_match(query: str, comp_title: str) -> bool:
+    comp = comp_title or ""
+    if _KID_RE.search(query) and _ADULT_RE.search(comp) and not _KID_RE.search(comp):
+        return False
+    if _ADULT_RE.search(query) and _KID_RE.search(comp) and not _ADULT_RE.search(comp):
+        return False
+    return True
+
+
 def _iqr_filter(prices: list[float]) -> list[float]:
     if len(prices) < 4:
         return prices
@@ -238,7 +258,7 @@ def lookup_comps(title: str) -> dict:
             continue
         comps = [(p, t) for p, t in comps
                  if _relevant(query, t) and _quantity_match(title, t)
-                 and _model_match(query, t)]
+                 and _model_match(query, t) and _audience_match(title, t)]
         prices = _iqr_filter([p for p, _ in comps])
         if len(prices) >= _MIN_FULL_COMPS:
             return _finalize(title, prices, source, result)
@@ -252,7 +272,7 @@ def lookup_comps(title: str) -> dict:
     comps = _active_lookup(variants[-1])
     comps = [(p, t) for p, t in comps
              if _relevant(variants[-1], t) and _quantity_match(title, t)
-             and _model_match(title, t)]
+             and _model_match(title, t) and _audience_match(title, t)]
     prices = _iqr_filter([p for p, _ in comps])
     if prices:
         return _finalize(title, prices, "active (eBay)", result,
