@@ -98,7 +98,8 @@ class AuctionOut(BaseModel):
     imported_at: Optional[datetime] = None
     gold_count: int = 0                       # GOLD MINE lots found so far
     gold_profit: Optional[Decimal] = None     # summed potential profit of those lots
-    category_lot_count: Optional[int] = None  # lots matching the scanned category (scan only)
+    category_lot_count: Optional[int] = None  # lots matching the last scanned category
+    category_count_for: Optional[int] = None  # which category that count is for
 
 
 class EnrichBatchRequest(BaseModel):

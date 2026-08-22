@@ -61,8 +61,14 @@ export default function App() {
   const scanCategoryId = Number(scan.category_id)
   const scanCategoryName = categories.find((c) => c.id === scanCategoryId)?.name
 
+  // The stored count is only meaningful for the category it was counted for.
+  const hasCategoryCount = (a) =>
+    scanCategoryId !== -1 &&
+    a.category_lot_count != null &&
+    a.category_count_for === scanCategoryId
+
   function importLabel(a) {
-    if (scanCategoryId !== -1 && a.category_lot_count != null) {
+    if (hasCategoryCount(a)) {
       // Keep it short on phones — the full category name blew the button
       // out of the card and pushed it off screen.
       return isMobile
@@ -200,13 +206,16 @@ export default function App() {
                   {a.city}, {a.state} · {a.lot_count ?? '—'} lots
                   · closes {a.closing_date ? new Date(a.closing_date).toLocaleDateString() : '—'}
                   {a.buyer_premium_mult ? ` · ${Math.round((a.buyer_premium_mult - 1) * 100)}% premium` : ''}
+                  {hasCategoryCount(a)
+                    ? ` · ${a.category_lot_count} in ${scanCategoryName ?? 'category'}` : ''}
                 </div>
                 {goldBadge(a) && (
                   <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{goldBadge(a)}</div>
                 )}
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button style={{ flex: 1, padding: 8 }} onClick={() => handleImport(a.id)} disabled={!!busy}>
-                    Import
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button style={{ flex: '1 1 90px', minWidth: 90, padding: 8 }}
+                          onClick={() => handleImport(a.id)} disabled={!!busy}>
+                    {importLabel(a)}
                   </button>
                   {a.imported_at && (
                     <>
@@ -244,7 +253,7 @@ export default function App() {
                   <td style={{ paddingRight: 12 }}>{a.city}, {a.state} ({a.source})</td>
                   <td style={{ textAlign: 'center' }}>
                     {a.lot_count ?? '—'}
-                    {a.category_lot_count != null && scanCategoryId !== -1 && (
+                    {hasCategoryCount(a) && (
                       <div style={{ fontSize: 11, color: 'var(--muted)' }}>{a.category_lot_count} match</div>
                     )}
                   </td>

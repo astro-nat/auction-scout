@@ -20,6 +20,8 @@ from sqlalchemy import text
 _MIGRATIONS = [
     "ALTER TABLE enrichment ADD COLUMN IF NOT EXISTS auth_required BOOLEAN DEFAULT FALSE",
     "ALTER TABLE enrichment ADD COLUMN IF NOT EXISTS progress VARCHAR",
+    "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS category_lot_count INTEGER",
+    "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS category_count_for INTEGER",
 ]
 
 for attempt in range(10):

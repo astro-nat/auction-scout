@@ -96,6 +96,8 @@ async def scan_auctions(payload: schemas.ScanRequest, db: Session = Depends(get_
             jobs.finish(cjob)
         for r in stored:
             r.category_lot_count = counts.get(r.hibid_id)
+            r.category_count_for = payload.category_id
+        db.commit()   # persist so a page refresh keeps the "Import N" button
     return stored
 
 

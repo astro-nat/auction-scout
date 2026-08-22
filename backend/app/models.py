@@ -24,6 +24,11 @@ class Auction(Base):
     buyer_premium_mult = Column(Float)   # 1.15 = 15% premium; None = unknown
     cond_ship = Column(Boolean, default=False)  # "shipping on some lots only"
     imported_at = Column(DateTime)   # when lots were last pulled
+    # Result of the last category-filtered scan: how many of this auction's
+    # lots matched, and which HiBid category that count refers to. Persisted
+    # so the "Import N <category>" button survives a page refresh.
+    category_lot_count = Column(Integer)
+    category_count_for = Column(Integer)
     created_at = Column(DateTime, server_default=func.now())
 
     lots = relationship("Lot", back_populates="auction")
