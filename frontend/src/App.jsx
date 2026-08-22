@@ -66,12 +66,22 @@ export default function App() {
 
   // Called when the status bar sees the server go idle — pull fresh data so
   // finished imports/enrichments appear without a manual refresh.
+  // Pull fresh auction stats and merge them into whatever is on screen, so
+  // counts update after an import/enrichment without wiping scan results.
+  const syncAuctionStats = useCallback(async () => {
+    const fresh = await fetchAuctions()
+    rememberAuctions(fresh)
+    const byId = Object.fromEntries(fresh.map((a) => [a.id, a]))
+    setAuctions((prev) => {
+      if (!prev.length) return fresh
+      return prev.map((a) => (byId[a.id] ? { ...a, ...byId[a.id] } : a))
+    })
+  }, [rememberAuctions])
+
   const refreshAll = useCallback(() => {
-    // Only refresh the name index here — replacing the visible list would
-    // wipe the user's scan results out from under them.
-    fetchAuctions().then(rememberAuctions).catch(console.error)
+    syncAuctionStats().catch(console.error)
     loadLots()
-  }, [loadLots, rememberAuctions])
+  }, [loadLots, syncAuctionStats])
 
   function setScanField(field, value) {
     setScan((prev) => ({ ...prev, [field]: value }))
@@ -104,14 +114,22 @@ export default function App() {
       const r = await importLots(auctionId, scanCategoryId)
       setBusy('')
       setSelectedAuction(auctionId)
-      alert(`Imported ${r.created} new lots (${r.updated} updated) of ${r.fetched} fetched`)
+      await syncAuctionStats()
+      alert(`Imported ${r.created} new lots into the database`
+            + (r.updated ? ` (${r.updated} already there, refreshed)` : '')
+            + `.
+
+They're listed below — use "Enrich" to price them.`)
     } catch (e) { alert(e.message); setBusy('') }
   }
 
   async function handleEnrichAll(auctionId) {
     try {
       const r = await enrichAll(auctionId)
-      alert(`Queued ${r.queued} lots for enrichment — statuses will update as they finish`)
+      alert(r.queued
+        ? `Queued ${r.queued} lots. Progress shows in the bar at the top; each lot's status updates as it finishes.`
+        : 'Nothing to enrich — every lot in this auction is already done.')
+      await syncAuctionStats()
       loadLots()
     } catch (e) { alert(e.message) }
   }
@@ -129,6 +147,25 @@ export default function App() {
       e.comp_count >= 3 &&
       Number(e.est_resale) < lowValueCutoff
     )
+  }
+
+  // What's actually in the database for this auction, in plain words.
+  function auctionState(a) {
+    if (!a.lots_imported) {
+      return { text: 'Not imported yet', pct: null }
+    }
+    const pct = Math.round((a.lots_enriched / a.lots_imported) * 100)
+    const bits = [`${a.lots_imported} lots imported`]
+    if (a.lots_enriched) bits.push(`${a.lots_enriched} enriched`)
+    if (a.lots_inspected) bits.push(`${a.lots_inspected} inspected`)
+    if (a.lots_pending) bits.push(`${a.lots_pending} not yet enriched`)
+    if (a.lots_failed) bits.push(`${a.lots_failed} failed`)
+    return { text: bits.join(' · '), pct }
+  }
+
+  function enrichAllLabel(a) {
+    const todo = a.lots_pending + a.lots_failed
+    return todo ? `Enrich ${todo}` : 'All enriched'
   }
 
   // An auction is "hot" when its gold-mine lots add up to real money.
@@ -232,6 +269,16 @@ export default function App() {
                 {goldBadge(a) && (
                   <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{goldBadge(a)}</div>
                 )}
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>
+                  {auctionState(a).text}
+                </div>
+                {auctionState(a).pct !== null && (
+                  <div style={{ height: 6, borderRadius: 3, background: 'var(--badge-bg)',
+                                overflow: 'hidden', marginBottom: 6 }}>
+                    <div style={{ height: '100%', width: `${auctionState(a).pct}%`,
+                                  background: 'var(--link)' }} />
+                  </div>
+                )}
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <button style={{ flex: '1 1 90px', minWidth: 90, padding: 8 }}
                           onClick={() => handleImport(a.id)} disabled={!!busy}>
@@ -242,7 +289,8 @@ export default function App() {
                       <button style={{ flex: '1 1 70px', minWidth: 70, padding: 8 }}
                               onClick={() => setSelectedAuction(a.id)}>View</button>
                       <button style={{ flex: '1 1 90px', minWidth: 90, padding: 8 }}
-                              onClick={() => handleEnrichAll(a.id)}>Enrich all</button>
+                              disabled={!(a.lots_pending + a.lots_failed)}
+                              onClick={() => handleEnrichAll(a.id)}>{enrichAllLabel(a)}</button>
                     </>
                   )}
                 </div>
@@ -275,6 +323,7 @@ export default function App() {
                     {goldBadge(a) && (
                       <div style={{ fontSize: 12, fontWeight: 600 }}>{goldBadge(a)}</div>
                     )}
+                    <div style={{ fontSize: 11, color: 'var(--muted)' }}>{auctionState(a).text}</div>
                   </td>
                   <td style={{ paddingRight: 12 }}>{a.city}, {a.state} ({a.source})</td>
                   <td style={{ textAlign: 'center' }}>
@@ -292,7 +341,8 @@ export default function App() {
                     {a.imported_at && (
                       <>
                         <button onClick={() => setSelectedAuction(a.id)}>View</button>{' '}
-                        <button onClick={() => handleEnrichAll(a.id)}>Enrich all</button>
+                        <button disabled={!(a.lots_pending + a.lots_failed)}
+                                onClick={() => handleEnrichAll(a.id)}>{enrichAllLabel(a)}</button>
                       </>
                     )}
                   </td>

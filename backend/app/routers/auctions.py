@@ -43,8 +43,28 @@ def list_auctions(include_closed: bool = False, db: Session = Depends(get_db)):
     )
     for auction_id, count, profit in rows:
         gold[auction_id] = (count, profit)
+
+    # Per-auction pipeline state, so a card can say what's actually in the DB.
+    from sqlalchemy import case
+    stat_rows = (
+        db.query(
+            models.Lot.auction_id,
+            func.count(models.Lot.id),
+            func.count(case((models.Enrichment.status == "success", 1))),
+            func.count(case((models.Enrichment.status.in_(["pending", "queued"]), 1))),
+            func.count(case((models.Enrichment.status == "failed", 1))),
+            func.count(case((models.Enrichment.ai_source == "vision-itemized", 1))),
+        )
+        .outerjoin(models.Enrichment, models.Enrichment.lot_id == models.Lot.id)
+        .group_by(models.Lot.auction_id)
+        .all()
+    )
+    stats = {r[0]: r[1:] for r in stat_rows}
+
     for a in auctions:
         a.gold_count, a.gold_profit = gold.get(a.id, (0, 0))
+        (a.lots_imported, a.lots_enriched, a.lots_pending,
+         a.lots_failed, a.lots_inspected) = stats.get(a.id, (0, 0, 0, 0, 0))
     return auctions
 
 

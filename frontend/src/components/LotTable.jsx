@@ -20,6 +20,16 @@ function money(v) {
 
 const num = (v) => (v === null || v === undefined ? null : Number(v))
 
+// What has actually happened to this lot, in words rather than jargon.
+function statusLabel(e) {
+  if (e.status === 'success') {
+    return e.ai_source === 'vision-itemized' ? '✓ inspected' : '✓ enriched'
+  }
+  if (e.status === 'failed') return '✗ failed'
+  if (e.status === 'queued') return 'queued'
+  return 'imported, not enriched'
+}
+
 // Column definitions. `get` drives sorting and filtering; `filter` picks the
 // filter widget: 'text' (title search), 'range' (money >N presets), or
 // 'values' (dropdown of the distinct values present in the loaded lots).
@@ -312,7 +322,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
                   </span>
                 )}
                 <span style={{ background: 'var(--badge-bg)', borderRadius: 4, padding: '2px 6px' }}>
-                  {isWorking(lot) ? <><span className="spinner" />{e.progress || (e.status === 'queued' ? 'waiting in queue…' : 'working…')}</> : e.status}
+                  {isWorking(lot) ? <><span className="spinner" />{e.progress || (e.status === 'queued' ? 'waiting in queue…' : 'working…')}</> : statusLabel(e)}
                 </span>
               </div>
               {e.notes && e.ai_source === 'vision-itemized' && (
@@ -474,7 +484,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
                 />
               </td>
               <td style={cell}>
-                {isWorking(lot) ? <><span className="spinner" />{e.progress || (e.status === 'queued' ? 'waiting in queue…' : 'working…')}</> : e.status}
+                {isWorking(lot) ? <><span className="spinner" />{e.progress || (e.status === 'queued' ? 'waiting in queue…' : 'working…')}</> : statusLabel(e)}
                 {e.status === 'failed' && e.error_message && (
                   <div style={{ color: 'var(--error)', fontSize: 12 }}>{e.error_message.slice(0, 80)}</div>
                 )}

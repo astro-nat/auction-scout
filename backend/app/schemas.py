@@ -100,6 +100,12 @@ class AuctionOut(BaseModel):
     gold_profit: Optional[Decimal] = None     # summed potential profit of those lots
     category_lot_count: Optional[int] = None  # lots matching the last scanned category
     category_count_for: Optional[int] = None  # which category that count is for
+    # What's actually in the database for this auction
+    lots_imported: int = 0
+    lots_enriched: int = 0
+    lots_pending: int = 0
+    lots_failed: int = 0
+    lots_inspected: int = 0
 
 
 class EnrichBatchRequest(BaseModel):
