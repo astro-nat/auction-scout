@@ -11,7 +11,7 @@ const VERDICTS = [
   'normal wear and tear',
 ]
 const SHIP_TIERS = ['EASY', 'NEUTRAL', 'HARD']
-const MONEY_RANGES = ['>5', '>10', '>25', '>50', '>100']
+const MONEY_RANGES = ['<5', '<10', '<25', '<50', '<100']
 
 function money(v) {
   if (v === null || v === undefined) return '—'
@@ -31,7 +31,7 @@ function statusLabel(e) {
 }
 
 // Column definitions. `get` drives sorting and filtering; `filter` picks the
-// filter widget: 'text' (title search), 'range' (money >N presets), or
+// filter widget: 'text' (title search), 'range' (money <N presets), or
 // 'values' (dropdown of the distinct values present in the loaded lots).
 const COLUMNS = [
   { key: 'title', label: 'Title', get: (l) => l.title?.toLowerCase(), filter: 'text' },
@@ -51,6 +51,7 @@ function matchesFilter(value, query) {
   if (!query) return true
   if (value == null) return false
   if (query.startsWith('>')) return typeof value === 'number' && value > parseFloat(query.slice(1))
+  if (query.startsWith('<')) return typeof value === 'number' && value < parseFloat(query.slice(1))
   if (typeof value === 'number') return String(value).includes(query)
   return String(value).toLowerCase().includes(query.toLowerCase())
 }
