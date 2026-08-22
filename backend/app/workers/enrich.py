@@ -30,7 +30,7 @@ from sqlalchemy.orm import Session
 
 from ..database import SessionLocal
 from .. import models, config
-from ..services import financials, pricing
+from ..services import financials, jobs, pricing
 from ..services.bolo import BoloMatcher
 
 logger = logging.getLogger(__name__)
@@ -383,3 +383,49 @@ def _download_image(url: str | None) -> bytes | None:
     except Exception:
         pass
     return None
+
+
+def run_reprice(lot_db_ids: list[int]) -> None:
+    """Recompute comps + ROI for already-enriched lots, reusing the AI title
+    and verdict we already paid for.
+
+    Pricing rules change (realization factor, condition multipliers, comp
+    filters) far more often than an item's identity does — this applies them
+    without spending anything on the model again.
+    """
+    db: Session = SessionLocal()
+    job = jobs.start("reprice", "Re-pricing lots with current comp rules",
+                     total=len(lot_db_ids))
+    repriced = skipped = 0
+    try:
+        for i, lot_db_id in enumerate(lot_db_ids, 1):
+            lot = db.query(models.Lot).filter(models.Lot.id == lot_db_id).first()
+            if not lot or not lot.enrichment:
+                continue
+            e = lot.enrichment
+            if "est_resale" in set(e.user_overrides or []):
+                skipped += 1            # never overwrite a hand-corrected price
+                continue
+            try:
+                comps = pricing.lookup_comps(e.enriched_title or lot.title)
+                mult = CONDITION_MULTIPLIER.get(e.verdict, 1.0)
+                e.est_resale = (round(float(comps["est_resale"]) * mult, 2)
+                                if comps["est_resale"] else None)
+                e.price_low = (round(float(comps["price_low"]) * mult, 2)
+                               if comps["price_low"] else None)
+                e.price_high = (round(float(comps["price_high"]) * mult, 2)
+                                if comps["price_high"] else None)
+                e.comp_count = comps["comp_count"]
+                e.price_source = comps["price_source"]
+                if mult != 1.0 and comps["price_source"]:
+                    e.price_source += f" ×{mult:g} condition"
+                _apply_roi(lot, e)
+                db.commit()
+                repriced += 1
+            except Exception as exc:  # noqa: BLE001 — one bad lot must not stop the run
+                logger.warning("Reprice failed for lot %s: %s", lot_db_id, exc)
+            jobs.update(job, current=i, detail=(lot.title or "")[:40])
+    finally:
+        jobs.finish(job)
+        db.close()
+    print(f"Reprice complete: {repriced} updated, {skipped} kept (hand-corrected)")

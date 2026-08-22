@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..database import get_db
-from ..workers.enrich import run_enrichment, run_inspection, _apply_roi
+from ..workers.enrich import run_enrichment, run_inspection, run_reprice, _apply_roi
 
 router = APIRouter(prefix="/lots", tags=["enrichment"])
 
@@ -44,6 +44,26 @@ def enrich_batch(payload: schemas.EnrichBatchRequest,
     for lot in ordered:
         background_tasks.add_task(run_enrichment, lot.id)
     return {"queued": len(ordered)}
+
+
+@router.post("/reprice", status_code=202)
+def reprice(background_tasks: BackgroundTasks, auction_id: int | None = None,
+            db: Session = Depends(get_db)):
+    """Recompute comps + ROI for enriched lots using current pricing rules.
+
+    Costs nothing at the model — it reuses the AI title and verdict already
+    stored — so it's the right way to apply a pricing change to old data.
+    """
+    q = (db.query(models.Lot.id)
+           .join(models.Enrichment)
+           .filter(models.Enrichment.enriched_title.isnot(None)))
+    if auction_id:
+        q = q.filter(models.Lot.auction_id == auction_id)
+    lot_ids = [row[0] for row in q.all()]
+    if not lot_ids:
+        return {"repricing": 0}
+    background_tasks.add_task(run_reprice, lot_ids)
+    return {"repricing": len(lot_ids)}
 
 
 @router.post("/{lot_id}/inspect", status_code=202)
