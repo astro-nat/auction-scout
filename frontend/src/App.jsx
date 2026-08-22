@@ -16,6 +16,11 @@ export default function App() {
   const [busy, setBusy] = useState('')
   // Scan filters — mirrors hibid.com's own search options
   const [categories, setCategories] = useState([])
+  // Names of every auction we've seen this session. The visible `auctions`
+  // list gets replaced by scan results, but lots can belong to any auction —
+  // without this they'd render as "—" (looking unattached).
+  const [auctionIndex, setAuctionIndex] = useState({})
+  const [auctionLimit, setAuctionLimit] = useState(50)
   const [scan, setScan] = useState({
     search_text: '', category_id: -1, auction_type: 'ALL',
     status: 'OPEN', zip: '', radius_miles: 25,
@@ -29,7 +34,18 @@ export default function App() {
     }).then(setLots).catch(console.error)
   }, [selectedAuction, filters])
 
-  useEffect(() => { fetchAuctions().then(setAuctions).catch(console.error) }, [])
+  const rememberAuctions = useCallback((list) => {
+    setAuctionIndex((prev) => {
+      const next = { ...prev }
+      for (const a of list) next[a.id] = a.name
+      return next
+    })
+    return list
+  }, [])
+
+  useEffect(() => {
+    fetchAuctions().then(rememberAuctions).then(setAuctions).catch(console.error)
+  }, [rememberAuctions])
   useEffect(() => { fetchCategories().then(setCategories).catch(console.error) }, [])
   useEffect(() => { loadLots() }, [loadLots])
 
@@ -42,16 +58,20 @@ export default function App() {
         category_id: Number(scan.category_id),
         radius_miles: Number(scan.radius_miles),
       })
+      rememberAuctions(found)
       setAuctions(found)
+      setAuctionLimit(50)
     } catch (e) { alert(e.message) } finally { setBusy('') }
   }
 
   // Called when the status bar sees the server go idle — pull fresh data so
   // finished imports/enrichments appear without a manual refresh.
   const refreshAll = useCallback(() => {
-    fetchAuctions().then(setAuctions).catch(console.error)
+    // Only refresh the name index here — replacing the visible list would
+    // wipe the user's scan results out from under them.
+    fetchAuctions().then(rememberAuctions).catch(console.error)
     loadLots()
-  }, [loadLots])
+  }, [loadLots, rememberAuctions])
 
   function setScanField(field, value) {
     setScan((prev) => ({ ...prev, [field]: value }))
@@ -119,7 +139,7 @@ export default function App() {
       : null
 
   // Stamp each lot with its auction's name so the table can show/filter it.
-  const auctionNames = Object.fromEntries(auctions.map((a) => [a.id, a.name]))
+  const auctionNames = { ...auctionIndex, ...Object.fromEntries(auctions.map((a) => [a.id, a.name])) }
   const visibleLots = lots
     .filter((l) => {
       if (hideLowValue && isConfirmedLowValue(l)) return false
@@ -192,7 +212,7 @@ export default function App() {
             <summary style={{ fontWeight: 600, padding: '4px 0' }}>
               Auctions ({auctions.length})
             </summary>
-            {auctions.map((a) => (
+            {auctions.slice(0, auctionLimit).map((a) => (
               <div key={a.id} style={{
                 border: isHotAuction(a) ? '2px solid #2e9e4f' : '1px solid var(--border)',
                 borderRadius: 8, padding: 10, marginTop: 8,
@@ -228,6 +248,12 @@ export default function App() {
                 </div>
               </div>
             ))}
+            {auctions.length > auctionLimit && (
+              <button style={{ width: '100%', padding: 8, marginTop: 8 }}
+                      onClick={() => setAuctionLimit((n) => n + 50)}>
+                Show more auctions ({auctions.length - auctionLimit} more)
+              </button>
+            )}
           </details>
         ) : (
           <table style={{ marginTop: '0.75rem', borderCollapse: 'collapse' }}>
@@ -239,7 +265,7 @@ export default function App() {
               </tr>
             </thead>
             <tbody>
-              {auctions.map((a) => (
+              {auctions.slice(0, auctionLimit).map((a) => (
                 <tr key={a.id} style={{
                   background: isHotAuction(a) ? 'var(--gold-bg)'
                     : selectedAuction === a.id ? 'var(--highlight)' : undefined,
@@ -275,6 +301,11 @@ export default function App() {
             </tbody>
           </table>
         ))}
+        {!isMobile && auctions.length > auctionLimit && (
+          <button style={{ marginTop: 8 }} onClick={() => setAuctionLimit((n) => n + 50)}>
+            Show more auctions ({auctions.length - auctionLimit} more)
+          </button>
+        )}
       </section>
 
       <section style={{ marginBottom: '0.75rem' }}>
