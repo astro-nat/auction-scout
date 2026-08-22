@@ -98,6 +98,9 @@ class Enrichment(Base):
     profit = Column(Numeric)
     roi_status = Column(String)        # GOLD MINE | PASS
 
+    # Live play-by-play while the worker runs ("searching eBay comps…");
+    # cleared when the lot finishes. The UI polls and shows it on the spinner.
+    progress = Column(String)
     error_message = Column(Text)
     last_attempted_at = Column(DateTime)
     # Field names the user has hand-corrected — the worker never overwrites these.

@@ -19,6 +19,7 @@ from sqlalchemy import text
 # tables, so columns added after first deploy are appended here idempotently.
 _MIGRATIONS = [
     "ALTER TABLE enrichment ADD COLUMN IF NOT EXISTS auth_required BOOLEAN DEFAULT FALSE",
+    "ALTER TABLE enrichment ADD COLUMN IF NOT EXISTS progress VARCHAR",
 ]
 
 for attempt in range(10):

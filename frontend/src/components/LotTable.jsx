@@ -253,7 +253,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
                   style={{ flex: '1 1 100%', padding: 10, fontSize: 15 }}>
             Enrich visible ({enrichableCount})
           </button>
-          {anyQueued && <span style={{ flexBasis: '100%' }}><span className="spinner" />enriching in the background… auto-refreshing</span>}
+          {anyQueued && <span style={{ flexBasis: '100%' }}><span className="spinner" />{lots.filter((l) => l.enrichment?.status === 'queued').length} lots in the queue… auto-refreshing</span>}
         </div>
         {sorted.slice(0, renderLimit).map((lot) => {
           const e = lot.enrichment || {}
@@ -295,7 +295,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
                   </span>
                 )}
                 <span style={{ background: 'var(--badge-bg)', borderRadius: 4, padding: '2px 6px' }}>
-                  {isWorking(lot) ? <><span className="spinner" />working…</> : e.status}
+                  {isWorking(lot) ? <><span className="spinner" />{e.progress || (e.status === 'queued' ? 'waiting in queue…' : 'working…')}</> : e.status}
                 </span>
               </div>
               {e.notes && e.ai_source === 'vision-itemized' && (
@@ -329,7 +329,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
       <button onClick={handleEnrichVisible} disabled={!enrichableCount}>
         Enrich visible ({enrichableCount})
       </button>
-      {anyQueued && <span style={{ marginLeft: '0.75rem' }}><span className="spinner" />enriching in the background… auto-refreshing</span>}
+      {anyQueued && <span style={{ marginLeft: '0.75rem' }}><span className="spinner" />{lots.filter((l) => l.enrichment?.status === 'queued').length} lots in the queue… auto-refreshing</span>}
     </div>
     <table style={{ borderCollapse: 'collapse', fontSize: 14 }}>
       <thead>
@@ -454,7 +454,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
                 />
               </td>
               <td style={cell}>
-                {isWorking(lot) ? <><span className="spinner" />working…</> : e.status}
+                {isWorking(lot) ? <><span className="spinner" />{e.progress || (e.status === 'queued' ? 'waiting in queue…' : 'working…')}</> : e.status}
                 {e.status === 'failed' && e.error_message && (
                   <div style={{ color: 'var(--error)', fontSize: 12 }}>{e.error_message.slice(0, 80)}</div>
                 )}

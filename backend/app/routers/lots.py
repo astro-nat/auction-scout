@@ -15,11 +15,21 @@ def list_lots(
     auction_id: Optional[int] = None,
     roi_status: Optional[str] = Query(None, description="GOLD MINE | PASS"),
     bolo_only: bool = False,
+    include_closed: bool = False,
     limit: int = 2000,
     offset: int = 0,
     db: Session = Depends(get_db),
 ):
     q = db.query(models.Lot).options(joinedload(models.Lot.enrichment))
+    if not include_closed:
+        # Hide lots from auctions that already closed. Outer join keeps
+        # manually created lots (no auction) visible.
+        from datetime import datetime
+        from sqlalchemy import or_
+        q = (q.outerjoin(models.Auction)
+              .filter(or_(models.Lot.auction_id.is_(None),
+                          models.Auction.closing_date.is_(None),
+                          models.Auction.closing_date >= datetime.now())))
     if category:
         q = q.filter(models.Lot.category == category)
     if auction_id:

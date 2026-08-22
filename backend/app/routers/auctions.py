@@ -6,7 +6,7 @@ POST /auctions/{id}/enrich-all — queue enrichment for every un-enriched lot
 GET  /auctions               — list what we know about
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone  # noqa: F401 — datetime used in filters
 from typing import List
 
 import httpx
@@ -22,11 +22,16 @@ router = APIRouter(prefix="/auctions", tags=["auctions"])
 
 
 @router.get("", response_model=List[schemas.AuctionOut])
-def list_auctions(db: Session = Depends(get_db)):
-    """All known auctions, each annotated with its gold-mine tally: how many
-    enriched lots are GOLD MINEs and their summed potential profit."""
-    from sqlalchemy import func
-    auctions = db.query(models.Auction).order_by(models.Auction.closing_date).all()
+def list_auctions(include_closed: bool = False, db: Session = Depends(get_db)):
+    """Open auctions (closed ones stay in the DB but drop off the list),
+    each annotated with its gold-mine tally: how many enriched lots are
+    GOLD MINEs and their summed potential profit."""
+    from sqlalchemy import func, or_
+    q = db.query(models.Auction)
+    if not include_closed:
+        q = q.filter(or_(models.Auction.closing_date.is_(None),
+                         models.Auction.closing_date >= datetime.now()))
+    auctions = q.order_by(models.Auction.closing_date).all()
     gold = dict()
     rows = (
         db.query(models.Lot.auction_id, func.count(models.Enrichment.id),

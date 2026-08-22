@@ -86,6 +86,13 @@ def _parse_json_response(text: str) -> dict:
     return obj
 
 
+def _progress(db: Session, e: models.Enrichment, text: str | None) -> None:
+    """Publish a live stage update — the UI polls and shows this next to the
+    spinner, so the user sees exactly what the worker is doing right now."""
+    e.progress = text
+    db.commit()
+
+
 def run_enrichment(lot_db_id: int) -> None:
     """Entry point called from the background task. Opens its own DB session
     since it runs outside the request/response cycle's session lifetime."""
@@ -100,25 +107,27 @@ def run_enrichment(lot_db_id: int) -> None:
         e.last_attempted_at = datetime.now(timezone.utc)
 
         try:
-            _enrich(lot, e)
+            _enrich(lot, e, db)
             e.status = "success"
             e.error_message = None
         except Exception as exc:  # noqa: BLE001 — one lot failing must not kill a batch
             logger.warning("Enrichment failed for lot %s: %s", lot_db_id, exc)
             e.status = "failed"
             e.error_message = str(exc)
+        e.progress = None
         db.commit()
     finally:
         db.close()
 
 
-def _enrich(lot: models.Lot, e: models.Enrichment) -> None:
+def _enrich(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
     title = lot.title or ""
     description = lot.description or ""
     # Fields the user hand-corrected are never overwritten by re-enrichment.
     protected = set(e.user_overrides or [])
 
     # --- 1. BOLO match (free, deterministic) ---
+    _progress(db, e, "matching against BOLO brand list…")
     match = bolo_matcher.match(title, description)
     if match and "bolo_brand" not in protected:
         e.bolo_brand = match["brand"]
@@ -143,9 +152,11 @@ def _enrich(lot: models.Lot, e: models.Enrichment) -> None:
     # --- 2. AI title + condition verdict ---
     ai = None
     if len(description.strip()) >= MIN_DESC_FOR_TEXT_PASS:
+        _progress(db, e, "AI reading the description…")
         ai = _call_text(title, description)
         e.ai_source = "text"
     if ai is None or not ai.get("confident"):
+        _progress(db, e, "AI examining the photo…")
         image_bytes = _download_image(lot.thumbnail_url or lot.hd_thumbnail_url)
         if image_bytes:
             vision = _call_vision(title, image_bytes)
@@ -165,6 +176,7 @@ def _enrich(lot: models.Lot, e: models.Enrichment) -> None:
 
     # --- 3. Comps (skipped entirely when the user hand-set the resale) ---
     if "est_resale" not in protected:
+        _progress(db, e, "searching eBay for comparable sales…")
         search_title = e.enriched_title or title
         comps = pricing.lookup_comps(search_title)
         e.est_resale = comps["est_resale"]
@@ -174,6 +186,7 @@ def _enrich(lot: models.Lot, e: models.Enrichment) -> None:
         e.price_source = comps["price_source"]
 
     # --- 4. ROI ---
+    _progress(db, e, "computing max bid and ROI…")
     _apply_roi(lot, e)
 
 
@@ -228,25 +241,28 @@ def run_inspection(lot_db_id: int) -> None:
         e = lot.enrichment
         e.last_attempted_at = datetime.now(timezone.utc)
         try:
-            _inspect(lot, e)
+            _inspect(lot, e, db)
             e.status = "success"
             e.error_message = None
         except Exception as exc:  # noqa: BLE001
             logger.warning("Inspection failed for lot %s: %s", lot_db_id, exc)
             e.status = "failed"
             e.error_message = str(exc)
+        e.progress = None
         db.commit()
     finally:
         db.close()
 
 
-def _inspect(lot: models.Lot, e: models.Enrichment) -> None:
+def _inspect(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
     # Full-size image beats the thumbnails for reading spines/labels
+    _progress(db, e, "downloading the full-size photo…")
     image_bytes = _download_image(lot.fullsize_url or lot.hd_thumbnail_url
                                   or lot.thumbnail_url)
     if not image_bytes:
         raise RuntimeError("no image available for inspection")
 
+    _progress(db, e, "AI identifying each item in the photo…")
     b64 = base64.b64encode(image_bytes).decode()
     result = _call_with_retry(lambda: client.messages.create(
         model=MODEL,
@@ -268,10 +284,11 @@ def _inspect(lot: models.Lot, e: models.Enrichment) -> None:
     lines = []
     total = 0.0
     priced = 0
-    for item in items:
+    for i, item in enumerate(items, 1):
         item_title = (item.get("title") or "").strip()
         if not item_title:
             continue
+        _progress(db, e, f"pricing item {i}/{len(items)}: {item_title[:40]}…")
         comps = pricing.lookup_comps(item_title)
         if comps["est_resale"]:
             total += float(comps["est_resale"])
