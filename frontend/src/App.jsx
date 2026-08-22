@@ -105,6 +105,8 @@ export default function App() {
       <h1 style={{ fontSize: isMobile ? 24 : undefined }}>AuctionScout</h1>
 
       <section style={{ marginBottom: '1.5rem' }}>
+        {/* Form wrapper: pressing Enter in any filter field runs the scan */}
+        <form onSubmit={(ev) => { ev.preventDefault(); handleScan() }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
           <input
             value={scan.search_text}
@@ -148,10 +150,11 @@ export default function App() {
             <option value={-1}>Anywhere</option>
           </select>
         </div>
-        <button onClick={handleScan} disabled={!!busy}
+        <button type="submit" disabled={!!busy}
                 style={isMobile ? { width: '100%', padding: 10, fontSize: 15 } : undefined}>
           Scan auctions
         </button>
+        </form>
         {busy && <span style={{ marginLeft: '1rem' }}>{busy}</span>}
         {auctions.length > 0 && (isMobile ? (
           <details style={{ marginTop: '0.75rem' }} open={!selectedAuction}>
