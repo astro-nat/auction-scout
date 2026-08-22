@@ -129,6 +129,16 @@ def _enrich(lot: models.Lot, e: models.Enrichment) -> None:
         e.matched_model = match["matched_model"]
         e.target_buy_price = match["target_buy_high"]
         e.ship_class = match["ship_class"]
+        # Broader than the BOLO file's own flag (tier-3 only): ANY luxury or
+        # sneaker match needs authentication before its comps mean anything —
+        # a $45 "Hublot" is a replica until proven otherwise.
+        e.auth_required = bool(
+            match.get("auth_required")
+            or match.get("category") in {
+                "luxury", "luxury_mid", "luxury_watch", "sneakers",
+                "designer_eyewear", "premium_eyewear",
+            }
+        )
 
     # --- 2. AI title + condition verdict ---
     ai = None

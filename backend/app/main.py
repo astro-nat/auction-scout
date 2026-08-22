@@ -13,9 +13,20 @@ from .routers import lots, enrichment, auctions
 # Retried because managed Postgres (Railway etc.) can take a few seconds to
 # accept connections at deploy time — crashing on the first refusal means an
 # endless crash-loop that looks like a broken deploy.
+from sqlalchemy import text
+
+# Poor-man's migrations until Alembic: create_all never ALTERs existing
+# tables, so columns added after first deploy are appended here idempotently.
+_MIGRATIONS = [
+    "ALTER TABLE enrichment ADD COLUMN IF NOT EXISTS auth_required BOOLEAN DEFAULT FALSE",
+]
+
 for attempt in range(10):
     try:
         Base.metadata.create_all(bind=engine)
+        with engine.begin() as conn:
+            for stmt in _MIGRATIONS:
+                conn.execute(text(stmt))
         break
     except Exception as exc:  # noqa: BLE001
         if attempt == 9:

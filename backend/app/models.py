@@ -74,6 +74,9 @@ class Enrichment(Base):
     matched_model = Column(String)
     target_buy_price = Column(Numeric)  # top of the BOLO target-buy range
     ship_class = Column(String)
+    # Luxury-tier match (watches, designer, sneakers): resale value hinges on
+    # authentication, so comps/ROI can't be trusted until verified in person.
+    auth_required = Column(Boolean, default=False)
 
     # --- AI enrichment (Claude text/vision, via the worker only) ---
     enriched_title = Column(String)    # eBay-searchable title

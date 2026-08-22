@@ -15,6 +15,7 @@ class EnrichmentOut(BaseModel):
     matched_model: Optional[str] = None
     target_buy_price: Optional[Decimal] = None
     ship_class: Optional[str] = None
+    auth_required: bool = False
     enriched_title: Optional[str] = None
     verdict: Optional[str] = None
     confidence: Optional[str] = None

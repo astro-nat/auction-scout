@@ -280,6 +280,12 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
                     BOLO: {e.bolo_brand} T{e.bolo_tier ?? '?'}
                   </span>
                 )}
+                {e.auth_required && (
+                  <span style={{ background: 'var(--bolo-bg)', color: 'var(--bolo-text)', borderRadius: 4, padding: '2px 6px', fontWeight: 600 }}
+                        title="Luxury-brand match — resale value depends on authentication; don't trust the comps until verified">
+                    ⚠️ authenticate first
+                  </span>
+                )}
                 {e.verdict && (
                   <span style={{ background: 'var(--badge-bg)', borderRadius: 4, padding: '2px 6px' }}>
                     {gold ? '🟢' : e.roi_status === 'PASS' ? '🔴' : ''} {e.verdict}
@@ -408,6 +414,12 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
                   edited={edited.has('bolo_brand')}
                   onSave={(v) => handleCorrect(lot.lot_id, 'bolo_brand', v)}
                 />
+                {e.auth_required && (
+                  <div style={{ background: 'var(--bolo-bg)', color: 'var(--bolo-text)', borderRadius: 4, padding: '1px 5px', fontSize: 11, fontWeight: 600, display: 'inline-block', marginTop: 2 }}
+                       title="Luxury-brand match — resale value depends on authentication; don't trust the comps until verified">
+                    ⚠️ authenticate first
+                  </div>
+                )}
               </td>
               <td style={cell}>
                 <EditableCell
