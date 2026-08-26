@@ -68,6 +68,38 @@ def reprice(background_tasks: BackgroundTasks, auction_id: int | None = None,
     return {"repricing": len(lot_ids)}
 
 
+@router.post("/reinspect-no-comps", status_code=202)
+def reinspect_no_comps(background_tasks: BackgroundTasks,
+                       dry_run: bool = False,
+                       db: Session = Depends(get_db)):
+    """Re-run itemized inspection on every enriched lot that still has no
+    usable price (est_resale is NULL) — the inspect strategy now falls back
+    to the AI's own value estimate, so a re-run can put numbers on these.
+    Only open auctions (a price on a closed lot buys nothing) and only lots
+    with an image. dry_run counts, so the caller can show cost first."""
+    from datetime import datetime
+    rows = (
+        db.query(models.Lot).join(models.Enrichment)
+        .join(models.Auction, models.Lot.auction_id == models.Auction.id)
+        .filter(models.Enrichment.status == "success",
+                models.Enrichment.est_resale.is_(None),
+                (models.Auction.closing_date.is_(None))
+                | (models.Auction.closing_date >= datetime.now()),
+                (models.Lot.fullsize_url.isnot(None))
+                | (models.Lot.thumbnail_url.isnot(None)))
+        .all()
+    )
+    if dry_run:
+        return {"lots": len(rows), "dry_run": True}
+    for lot in rows:
+        lot.enrichment.status = "queued"
+        lot.enrichment.queued_task = "inspect"
+    db.commit()
+    for lot in rows:
+        background_tasks.add_task(run_inspection, lot.id)
+    return {"queued": len(rows)}
+
+
 @router.post("/{lot_id}/inspect", status_code=202)
 def inspect_lot(lot_id: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Itemized vision pass for mixed lots — identify and price each item in
