@@ -51,6 +51,24 @@ MIN_DESC_FOR_TEXT_PASS = 80     # below this the description carries no signal
 # not a real shipping quote.
 LOGISTICS_PENALTY = {"EASY": 15.0, "NEUTRAL": 25.0, "HARD": 60.0}
 
+# When itemized inspection finds no comps for an item, the model's own
+# sold-price estimate (from the same vision call) fills the gap — discounted,
+# because model guesses skew optimistic vs. real sold data. env-tunable like
+# ACTIVE_REALIZATION in services/pricing.py.
+import os
+AI_ESTIMATE_REALIZATION = float(os.environ.get("AI_ESTIMATE_REALIZATION", "0.8"))
+
+
+def _sane_estimate(v) -> float | None:
+    """The model's est_value, if it's a usable number. Rejects junk (strings,
+    negatives, zero) and absurd guesses that would poison the lot total."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return None
+    if not (0 < float(v) <= 5000):
+        return None
+    return float(v)
+
+
 # Comps mostly describe working/complete examples — often brand new. What the
 # AI saw in the photo has to move the number, or a broken unit inherits a
 # working unit's price.
@@ -292,14 +310,17 @@ it, but use its sizes, model numbers, and quantities):
 
 Identify each INDIVIDUALLY SELLABLE item you can actually read or recognize in
 the photo — CD/DVD/book spines, game boxes, branded products, etc. For each,
-give an eBay-searchable title (under 60 chars). For apparel/shoes, ALWAYS
+give an eBay-searchable title (under 60 chars) AND your estimate of what that
+item actually SELLS for secondhand in visible condition — a realistic eBay
+sold price, not an asking price and not retail. For apparel/shoes, ALWAYS
 carry the audience and size when shown (kids/youth/toddler/boys/girls/men's/
 women's, size) — a kids item priced against adult listings is a wrong price.
 Skip anything you can't specifically identify — never guess or pad the list.
 Max 12 items.
 
 Return ONLY valid JSON:
-{{"items": [{{"title": string}}], "summary": string, "ship": string}}
+{{"items": [{{"title": string, "est_value": number or null}}], "summary": string, "ship": string}}
+est_value = realistic secondhand SOLD price in USD; null only if you genuinely can't estimate.
 summary = one sentence on what the lot contains overall.
 ship = how hard the WHOLE lot is to ship, exactly one of "EASY" (fits a padded mailer or small box) | "NEUTRAL" (normal parcel or two) | "HARD" (furniture, appliance, oversized/freight)
 """
@@ -370,6 +391,7 @@ def _inspect(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
     lines = []
     total = 0.0
     priced = 0
+    ai_priced = 0
     for i, item in enumerate(items, 1):
         item_title = (item.get("title") or "").strip()
         if not item_title:
@@ -377,16 +399,27 @@ def _inspect(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
         _progress(db, e, f"pricing item {i}/{len(items)}: {item_title[:40]}…")
         comps = pricing.lookup_comps(item_title)
         if comps["est_resale"]:
+            # Real market data always wins over the model's guess.
             total += float(comps["est_resale"])
             priced += 1
             lines.append(f"{item_title} → ${comps['est_resale']} ({comps['comp_count']} comps)")
+            continue
+        # No comps — fall back to the AI's own sold-price estimate from the
+        # same vision call, discounted because model guesses skew optimistic.
+        ai_val = _sane_estimate(item.get("est_value")) if AI_ESTIMATE_REALIZATION > 0 else None
+        if ai_val is not None:
+            val = round(ai_val * AI_ESTIMATE_REALIZATION, 2)
+            total += val
+            ai_priced += 1
+            lines.append(f"{item_title} → ${val} (AI estimate, no comps)")
         else:
             lines.append(f"{item_title} → no comps")
 
     protected = set(e.user_overrides or [])
     summary = result.get("summary") or ""
     if "notes" not in protected:
-        e.notes = f"[inspected: {len(items)} items, {priced} priced] {summary}\n" + "\n".join(lines)
+        e.notes = (f"[inspected: {len(items)} items, {priced} comp-priced, "
+                   f"{ai_priced} AI-estimated] {summary}\n" + "\n".join(lines))
     e.ai_source = "vision-itemized"
     # Vision saw the whole lot — trust its ship-tier call over the title regex.
     ship = (result.get("ship") or "").upper()
@@ -397,8 +430,11 @@ def _inspect(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
         e.est_resale = round(total, 2)
         e.price_low = None
         e.price_high = None
-        e.comp_count = priced
-        e.price_source = f"itemized vision ({priced}/{len(items)} items priced)"
+        e.comp_count = priced          # real comps only — AI guesses don't count
+        bits = [f"{priced} from comps"] if priced else []
+        if ai_priced:
+            bits.append(f"{ai_priced} AI-estimated ×{AI_ESTIMATE_REALIZATION:g}")
+        e.price_source = f"itemized vision ({' + '.join(bits)} of {len(items)} items)"
         _apply_roi(lot, e)
 
 
