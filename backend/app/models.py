@@ -63,6 +63,9 @@ class Lot(Base):
     # the timestamp dedupes so each lot alerts exactly once.
     watched = Column(Boolean, default=False)
     closing_alert_sent_at = Column(DateTime)
+    # Manually hidden by the user — stays in the DB (and keeps its
+    # enrichment) but drops out of the items view until unhidden.
+    hidden = Column(Boolean, default=False)
     lot_link = Column(String)
     thumbnail_url = Column(String)
     hd_thumbnail_url = Column(String)

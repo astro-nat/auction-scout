@@ -108,3 +108,7 @@ export function analyzeShipping(dryRun = false) {
 export function setWatch(lotId, watched) {
   return request(`/lots/${lotId}/watch?watched=${watched}`, { method: 'POST' })
 }
+
+export function setHidden(lotId, hidden) {
+  return request(`/lots/${lotId}/hide?hidden=${hidden}`, { method: 'POST' })
+}

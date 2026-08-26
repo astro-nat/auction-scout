@@ -29,6 +29,7 @@ _MIGRATIONS = [
     "ALTER TABLE enrichment ADD COLUMN IF NOT EXISTS queued_task VARCHAR",
     "ALTER TABLE lots ADD COLUMN IF NOT EXISTS watched BOOLEAN DEFAULT FALSE",
     "ALTER TABLE lots ADD COLUMN IF NOT EXISTS closing_alert_sent_at TIMESTAMP",
+    "ALTER TABLE lots ADD COLUMN IF NOT EXISTS hidden BOOLEAN DEFAULT FALSE",
 ]
 
 def _run_migrations() -> list[str]:

@@ -132,6 +132,21 @@ def set_watch(lot_id: str, watched: bool = True, db: Session = Depends(get_db)):
     return lot
 
 
+@router.post("/{lot_id}/hide", response_model=schemas.LotOut)
+def set_hidden(lot_id: str, hidden: bool = True, db: Session = Depends(get_db)):
+    """Manually hide a lot from the items view (or unhide it). The row and
+    its enrichment stay in the DB — this is a personal 'not interested'."""
+    lot = (db.query(models.Lot)
+             .options(joinedload(models.Lot.enrichment))
+             .filter(models.Lot.lot_id == lot_id).first())
+    if not lot:
+        raise HTTPException(status_code=404, detail="Lot not found")
+    lot.hidden = hidden
+    db.commit()
+    db.refresh(lot)
+    return lot
+
+
 @router.get("/{lot_id}", response_model=schemas.LotOut)
 def get_lot(lot_id: str, db: Session = Depends(get_db)):
     lot = (

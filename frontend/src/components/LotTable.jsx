@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { enrichLot, inspectLot, fetchLot, patchEnrichment, enrichBatch, setWatch } from '../api'
+import { enrichLot, inspectLot, fetchLot, patchEnrichment, enrichBatch, setWatch, setHidden } from '../api'
 import useMediaQuery from '../useMediaQuery'
 
 const cell = { padding: '4px 10px', borderBottom: '1px solid var(--border)' }
@@ -206,6 +206,11 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
     onLotUpdated(updated)
   }
 
+  async function handleHide(lotId, hidden) {
+    const updated = await setHidden(lotId, hidden)
+    onLotUpdated(updated)
+  }
+
   function poll(lotId) {
     const interval = setInterval(async () => {
       const updated = await fetchLot(lotId)
@@ -297,7 +302,25 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
               background: gold ? 'var(--gold-bg)' : 'var(--card-bg)',
             }}>
               <div style={{ fontWeight: 600 }}>
-                <a href={lot.lot_link} target="_blank" rel="noreferrer">{lot.title}</a>
+                <button
+                  onClick={() => handleWatch(lot.lot_id, !lot.watched)}
+                  title={lot.watched ? 'Watching — phone alert when closing (tap to stop)'
+                                     : 'Watch: phone alert when this closes within 2 hours'}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer',
+                           fontSize: 16, padding: '0 4px 0 0',
+                           opacity: lot.watched ? 1 : 0.45 }}>
+                  {lot.watched ? '★' : '☆'}
+                </button>
+                <button
+                  onClick={() => handleHide(lot.lot_id, !lot.hidden)}
+                  title={lot.hidden ? 'Hidden — tap to bring it back' : 'Hide this lot'}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer',
+                           fontSize: 14, padding: '0 4px 0 0',
+                           opacity: lot.hidden ? 1 : 0.4 }}>
+                  {lot.hidden ? '👁' : '🚫'}
+                </button>
+                <a href={lot.lot_link} target="_blank" rel="noreferrer"
+                   style={lot.hidden ? { opacity: 0.5, textDecoration: 'line-through' } : undefined}>{lot.title}</a>
               </div>
               <div style={{ color: 'var(--muted)', fontSize: 12 }}>
                 {lot.auction_closed ? '⏹ closed · ' : ''}{lot.auction_name}
@@ -439,7 +462,18 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
                            opacity: lot.watched ? 1 : 0.45 }}>
                   {lot.watched ? '★' : '☆'}
                 </button>
-                <a href={lot.lot_link} target="_blank" rel="noreferrer">{lot.title}</a>
+                <button
+                  onClick={() => handleHide(lot.lot_id, !lot.hidden)}
+                  title={lot.hidden
+                    ? 'Hidden — click to bring it back'
+                    : 'Hide this lot — it disappears from your items until you unhide it (Show hidden checkbox)'}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer',
+                           fontSize: 13, padding: '0 4px 0 0',
+                           opacity: lot.hidden ? 1 : 0.4 }}>
+                  {lot.hidden ? '👁' : '🚫'}
+                </button>
+                <a href={lot.lot_link} target="_blank" rel="noreferrer"
+                   style={lot.hidden ? { opacity: 0.5, textDecoration: 'line-through' } : undefined}>{lot.title}</a>
                 <div style={{ color: 'var(--muted)', fontSize: 12 }}>
                   →{' '}
                   <EditableCell

@@ -32,6 +32,7 @@ export default function App() {
     status: 'OPEN', zip: '', radius_miles: 25,
   })
   const [hideUnshippable, setHideUnshippable] = useState(true)
+  const [showHiddenLots, setShowHiddenLots] = useState(false)
 
   const [lotTotal, setLotTotal] = useState(0)
 
@@ -300,6 +301,7 @@ Skipping ${hard} HARD-to-ship lots.`
   const auctionNames = { ...auctionIndex, ...Object.fromEntries(auctions.map((a) => [a.id, a.name])) }
   const visibleLots = lots
     .filter((l) => {
+      if (!showHiddenLots && l.hidden) return false
       if (hideLowValue && isConfirmedLowValue(l)) return false
       if (hideHardShip && l.logistics_ease === 'HARD') return false
       if (hideClosed && l.auction_closed) return false
@@ -582,7 +584,15 @@ Skipping ${hard} HARD-to-ship lots.`
             onChange={(ev) => setHideClosed(ev.target.checked)}
           /> Hide closed auctions
         </label>
-        {(hideLowValue || hideHardShip || hideClosed) && hiddenCount > 0 && (
+        <label style={{ marginLeft: '1rem' }}
+               title="Lots you hid with the 🚫 button — check to see and unhide them">
+          <input
+            type="checkbox"
+            checked={showHiddenLots}
+            onChange={(ev) => setShowHiddenLots(ev.target.checked)}
+          /> Show hidden ({lots.filter((l) => l.hidden).length})
+        </label>
+        {(hideLowValue || hideHardShip || hideClosed || !showHiddenLots) && hiddenCount > 0 && (
           <span style={{ marginLeft: '0.5rem', color: 'var(--muted)' }}>
             {hiddenCount} hidden
           </span>
