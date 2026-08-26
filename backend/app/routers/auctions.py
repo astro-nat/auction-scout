@@ -234,6 +234,11 @@ async def import_lots(auction_id: int, category_id: int = -1,
 
     ctx = {"premium_mult": auction.buyer_premium_mult, "source": auction.source}
     job = jobs.start("import", f"Fetching lots from {auction.name}")
+    # try/FINALLY, not try/except: a closed browser tab cancels this request
+    # coroutine with CancelledError (a BaseException), which `except
+    # Exception` never sees — that's how a cancelled import once haunted the
+    # status bar for two days. finish() is idempotent, so the happy path
+    # calling it inside the block is fine.
     try:
         lots = await hibid.fetch_lots(
             auction.hibid_id, auction_ctx=ctx, category_id=category_id,
@@ -244,35 +249,33 @@ async def import_lots(auction_id: int, category_id: int = -1,
         )
         jobs.update(job, current=0, total=len(lots),
                     label=f"Saving lots from {auction.name}")
-    except Exception:
-        jobs.finish(job)
-        raise
 
-    created = updated = 0
-    cancelled = False
-    for i, data in enumerate(lots, 1):
-        if i % 10 == 0 or i == len(lots):
-            if jobs.is_cancelled(job):
-                cancelled = True
-                break            # keep what's saved so far
-            jobs.update(job, current=i)
-        row = db.query(models.Lot).filter(models.Lot.lot_id == data["lot_id"]).first()
-        if row:
-            # bids/status/time-left always come fresh; analysis fields stay
-            for k in ("current_bid", "next_bid", "bid_count", "est_cost",
-                      "status", "time_left", "thumbnail_url",
-                      "hd_thumbnail_url", "fullsize_url"):
-                setattr(row, k, data[k])
-            updated += 1
-        else:
-            row = models.Lot(auction_id=auction.id, **data)
-            db.add(row)
-            db.flush()
-            db.add(models.Enrichment(lot_id=row.id, status="pending"))
-            created += 1
-    auction.imported_at = datetime.now(timezone.utc)
-    db.commit()
-    jobs.finish(job)
+        created = updated = 0
+        cancelled = False
+        for i, data in enumerate(lots, 1):
+            if i % 10 == 0 or i == len(lots):
+                if jobs.is_cancelled(job):
+                    cancelled = True
+                    break            # keep what's saved so far
+                jobs.update(job, current=i)
+            row = db.query(models.Lot).filter(models.Lot.lot_id == data["lot_id"]).first()
+            if row:
+                # bids/status/time-left always come fresh; analysis fields stay
+                for k in ("current_bid", "next_bid", "bid_count", "est_cost",
+                          "status", "time_left", "thumbnail_url",
+                          "hd_thumbnail_url", "fullsize_url"):
+                    setattr(row, k, data[k])
+                updated += 1
+            else:
+                row = models.Lot(auction_id=auction.id, **data)
+                db.add(row)
+                db.flush()
+                db.add(models.Enrichment(lot_id=row.id, status="pending"))
+                created += 1
+        auction.imported_at = datetime.now(timezone.utc)
+        db.commit()
+    finally:
+        jobs.finish(job)
     return {"auction_id": auction_id, "fetched": len(lots),
             "created": created, "updated": updated, "cancelled": cancelled}
 

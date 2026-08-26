@@ -97,12 +97,22 @@ def active() -> list[dict]:
 
 def cancel(job_id: str) -> bool:
     """Ask a job to stop. Workers check is_cancelled() at safe points — the
-    work already done is kept, nothing is rolled back."""
+    work already done is kept, nothing is rolled back.
+
+    Cancelling an ALREADY-cancelled job force-dismisses the row instead:
+    if the worker died between acknowledging the cancel and finishing
+    (e.g. the browser closed mid-request, so CancelledError skipped the
+    handler's cleanup), the row would sit in the status bar until the next
+    restart — a second Cancel click clears it on the spot."""
     db = SessionLocal()
     try:
         job = db.query(models.Job).filter(models.Job.id == job_id).first()
         if not job:
             return False
+        if job.cancelled:
+            db.delete(job)
+            db.commit()
+            return True
         job.cancelled = True
         job.label = f"Stopping — {job.label}"
         db.commit()
