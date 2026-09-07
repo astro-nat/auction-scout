@@ -48,6 +48,10 @@ def list_lots(
     offset: int = 0,
     db: Session = Depends(get_db),
 ):
+    # Hard ceiling regardless of what the client asks for — a 6000-row
+    # response (each lot with enrichment + itemized notes) crashed mobile
+    # browser tabs and helped OOM the backend once.
+    limit = min(limit, 2000)
     # Imported lots are kept visible even after their auction closes — the
     # enrichment work is yours, and a vanished lot looks like data loss. The
     # row is marked closed instead (see auction_closed below).

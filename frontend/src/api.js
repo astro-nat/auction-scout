@@ -38,9 +38,13 @@ export function alertOnce(msg) {
   window.alert(msg)
 }
 
-export function fetchLots({ auctionId, status, roiStatus, boloOnly } = {}) {
+export function fetchLots({ auctionId, status, roiStatus, boloOnly, offset } = {}) {
   const params = new URLSearchParams()
-  params.set('limit', auctionId ? '6000' : '2000')
+  // 2000 per page everywhere: a 6000-lot payload crashed phone tabs and
+  // strained the backend. Big auctions page in with `offset` via the
+  // "Load more" button instead.
+  params.set('limit', '2000')
+  if (offset) params.set('offset', String(offset))
   if (auctionId) params.set('auction_id', auctionId)
   if (status) params.set('status', status)
   if (roiStatus) params.set('roi_status', roiStatus)

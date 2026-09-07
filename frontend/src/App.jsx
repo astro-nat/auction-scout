@@ -152,6 +152,18 @@ They're listed below — use "Enrich" to price them.`)
     } catch (e) { alertOnce(e.message); setBusy('') }
   }
 
+  async function handleLoadMoreLots() {
+    try {
+      const more = await fetchLots({
+        auctionId: selectedAuction,
+        boloOnly: filters.boloOnly,
+        roiStatus: filters.roiStatus || undefined,
+        offset: lots.length,
+      })
+      setLots((prev) => [...prev, ...more])
+    } catch (e) { alertOnce(e.message) }
+  }
+
   async function handleRefreshBids() {
     try {
       const r = await refreshBids()
@@ -715,7 +727,15 @@ Skipping ${hard} HARD-to-ship lots.`
           and press <strong>Import</strong> — its lots land here.
         </p>
       ) : (
+        <>
         <LotTable lots={visibleLots} onLotUpdated={handleLotUpdated} onRefresh={loadLots} />
+        {lots.length >= 2000 && lots.length < lotTotal && (
+          <button style={{ width: '100%', padding: 10, marginTop: 8 }}
+                  onClick={handleLoadMoreLots}>
+            Load next 2,000 from the server (holding {lots.length.toLocaleString()} of {lotTotal.toLocaleString()})
+          </button>
+        )}
+        </>
       )}
       </>)}
       </div>
