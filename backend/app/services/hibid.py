@@ -316,6 +316,27 @@ def _logistics_ease(title: str, category: str, description: str) -> str:
 classify_logistics = _logistics_ease
 
 
+# HiBid serves time-left as a relative string ("2d  6h  30m", "45m").
+# Converted to an absolute timestamp at fetch so the UI can show a LIVE
+# countdown instead of a snapshot that goes stale the moment it's stored.
+_TIME_LEFT_RE = re.compile(
+    r"(?:(\d+)\s*d)?\s*(?:(\d+)\s*h)?\s*(?:(\d+)\s*m)?\s*(?:(\d+)\s*s)?",
+    re.IGNORECASE)
+
+
+def _closes_at_from_time_left(s: str | None):
+    if not s:
+        return None
+    m = _TIME_LEFT_RE.match(s.strip())
+    if not m:
+        return None
+    d, h, mi, sec = (int(x) if x else 0 for x in m.groups())
+    total = d * 86400 + h * 3600 + mi * 60 + sec
+    if total <= 0:
+        return None   # "Bidding Closed" and friends parse to zero
+    return datetime.now() + timedelta(seconds=total)
+
+
 def _process_lot(raw: dict, auction_ctx: dict) -> dict:
     state = raw.get("lotState") or {}
     pictures = raw.get("pictures") or []
@@ -350,6 +371,7 @@ def _process_lot(raw: dict, auction_ctx: dict) -> dict:
         "est_cost": est_cost,
         "status": state.get("status"),
         "time_left": state.get("timeLeft"),
+        "closes_at": _closes_at_from_time_left(state.get("timeLeft")),
         "source": source,
         "logistics_ease": _logistics_ease(title, category, description),
         "lot_link": f"https://hibid.com/lot/{raw.get('id')}",

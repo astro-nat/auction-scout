@@ -55,6 +55,10 @@ class Lot(Base):
     est_cost = Column(Numeric)        # effective bid × buyer-premium multiplier
     status = Column(String)           # HiBid lot status
     time_left = Column(String)
+    # Absolute close time, computed from HiBid's relative "2d 6h 30m" at
+    # fetch time — the UI renders a live countdown from this instead of
+    # showing a snapshot string that goes stale.
+    closes_at = Column(DateTime)
     source = Column(String)           # Ship | Local Pickup (per-lot, beats auction-level)
     logistics_ease = Column(String)   # EASY | NEUTRAL | HARD
     unreachable_pickup = Column(Boolean, default=False)  # nationwide + pickup-only

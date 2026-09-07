@@ -78,7 +78,7 @@ def run_bid_refresh(auction_ids: list[int], resume_job_id: str | None = None) ->
                         lot.time_left = None
                     continue
                 for k in ("current_bid", "next_bid", "bid_count", "est_cost",
-                          "status", "time_left"):
+                          "status", "time_left", "closes_at"):
                     setattr(lot, k, data[k])
                 # New bid moves cost, so the ROI verdict has to move with it.
                 if lot.enrichment and lot.enrichment.est_resale:

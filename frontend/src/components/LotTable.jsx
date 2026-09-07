@@ -37,6 +37,7 @@ const COLUMNS = [
   { key: 'title', label: 'Title', get: (l) => l.title?.toLowerCase(), filter: 'text' },
   { key: 'auction', label: 'Auction', get: (l) => l.auction_name, filter: 'values' },
   { key: 'category', label: 'Category', get: (l) => l.category, filter: 'values' },
+  { key: 'closes', label: 'Closes', get: (l) => l.closes_at ? new Date(l.closes_at).getTime() : Number.MAX_SAFE_INTEGER, filter: null },
   { key: 'bid', label: 'Bid', get: (l) => num(l.current_bid), filter: 'range' },
   { key: 'est_cost', label: 'Est Cost', get: (l) => num(l.est_cost), filter: 'range' },
   { key: 'ship', label: 'Ship', get: (l) => l.logistics_ease, filter: 'values' },
@@ -46,6 +47,18 @@ const COLUMNS = [
   { key: 'verdict', label: 'Verdict', get: (l) => l.enrichment?.verdict, filter: 'values' },
   { key: 'status', label: 'Status', get: (l) => l.enrichment?.status, filter: 'values' },
 ]
+
+// Live countdown text from an absolute close time. Bold/red inside two
+// hours; "closed" once past; em-dash when HiBid gave no time.
+function closesIn(closesAt, now) {
+  if (!closesAt) return { text: '—', urgent: false }
+  const ms = new Date(closesAt).getTime() - now
+  if (ms <= 0) return { text: 'closed', urgent: false }
+  const m = Math.floor(ms / 60000)
+  const d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60), mm = m % 60
+  const text = d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${mm}m` : `${mm}m`
+  return { text, urgent: ms < 2 * 3600 * 1000 }
+}
 
 function matchesFilter(value, query) {
   if (!query) return true
@@ -125,6 +138,12 @@ const MOBILE_SORTS = [
 export default function LotTable({ lots, onLotUpdated, onRefresh }) {
   const isMobile = useMediaQuery('(max-width: 768px)')
   const [pollingIds, setPollingIds] = useState(new Set())
+  // Countdown clock — a 30s tick keeps every "closes in" cell live.
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 30000)
+    return () => clearInterval(t)
+  }, [])
   const [sort, setSort] = useState({ key: null, dir: 1 })
   const [colFilters, setColFilters] = useState({})
   // Render cap: building thousands of DOM rows eats real browser memory.
@@ -342,6 +361,10 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
                 <div style={{ color: 'var(--muted)', fontSize: 13 }}>→ {e.enriched_title}</div>
               )}
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', fontSize: 14, margin: '6px 0' }}>
+                <span style={closesIn(lot.closes_at, now).urgent
+                             ? { color: '#e05555', fontWeight: 700 } : undefined}>
+                  ⏱ {closesIn(lot.closes_at, now).text}
+                </span>
                 <span>Bid {money(lot.current_bid)} / {money(lot.next_bid)}</span>
                 <span>Cost {money(lot.est_cost)}</span>
                 <span>Resale {money(e.est_resale)}{e.comp_count > 0 ? ` (${e.comp_count})` : ''}</span>
@@ -429,7 +452,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
         <tr>
           {COLUMNS.map((c) => (
             <th key={c.key} style={{ ...cell, fontWeight: 'normal' }}>
-              {c.filter === 'text' ? (
+              {!c.filter ? null : c.filter === 'text' ? (
                 <input
                   value={colFilters[c.key] ?? ''}
                   onChange={(ev) => setFilter(c.key, ev.target.value)}
@@ -508,6 +531,11 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
                 {lot.auction_name}
               </td>
               <td style={cell}>{lot.category}</td>
+              <td style={{ ...cell, whiteSpace: 'nowrap',
+                           ...(closesIn(lot.closes_at, now).urgent
+                               ? { color: '#e05555', fontWeight: 700 } : {}) }}>
+                {closesIn(lot.closes_at, now).text}
+              </td>
               <td style={cell}>{money(lot.current_bid)} / {money(lot.next_bid)}</td>
               <td style={cell}>{money(lot.est_cost)}</td>
               <td style={cell}>

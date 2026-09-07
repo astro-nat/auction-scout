@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, scanAuctions, importLots, enrichAll, flushClosed, refreshBids, reinspectNoComps, alertOnce } from './api'
+import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, scanAuctions, importLots, enrichAll, flushClosed, refreshBids, reinspectNoComps, fetchSettings, saveTargetRoi, alertOnce } from './api'
 import LotTable from './components/LotTable'
 import StatusBar from './components/StatusBar'
 import useMediaQuery from './useMediaQuery'
@@ -34,6 +34,11 @@ export default function App() {
   const [hideUnshippable, setHideUnshippable] = useState(true)
   const [showHiddenLots, setShowHiddenLots] = useState(false)
   const [importedRows, setImportedRows] = useState({})
+  // Target ROI % for the GOLD MINE verdict — DB-backed, editable inline.
+  const [targetRoi, setTargetRoi] = useState('')
+  useEffect(() => {
+    fetchSettings().then((s) => setTargetRoi(String(s.target_roi_pct))).catch(console.error)
+  }, [])
 
   const [lotTotal, setLotTotal] = useState(0)
   const loadGen = useRef(0)
@@ -178,6 +183,15 @@ export default function App() {
 
 They're listed below — use "Enrich" to price them.`)
     } catch (e) { alertOnce(e.message); setBusy('') }
+  }
+
+  async function handleSaveRoi() {
+    const pct = Number(targetRoi)
+    if (!pct || pct < 1) { alert('Enter a target ROI percent, e.g. 150.'); return }
+    try {
+      const r = await saveTargetRoi(pct)
+      alert(`Target ROI set to ${r.target_roi_pct}%. Re-grading ${r.repricing} enriched items now (free) — gold mines update as it runs.`)
+    } catch (e) { alertOnce(e.message) }
   }
 
   async function handleRefreshBids() {
@@ -667,6 +681,18 @@ Skipping ${hard} HARD-to-ship lots.`
               onChange={(ev) => setFilters((f) => ({ ...f, roiStatus: ev.target.checked ? 'GOLD MINE' : '' }))}
             /> Gold mines only
           </label>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
+                title="An item is a GOLD MINE when its current bid still clears this return after all fees. Saving re-grades every item for free.">
+            (at
+            <input
+              type="number"
+              value={targetRoi}
+              onChange={(ev) => setTargetRoi(ev.target.value)}
+              style={{ width: 56 }}
+            />% ROI
+            <button style={{ fontSize: 12, padding: '2px 8px' }} onClick={handleSaveRoi}>Apply</button>
+            )
+          </span>
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
                  title="Hide items whose resale (from 3+ comps) is under the cutoff">
             <input

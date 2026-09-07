@@ -1,6 +1,6 @@
 """GET /status — everything happening server-side right now, for the top bar."""
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from .. import models
@@ -52,6 +52,34 @@ def get_status(db: Session = Depends(get_db)):
         enrichment["lot_title"] = working[1]
 
     return {"jobs": jobs.active(), "enrichment": enrichment}
+
+
+@router.get("/settings")
+def get_settings():
+    """The tunables the UI can edit. target_roi_pct is served as a percent."""
+    from ..services import financials
+    return {"target_roi_pct": round(financials.current_target_roi() * 100)}
+
+
+@router.patch("/settings")
+def patch_settings(payload: dict,
+                   background_tasks: BackgroundTasks,
+                   db: Session = Depends(get_db)):
+    """Save a new ROI target and immediately reprice every enriched lot under
+    it (free — reuses stored AI results). 1-10000 sanity range."""
+    from ..services import settings as settings_store
+    from ..workers.enrich import run_reprice
+    pct = payload.get("target_roi_pct")
+    if not isinstance(pct, (int, float)) or not (1 <= pct <= 10000):
+        raise HTTPException(status_code=422,
+                            detail="target_roi_pct must be a number from 1 to 10000")
+    settings_store.set("target_roi_pct", str(float(pct)))
+    lot_ids = [row[0] for row in
+               db.query(models.Lot.id).join(models.Enrichment)
+                 .filter(models.Enrichment.enriched_title.isnot(None)).all()]
+    if lot_ids:
+        background_tasks.add_task(run_reprice, lot_ids)
+    return {"target_roi_pct": pct, "repricing": len(lot_ids)}
 
 
 @router.post("/jobs/{job_id}/cancel")

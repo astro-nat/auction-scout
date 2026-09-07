@@ -8,9 +8,22 @@ prototype's defaults; override per-call if an auction house differs.
 import os
 from dataclasses import dataclass
 
-# 500% default (prototype's setting) — resale must clear 5x all-in cost to be a
-# "buy". Tune via TARGET_ROI_PCT in .env (e.g. 100 = double your money).
+# 500% default (prototype's setting) — resale must clear 5x all-in cost to be
+# a "buy". The env var TARGET_ROI_PCT is the baseline; a value saved from the
+# UI (settings table, key target_roi_pct) overrides it live — no redeploy.
 TARGET_ROI = float(os.environ.get("TARGET_ROI_PCT", "500")) / 100
+
+
+def current_target_roi() -> float:
+    """The live ROI target as a multiplier (1.5 = 150%)."""
+    from . import settings
+    try:
+        v = settings.get("target_roi_pct")
+        if v:
+            return float(v) / 100
+    except Exception:  # noqa: BLE001 — settings table missing on first boot
+        pass
+    return TARGET_ROI
 BUYERS_PREMIUM = 0.15     # auction house premium on the hammer price
 SALES_TAX = 0.0825        # TX sales tax, applied on hammer + premium
 PLATFORM_FEE = 0.15       # eBay final-value fee on the resale side
@@ -35,13 +48,15 @@ def days_to_sell(sold_count: int, active_count: int) -> float:
 
 def max_bid(resale_value: float,
             logistics_penalty: float = 0.0,
-            target_roi: float = TARGET_ROI,
+            target_roi: float | None = None,
             buyers_premium: float = BUYERS_PREMIUM,
             sales_tax: float = SALES_TAX,
             platform_fee: float = PLATFORM_FEE,
             buffer: float = BUFFER) -> float:
     """Highest hammer price that still hits the target ROI after premium, tax,
     platform fees, shipping penalty, and buffer."""
+    if target_roi is None:
+        target_roi = current_target_roi()
     net_proceeds = resale_value * (1 - platform_fee)
     allowable = net_proceeds - logistics_penalty - buffer
     ceiling = allowable / ((1 + target_roi) * acquisition_multiplier(buyers_premium, sales_tax))
@@ -63,9 +78,11 @@ def evaluate_lead(resale_value: float,
                   logistics_penalty: float = 0.0,
                   dts: float = 999.0,
                   max_dts: float = MAX_DTS,
-                  target_roi: float = TARGET_ROI) -> LeadEvaluation:
+                  target_roi: float | None = None) -> LeadEvaluation:
     """Grade a lot at its current bid. Viable = bid under the ROI ceiling AND
     the item actually moves on eBay (dts within bounds)."""
+    if target_roi is None:
+        target_roi = current_target_roi()
     ceiling = max_bid(resale_value, logistics_penalty, target_roi)
     total_cost = current_bid * acquisition_multiplier() + logistics_penalty + BUFFER
     profit = resale_value * (1 - PLATFORM_FEE) - total_cost

@@ -146,6 +146,14 @@ export function refreshBids() {
   return request('/auctions/refresh-bids', { method: 'POST' })
 }
 
+export function fetchSettings() {
+  return request('/settings')
+}
+
+export function saveTargetRoi(pct) {
+  return request('/settings', { method: 'PATCH', body: JSON.stringify({ target_roi_pct: pct }) })
+}
+
 export function reinspectNoComps(dryRun = false) {
   const q = dryRun ? '?dry_run=true' : ''
   return request(`/lots/reinspect-no-comps${q}`, { method: 'POST' })

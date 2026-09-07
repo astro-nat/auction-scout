@@ -61,6 +61,7 @@ class LotOut(BaseModel):
     est_cost: Optional[Decimal] = None
     status: Optional[str] = None
     time_left: Optional[str] = None
+    closes_at: Optional[datetime] = None
     source: Optional[str] = None
     logistics_ease: Optional[str] = None
     unreachable_pickup: bool = False
