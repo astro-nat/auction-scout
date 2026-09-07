@@ -87,14 +87,31 @@ def clean_title(title: str) -> str:
     return " ".join(words)
 
 
+# Measurement-ish trailing tokens ("18x21", '21"', "12in", "30cm", "5pc").
+# These are NOT the item noun, and keeping one as the anchor word produced
+# queries like "Antique Still Life 18x21" that match almost nothing — the
+# handful of listings that do match then price the lot off an anecdote.
+_DIMENSION_RE = re.compile(
+    r"""^(?:\d+(?:[.,]\d+)?\s*(?:x|by)\s*\d+(?:[.,]\d+)?  # 18x21
+        |\d+(?:[.,]\d+)?\s*(?:"|''|in|inch|inches|cm|mm|ft|lb|lbs|oz|pc|pcs|pk)
+        |\d+(?:[.,]\d+)?)$""",
+    re.IGNORECASE | re.VERBOSE)
+
+
 def query_variants(title: str) -> list[str]:
     """Progressively shorter queries. eBay returns zero results for very long
     queries; 4-6 words is the sweet spot. When truncating, always keep the
-    LAST word — enriched titles end with the item-type noun ("...Ironwood 18
-    Head Statue"), and dropping it comps a statue against generic 'vintage
-    african' listings."""
+    LAST MEANINGFUL word — enriched titles end with the item-type noun
+    ("...Ironwood 18 Head Statue"), and dropping it comps a statue against
+    generic 'vintage african' listings. Trailing dimensions are skipped when
+    picking that anchor; they describe the item, they don't identify it."""
     cleaned = clean_title(title)
     words = cleaned.split()
+    # Anchor on the last non-dimension token.
+    anchor_idx = len(words) - 1
+    while anchor_idx > 0 and _DIMENSION_RE.match(words[anchor_idx]):
+        anchor_idx -= 1
+    anchor = words[anchor_idx:anchor_idx + 1]
     variants, seen = [], set()
 
     def add(tokens):
@@ -106,7 +123,8 @@ def query_variants(title: str) -> list[str]:
     add(words[:8])  # near-full title first — most specific match wins
     for cap in _QUERY_WORD_CAPS:
         if len(words) > cap:
-            add(words[:cap - 1] + words[-1:])  # keep the head noun
+            head = [w for w in words[:cap - 1] if w != anchor[0]]
+            add(head + anchor)  # keep the item noun, not a stray dimension
         else:
             add(words[:cap])
     return variants
@@ -268,14 +286,28 @@ def lookup_comps(title: str) -> dict:
     if best_partial:
         return _finalize(title, best_partial[0], best_partial[1], result)
 
-    # Active-listing fallback with the shortest variant
-    comps = _active_lookup(variants[-1])
-    comps = [(p, t) for p, t in comps
-             if _relevant(variants[-1], t) and _quantity_match(title, t)
-             and _model_match(title, t) and _audience_match(title, t)]
-    prices = _iqr_filter([p for p, _ in comps])
-    if prices:
-        return _finalize(title, prices, "active (eBay)", result,
+    # Active-listing fallback. Walk the variants MOST-SPECIFIC first (same
+    # order as the sold-comps loop above) and take the first query with
+    # enough agreeing listings: precision first, breadth only as needed.
+    # Pricing off a single surviving comp is pricing off an anecdote, and on
+    # dispersed markets (antique art, collectibles) that lone listing is
+    # often the outlier that makes a $100 item look like a $600 one.
+    best = None
+    for query in variants:
+        comps = _active_lookup(query)
+        comps = [(p, t) for p, t in comps
+                 if _relevant(query, t) and _quantity_match(title, t)
+                 and _model_match(title, t) and _audience_match(title, t)]
+        prices = _iqr_filter([p for p, _ in comps])
+        if not prices:
+            continue
+        if len(prices) >= _MIN_FULL_COMPS:
+            return _finalize(title, prices, "active (eBay)", result,
+                             realization=ACTIVE_REALIZATION)
+        if best is None or len(prices) > len(best):
+            best = prices
+    if best:
+        return _finalize(title, best, "active (eBay)", result,
                          realization=ACTIVE_REALIZATION)
     return result
 
