@@ -175,7 +175,9 @@ async def list_categories():
 
 
 @router.post("/scan", response_model=List[schemas.AuctionOut])
-async def scan_auctions(payload: schemas.ScanRequest, db: Session = Depends(get_db)):
+async def scan_auctions(payload: schemas.ScanRequest,
+                        background_tasks: BackgroundTasks,
+                        db: Session = Depends(get_db)):
     """Discover open auctions near the configured zip and store them."""
     # Keep the table from growing without bound — every scan appends.
     removed = purge_stale_auctions(db)
@@ -230,6 +232,15 @@ async def scan_auctions(payload: schemas.ScanRequest, db: Session = Depends(get_
             r.category_lot_count = counts.get(r.hibid_id)
             r.category_count_for = payload.category_id
         db.commit()   # persist so a page refresh keeps the "Import N" button
+    # Auto-analyze shipping for auctions the user can't drive to: anything a
+    # non-local scan surfaced would have to ship, so its terms are worth an
+    # AI read up front. ship_analyzed_at gates it — an auction is only ever
+    # paid for once, no matter how many scans re-surface it.
+    to_analyze = [r.id for r in stored
+                  if r.source == "Ship" and r.ship_analyzed_at is None]
+    if to_analyze:
+        background_tasks.add_task(run_ship_analysis, to_analyze)
+
     # Attach the same stats GET /auctions serves — without this, previously
     # imported auctions come back with zeroed counts and the UI shows them
     # as "Not imported yet" until the next idle refresh.
