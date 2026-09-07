@@ -71,10 +71,18 @@ export default function App() {
     })
     // Accumulate imported auctions separately — they feed the items-tab
     // filter dropdown, and must survive the auctions list being replaced
-    // by scan results.
+    // by scan results. Gold/city refresh on every sighting.
     setImportedIndex((prev) => {
       const next = { ...prev }
-      for (const a of list) if (a.lots_imported > 0) next[a.id] = a.name
+      for (const a of list) {
+        if (a.lots_imported > 0) {
+          next[a.id] = {
+            name: a.name,
+            city: [a.city, a.state].filter(Boolean).join(', '),
+            gold: a.gold_count ?? 0,
+          }
+        }
+      }
       return next
     })
     return list
@@ -612,8 +620,12 @@ Skipping ${hard} HARD-to-ship lots.`
         >
           <option value="">All auctions ({Object.keys(importedIndex).length} imported)</option>
           {Object.entries(importedIndex)
-            .sort((a, b) => a[1].localeCompare(b[1]))
-            .map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+            .sort((a, b) => (b[1].gold - a[1].gold) || a[1].name.localeCompare(b[1].name))
+            .map(([id, info]) => (
+              <option key={id} value={id}>
+                {info.gold} gold | [ {info.city || '—'} ] | {info.name}
+              </option>
+            ))}
         </select>
         <label>
           <input
