@@ -84,24 +84,26 @@ def list_lots(
     return rows
 
 
-@router.post("/flush-closed")
-def flush_closed(dry_run: bool = False, db: Session = Depends(get_db)):
-    """Delete every imported lot whose auction has closed, then drop the
-    now-empty closed auctions from the list.
-
-    dry_run=true only counts, so the UI can put a real number in its
-    confirm dialog. The delete is permanent — enrichment results (the
-    paid AI calls) go with the lots.
-    """
+def flush_closed_now(db: Session, dry_run: bool = False) -> dict:
+    """Delete every imported lot that can no longer be bid on — its own
+    HiBid status says closed/sold, OR its whole auction has closed — then
+    drop the now-empty closed auctions. Shared by the manual endpoint below
+    and the 12-hourly maintenance loop (workers/maintenance.py). Permanent —
+    enrichment results (the paid AI calls) go with the lots."""
     from datetime import datetime
+    from sqlalchemy import func, or_
     from .auctions import purge_stale_auctions
 
+    _CLOSED_STATUSES = ("CLOSED", "SOLD", "ENDED", "PASSED", "ARCHIVED")
     lot_ids = [
         row[0] for row in
         db.query(models.Lot.id)
           .join(models.Auction, models.Lot.auction_id == models.Auction.id)
-          .filter(models.Auction.closing_date.isnot(None),
-                  models.Auction.closing_date < datetime.now())
+          .filter(or_(
+              (models.Auction.closing_date.isnot(None))
+              & (models.Auction.closing_date < datetime.now()),
+              func.upper(func.coalesce(models.Lot.status, "")).in_(_CLOSED_STATUSES),
+          ))
           .all()
     ]
     if dry_run:
@@ -117,6 +119,13 @@ def flush_closed(dry_run: bool = False, db: Session = Depends(get_db)):
         db.commit()
     auctions_removed = purge_stale_auctions(db)
     return {"lots": len(lot_ids), "auctions": auctions_removed, "dry_run": False}
+
+
+@router.post("/flush-closed")
+def flush_closed(dry_run: bool = False, db: Session = Depends(get_db)):
+    """Manual flush — dry_run=true only counts, so the UI can put a real
+    number in its confirm dialog."""
+    return flush_closed_now(db, dry_run=dry_run)
 
 
 @router.post("/{lot_id}/watch", response_model=schemas.LotOut)

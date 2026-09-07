@@ -344,6 +344,12 @@ Skipping ${hard} HARD-to-ship lots.`
   // Stamp each lot with its auction's name so the table can show/filter it.
   // Memoized: with several thousand lots streamed in, rebuilding this array
   // of copies on every unrelated render is real work on a phone.
+  // Closed at the ITEM level: the whole auction ended, or this lot's own
+  // HiBid status says it's done — catalogs soft-close progressively, so an
+  // open auction can be full of already-closed lots.
+  const isClosedItem = (l) =>
+    l.auction_closed || /^(closed|sold|ended|passed|archived)/i.test(l.status || '')
+
   const visibleLots = useMemo(() => {
     const auctionNames = { ...auctionIndex, ...Object.fromEntries(auctions.map((a) => [a.id, a.name])) }
     return lots
@@ -351,10 +357,12 @@ Skipping ${hard} HARD-to-ship lots.`
         if (!showHiddenLots && l.hidden) return false
         if (hideLowValue && isConfirmedLowValue(l)) return false
         if (hideHardShip && l.logistics_ease === 'HARD') return false
-        if (hideClosed && l.auction_closed) return false
+        if (hideClosed && isClosedItem(l)) return false
         return true
       })
-      .map((l) => ({ ...l, auction_name: l.auction_name ?? auctionNames[l.auction_id] ?? '—' }))
+      .map((l) => ({ ...l,
+                     auction_name: l.auction_name ?? auctionNames[l.auction_id] ?? '—',
+                     item_closed: isClosedItem(l) }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lots, auctions, auctionIndex, showHiddenLots, hideLowValue, lowValueCutoff, hideHardShip, hideClosed])
   const hiddenCount = lots.length - visibleLots.length
@@ -647,7 +655,7 @@ Skipping ${hard} HARD-to-ship lots.`
             type="checkbox"
             checked={hideClosed}
             onChange={(ev) => setHideClosed(ev.target.checked)}
-          /> Hide closed auctions
+          /> Hide closed items
         </label>
         <label style={{ marginLeft: '1rem' }}
                title="Lots you hid with the 🚫 button — check to see and unhide them">

@@ -130,6 +130,9 @@ def recover_orphaned_jobs():
     # Phone alerts for watched lots closing soon (no-op without NTFY_TOPIC).
     from .workers.notify import start_notifier
     start_notifier()
+    # 12-hourly closed-item flush (FLUSH_CLOSED_HOURS=0 disables).
+    from .workers.maintenance import start_maintenance
+    start_maintenance()
 
 
 @app.get("/health")

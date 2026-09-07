@@ -33,6 +33,10 @@ NTFY_URL = os.environ.get("NTFY_URL", "https://ntfy.sh")
 # Alert when a watched lot's auction closes within this many hours.
 WATCH_ALERT_HOURS = float(os.environ.get("WATCH_ALERT_HOURS", "2"))
 
+# Auto-delete lots from closed auctions this often (hours). 0 disables and
+# leaves cleanup to the manual "Flush closed items" button.
+FLUSH_CLOSED_HOURS = float(os.environ.get("FLUSH_CLOSED_HOURS", "12"))
+
 # Items that are miserable/impossible to ship — HARD logistics.
 # Matched against TITLE + CATEGORY only (never descriptions — auctioneer
 # boilerplate like "we sell furniture, vehicles... our moving truck..."

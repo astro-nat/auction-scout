@@ -69,6 +69,13 @@ def run_bid_refresh(auction_ids: list[int], resume_job_id: str | None = None) ->
             for lot in rows:
                 data = by_lot_id.get(str(lot.lot_id))
                 if not data:
+                    # fetch_lots returns every still-OPEN lot; one of ours
+                    # missing from it has individually closed (HiBid soft-
+                    # closes catalogs progressively) — record that, or its
+                    # status reads OPEN forever.
+                    if (lot.status or "").upper() in ("OPEN", "POSTED"):
+                        lot.status = "CLOSED"
+                        lot.time_left = None
                     continue
                 for k in ("current_bid", "next_bid", "bid_count", "est_cost",
                           "status", "time_left"):
