@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, scanAuctions, importLots, enrichAll, flushClosed, analyzeShipping, refreshBids, reinspectNoComps, alertOnce } from './api'
 import LotTable from './components/LotTable'
 import StatusBar from './components/StatusBar'
@@ -36,6 +36,7 @@ export default function App() {
   const [importedIndex, setImportedIndex] = useState({})
 
   const [lotTotal, setLotTotal] = useState(0)
+  const loadGen = useRef(0)
 
   const loadLots = useCallback(() => {
     const args = {
@@ -43,9 +44,22 @@ export default function App() {
       boloOnly: filters.boloOnly,
       roiStatus: filters.roiStatus || undefined,
     }
-    fetchLots(args).then(setLots).catch(console.error)
-    // The fetch is capped for the browser's sake; the real total comes from
-    // the database so the UI never passes off a page size as the whole set.
+    // Pages of 2000 chain automatically until the set is complete: the
+    // first page renders immediately, the rest stream in behind it. One
+    // 6000-row payload crashed phone tabs; four 2000-row parses don't.
+    // The generation counter aborts a stale chain when the user switches
+    // auction or filters mid-load.
+    const gen = ++loadGen.current
+    const loadPage = (offset, acc) =>
+      fetchLots({ ...args, offset }).then((page) => {
+        if (gen !== loadGen.current) return
+        const all = offset ? [...acc, ...page] : page
+        setLots(all)
+        if (page.length === 2000) loadPage(all.length, all)
+      }).catch(console.error)
+    loadPage(0, [])
+    // The real total comes from the database so the UI never passes off a
+    // page size as the whole set.
     fetchLotCount(args).then((r) => setLotTotal(r.total)).catch(console.error)
   }, [selectedAuction, filters])
 
@@ -150,18 +164,6 @@ export default function App() {
 
 They're listed below — use "Enrich" to price them.`)
     } catch (e) { alertOnce(e.message); setBusy('') }
-  }
-
-  async function handleLoadMoreLots() {
-    try {
-      const more = await fetchLots({
-        auctionId: selectedAuction,
-        boloOnly: filters.boloOnly,
-        roiStatus: filters.roiStatus || undefined,
-        offset: lots.length,
-      })
-      setLots((prev) => [...prev, ...more])
-    } catch (e) { alertOnce(e.message) }
   }
 
   async function handleRefreshBids() {
@@ -355,16 +357,21 @@ Skipping ${hard} HARD-to-ship lots.`
       : null
 
   // Stamp each lot with its auction's name so the table can show/filter it.
-  const auctionNames = { ...auctionIndex, ...Object.fromEntries(auctions.map((a) => [a.id, a.name])) }
-  const visibleLots = lots
-    .filter((l) => {
-      if (!showHiddenLots && l.hidden) return false
-      if (hideLowValue && isConfirmedLowValue(l)) return false
-      if (hideHardShip && l.logistics_ease === 'HARD') return false
-      if (hideClosed && l.auction_closed) return false
-      return true
-    })
-    .map((l) => ({ ...l, auction_name: l.auction_name ?? auctionNames[l.auction_id] ?? '—' }))
+  // Memoized: with several thousand lots streamed in, rebuilding this array
+  // of copies on every unrelated render is real work on a phone.
+  const visibleLots = useMemo(() => {
+    const auctionNames = { ...auctionIndex, ...Object.fromEntries(auctions.map((a) => [a.id, a.name])) }
+    return lots
+      .filter((l) => {
+        if (!showHiddenLots && l.hidden) return false
+        if (hideLowValue && isConfirmedLowValue(l)) return false
+        if (hideHardShip && l.logistics_ease === 'HARD') return false
+        if (hideClosed && l.auction_closed) return false
+        return true
+      })
+      .map((l) => ({ ...l, auction_name: l.auction_name ?? auctionNames[l.auction_id] ?? '—' }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lots, auctions, auctionIndex, showHiddenLots, hideLowValue, lowValueCutoff, hideHardShip, hideClosed])
   const hiddenCount = lots.length - visibleLots.length
 
   return (
@@ -727,15 +734,7 @@ Skipping ${hard} HARD-to-ship lots.`
           and press <strong>Import</strong> — its lots land here.
         </p>
       ) : (
-        <>
         <LotTable lots={visibleLots} onLotUpdated={handleLotUpdated} onRefresh={loadLots} />
-        {lots.length >= 2000 && lots.length < lotTotal && (
-          <button style={{ width: '100%', padding: 10, marginTop: 8 }}
-                  onClick={handleLoadMoreLots}>
-            Load next 2,000 from the server (holding {lots.length.toLocaleString()} of {lotTotal.toLocaleString()})
-          </button>
-        )}
-        </>
       )}
       </>)}
       </div>
