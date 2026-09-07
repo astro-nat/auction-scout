@@ -461,25 +461,38 @@ def _inspect(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
 
     protected = set(e.user_overrides or [])
     summary = result.get("summary") or ""
+    # Inspection must never replace stronger evidence with weaker: a lot
+    # already priced from more real comps than the itemized pass found keeps
+    # its price (and its gold status) — the breakdown is still recorded.
+    # Inspecting a strong 18-comp gold item used to swap in a 0-comp AI
+    # guess, which the thin-evidence rule then demoted.
+    prior_comps = e.comp_count or 0
+    keep_prior = (e.est_resale is not None
+                  and not (e.price_source or "").startswith("itemized")
+                  and prior_comps > priced)
+    kept = " · kept pre-inspection price (stronger comps)" if keep_prior else ""
     if "notes" not in protected:
         e.notes = (f"[inspected: {len(items)} items, {priced} comp-priced, "
-                   f"{ai_priced} AI-estimated] {summary}\n" + "\n".join(lines))
+                   f"{ai_priced} AI-estimated{kept}] {summary}\n" + "\n".join(lines))
     e.ai_source = "vision-itemized"
     # Vision saw the whole lot — trust its ship-tier call over the title regex.
     ship = (result.get("ship") or "").upper()
     if ship in ("EASY", "NEUTRAL", "HARD") and "logistics_ease" not in protected:
         lot.logistics_ease = ship
         _mark_ai_ship(e)
-    if total > 0 and "est_resale" not in protected:
-        e.est_resale = round(total, 2)
-        e.price_low = None
-        e.price_high = None
-        e.comp_count = priced          # real comps only — AI guesses don't count
-        bits = [f"{priced} from comps"] if priced else []
-        if ai_priced:
-            bits.append(f"{ai_priced} AI-estimated ×{AI_ESTIMATE_REALIZATION:g}")
-        e.price_source = f"itemized vision ({' + '.join(bits)} of {len(items)} items)"
-        _apply_roi(lot, e)
+    if "est_resale" not in protected:
+        if keep_prior:
+            _apply_roi(lot, e)     # price stays; bid/ship may have moved
+        elif total > 0:
+            e.est_resale = round(total, 2)
+            e.price_low = None
+            e.price_high = None
+            e.comp_count = priced          # real comps only — AI guesses don't count
+            bits = [f"{priced} from comps"] if priced else []
+            if ai_priced:
+                bits.append(f"{ai_priced} AI-estimated ×{AI_ESTIMATE_REALIZATION:g}")
+            e.price_source = f"itemized vision ({' + '.join(bits)} of {len(items)} items)"
+            _apply_roi(lot, e)
 
 
 # ------------------------------------------------------------------ AI calls
