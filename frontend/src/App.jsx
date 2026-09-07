@@ -610,13 +610,15 @@ Skipping ${hard} HARD-to-ship lots.`
       )}
 
       {view === 'items' && (<>
-      <section style={{ marginBottom: '0.75rem' }}>
+      <section style={{ marginBottom: '0.75rem', display: 'flex',
+                        flexDirection: 'column', gap: 8 }}>
+        {/* Row 1: which auction */}
         <select
           value={selectedAuction ?? ''}
           onChange={(ev) => setSelectedAuction(ev.target.value ? Number(ev.target.value) : null)}
           title="Show items from one imported auction only"
-          style={{ padding: 6, fontSize: 14, maxWidth: isMobile ? '100%' : 320,
-                   marginRight: '1rem', marginBottom: isMobile ? 6 : 0 }}
+          style={{ padding: 8, fontSize: 14, width: isMobile ? '100%' : 'auto',
+                   maxWidth: isMobile ? '100%' : 420, alignSelf: 'flex-start' }}
         >
           <option value="">All auctions ({Object.keys(importedIndex).length} imported)</option>
           {Object.entries(importedIndex)
@@ -627,74 +629,86 @@ Skipping ${hard} HARD-to-ship lots.`
               </option>
             ))}
         </select>
-        <label>
-          <input
-            type="checkbox"
-            checked={filters.boloOnly}
-            onChange={(ev) => setFilters((f) => ({ ...f, boloOnly: ev.target.checked }))}
-          /> BOLO matches only
-        </label>
-        {' '}
-        <label style={{ marginLeft: '1rem' }}>
-          <input
-            type="checkbox"
-            checked={filters.roiStatus === 'GOLD MINE'}
-            onChange={(ev) => setFilters((f) => ({ ...f, roiStatus: ev.target.checked ? 'GOLD MINE' : '' }))}
-          /> Gold mines only
-        </label>
-        <label style={{ marginLeft: '1rem' }}>
-          <input
-            type="checkbox"
-            checked={hideLowValue}
-            onChange={(ev) => setHideLowValue(ev.target.checked)}
-          /> Hide confirmed low-value (resale under $
-          <input
-            type="number"
-            value={lowValueCutoff}
-            onChange={(ev) => setLowValueCutoff(Number(ev.target.value) || 0)}
-            style={{ width: 50 }}
-          /> with 3+ comps)
-        </label>
-        <label style={{ marginLeft: '1rem' }}>
-          <input
-            type="checkbox"
-            checked={hideHardShip}
-            onChange={(ev) => setHideHardShip(ev.target.checked)}
-          /> Hide HARD ship
-        </label>
-        <label style={{ marginLeft: '1rem' }}>
-          <input
-            type="checkbox"
-            checked={hideClosed}
-            onChange={(ev) => setHideClosed(ev.target.checked)}
-          /> Hide closed items
-        </label>
-        <label style={{ marginLeft: '1rem' }}
-               title="Lots you hid with the 🚫 button — check to see and unhide them">
-          <input
-            type="checkbox"
-            checked={showHiddenLots}
-            onChange={(ev) => setShowHiddenLots(ev.target.checked)}
-          /> Show hidden ({lots.filter((l) => l.hidden).length})
-        </label>
-        {(hideLowValue || hideHardShip || hideClosed || !showHiddenLots) && hiddenCount > 0 && (
-          <span style={{ marginLeft: '0.5rem', color: 'var(--muted)' }}>
-            {hiddenCount} hidden
-          </span>
-        )}
 
-        <button style={{ marginLeft: '1rem' }} onClick={handleRefreshBids}
-                title="Re-pull current bids from HiBid for every imported open auction and recompute ROI. Free — progress shows in the top bar.">
-          Refresh bids
-        </button>
-        <button style={{ marginLeft: '0.5rem' }} onClick={handleInspectNoValue}
-                title="Bulk-inspect every enriched item that still has no resale value — AI reads the photo and prices it (asks first, shows cost)">
-          Inspect no-value items
-        </button>
-        <button style={{ marginLeft: '0.5rem' }} onClick={handleFlushClosed}
-                title="Permanently delete all items whose auction has closed (asks first)">
-          Flush closed items
-        </button>
+        {/* Row 2: filters — inline-flex per label so a checkbox never wraps
+            away from its own text, consistent gaps instead of ad-hoc margins */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center',
+                      columnGap: 16, rowGap: 6, fontSize: 14 }}>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
+            <input
+              type="checkbox"
+              checked={filters.boloOnly}
+              onChange={(ev) => setFilters((f) => ({ ...f, boloOnly: ev.target.checked }))}
+            /> BOLO only
+          </label>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
+            <input
+              type="checkbox"
+              checked={filters.roiStatus === 'GOLD MINE'}
+              onChange={(ev) => setFilters((f) => ({ ...f, roiStatus: ev.target.checked ? 'GOLD MINE' : '' }))}
+            /> Gold mines only
+          </label>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
+                 title="Hide items whose resale (from 3+ comps) is under the cutoff">
+            <input
+              type="checkbox"
+              checked={hideLowValue}
+              onChange={(ev) => setHideLowValue(ev.target.checked)}
+            /> Hide low-value (&lt; $
+            <input
+              type="number"
+              value={lowValueCutoff}
+              onChange={(ev) => setLowValueCutoff(Number(ev.target.value) || 0)}
+              style={{ width: 44 }}
+            />)
+          </label>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
+            <input
+              type="checkbox"
+              checked={hideHardShip}
+              onChange={(ev) => setHideHardShip(ev.target.checked)}
+            /> Hide HARD ship
+          </label>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
+            <input
+              type="checkbox"
+              checked={hideClosed}
+              onChange={(ev) => setHideClosed(ev.target.checked)}
+            /> Hide closed
+          </label>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
+                 title="Lots you hid with the 🚫 button — check to see and unhide them">
+            <input
+              type="checkbox"
+              checked={showHiddenLots}
+              onChange={(ev) => setShowHiddenLots(ev.target.checked)}
+            /> Show hidden ({lots.filter((l) => l.hidden).length})
+          </label>
+          {(hideLowValue || hideHardShip || hideClosed || !showHiddenLots) && hiddenCount > 0 && (
+            <span style={{ color: 'var(--muted)', whiteSpace: 'nowrap' }}>
+              {hiddenCount} hidden
+            </span>
+          )}
+        </div>
+
+        {/* Row 3: actions */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          <button style={isMobile ? { flex: '1 1 45%', padding: 8 } : undefined}
+                  onClick={handleRefreshBids}
+                  title="Re-pull current bids from HiBid for every imported open auction and recompute ROI. Free — progress shows in the top bar.">
+            Refresh bids
+          </button>
+          <button style={isMobile ? { flex: '1 1 45%', padding: 8 } : undefined}
+                  onClick={handleInspectNoValue}
+                  title="Bulk-inspect every enriched item that still has no resale value — AI reads the photo and prices it (asks first, shows cost)">
+            Inspect no-value items
+          </button>
+          <button style={isMobile ? { flex: '1 1 45%', padding: 8 } : undefined}
+                  onClick={handleFlushClosed}
+                  title="Permanently delete all items whose auction has closed (asks first)">
+            Flush closed items
+          </button>
+        </div>
       </section>
 
       <div style={{
