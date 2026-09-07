@@ -41,9 +41,9 @@ const COLUMNS = [
   { key: 'bid', label: 'Bid', get: (l) => num(l.current_bid), filter: 'range' },
   { key: 'est_cost', label: 'Est Cost', get: (l) => num(l.est_cost), filter: 'range' },
   { key: 'ship', label: 'Ship', get: (l) => l.logistics_ease, filter: 'values' },
-  { key: 'bolo', label: 'BOLO', get: (l) => l.enrichment?.bolo_brand, filter: 'values' },
   { key: 'est_resale', label: 'Est Resale', get: (l) => num(l.enrichment?.est_resale), filter: 'range' },
   { key: 'max_bid', label: 'Max Bid', get: (l) => num(l.enrichment?.max_bid), filter: 'range' },
+  { key: 'roi', label: 'ROI %', get: (l) => num(l.enrichment?.est_roi), filter: 'range' },
   { key: 'verdict', label: 'Verdict', get: (l) => l.enrichment?.verdict, filter: 'values' },
   { key: 'status', label: 'Status', get: (l) => l.enrichment?.status, filter: 'values' },
 ]
@@ -141,6 +141,7 @@ const MOBILE_SORTS = [
   { label: 'Sort: default', key: null, dir: 1 },
   { label: 'Est Resale (high first)', key: 'est_resale', dir: -1 },
   { label: 'Max Bid (high first)', key: 'max_bid', dir: -1 },
+  { label: 'ROI % (high first)', key: 'roi', dir: -1 },
   { label: 'Current Bid (low first)', key: 'bid', dir: 1 },
   { label: 'Est Cost (low first)', key: 'est_cost', dir: 1 },
 ]
@@ -431,6 +432,12 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
                 <span>Cost {money(lot.est_cost)}</span>
                 <span>Resale {money(e.est_resale)}{e.comp_count > 0 ? ` (${e.comp_count})` : ''}</span>
                 <span>Max bid {money(e.max_bid)}</span>
+                {e.est_roi != null && (
+                  <span style={{ color: Number(e.est_roi) < 0 ? '#e05555'
+                                   : e.roi_status === 'GOLD MINE' ? '#2e9e4f' : undefined }}>
+                    ROI {Math.round(Number(e.est_roi) * 100)}%
+                  </span>
+                )}
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, fontSize: 12, marginBottom: 6 }}>
                 <span style={{ background: 'var(--badge-bg)', borderRadius: 4, padding: '2px 6px' }}>{lot.logistics_ease}</span>
@@ -575,6 +582,14 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
                            opacity: lot.hidden ? 1 : 0.4 }}>
                   {lot.hidden ? '👁' : '🚫'}
                 </button>
+                {e.bolo_brand && (
+                  <span style={{ cursor: 'help', marginRight: 4 }}
+                        title={`BOLO match: ${e.bolo_brand} (tier ${e.bolo_tier ?? '?'})`}>🎯</span>
+                )}
+                {e.auth_required && (
+                  <span style={{ cursor: 'help', marginRight: 4 }}
+                        title="Luxury/precious-metal match — resale depends on authentication; don't trust the comps until verified in hand">⚠️</span>
+                )}
                 <a href={lot.lot_link} target="_blank" rel="noreferrer"
                    style={lot.hidden ? { opacity: 0.5, textDecoration: 'line-through' } : undefined}>{lot.title}</a>
                 <div style={{ color: 'var(--muted)', fontSize: 12 }}>
@@ -616,20 +631,6 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
               </td>
               <td style={cell}>
                 <EditableCell
-                  display={e.bolo_brand ? `${e.bolo_brand} (T${e.bolo_tier ?? '?'})` : '—'}
-                  rawValue={e.bolo_brand}
-                  edited={edited.has('bolo_brand')}
-                  onSave={(v) => handleCorrect(lot.lot_id, 'bolo_brand', v)}
-                />
-                {e.auth_required && (
-                  <div style={{ background: 'var(--bolo-bg)', color: 'var(--bolo-text)', borderRadius: 4, padding: '1px 5px', fontSize: 11, fontWeight: 600, display: 'inline-block', marginTop: 2 }}
-                       title="Luxury-brand match — resale value depends on authentication; don't trust the comps until verified">
-                    ⚠️ authenticate first
-                  </div>
-                )}
-              </td>
-              <td style={cell}>
-                <EditableCell
                   display={money(e.est_resale)}
                   rawValue={e.est_resale}
                   inputType="number"
@@ -641,6 +642,13 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
                 )}
               </td>
               <td style={cell}>{money(e.max_bid)}</td>
+              <td style={{ ...cell, whiteSpace: 'nowrap',
+                           color: e.est_roi == null ? undefined
+                             : Number(e.est_roi) < 0 ? '#e05555'
+                             : e.roi_status === 'GOLD MINE' ? '#2e9e4f' : undefined,
+                           fontWeight: e.roi_status === 'GOLD MINE' ? 600 : undefined }}>
+                {e.est_roi == null ? '—' : `${Math.round(Number(e.est_roi) * 100)}%`}
+              </td>
               <td style={cell}>
                 {gold ? '🟢' : e.roi_status === 'PASS' ? '🔴' : ''}{' '}
                 <EditableCell

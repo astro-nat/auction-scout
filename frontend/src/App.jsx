@@ -15,7 +15,9 @@ export default function App() {
   const [filters, setFilters] = useState({ boloOnly: false, roiStatus: '' })
   const [hideLowValue, setHideLowValue] = useState(true)
   const [lowValueCutoff, setLowValueCutoff] = useState(25)
-  const [hideHardShip, setHideHardShip] = useState(false)
+  // HARD-ship lots (furniture, appliances) rarely clear the ROI bar and
+  // cost the most to move — hidden by default, one click to see them.
+  const [hideHardShip, setHideHardShip] = useState(true)
   // Closed auctions can't be bid on — hide their lots by default, but
   // keep them reachable: the enrichment work is still useful history.
   const [hideClosed, setHideClosed] = useState(true)
@@ -218,8 +220,9 @@ They're listed below — use "Enrich" to price them.`)
     // No popup on success — the status bar showing the job IS the feedback,
     // and this runs often (button + hourly timer).
     try {
-      const r = await refreshBids()
-      if (!r.queued && !r.already_running) alert('No imported open auctions to refresh.')
+      // Fully silent: the status bar is the feedback, and "nothing to
+      // refresh" is not worth interrupting for either.
+      await refreshBids()
     } catch (e) { alertOnce(e.message) }
   }
 
