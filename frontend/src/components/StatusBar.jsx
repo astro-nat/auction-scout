@@ -41,7 +41,9 @@ export default function StatusBar({ onQuiet }) {
     }
 
     tick()
-    const interval = setInterval(tick, 2000)
+    // 1s: fast enough that per-lot stage changes and queue counts visibly
+    // tick down. The endpoint is one aggregate query — cheap to poll.
+    const interval = setInterval(tick, 1000)
     return () => { alive = false; clearInterval(interval) }
   }, [onQuiet])
 
@@ -64,9 +66,18 @@ export default function StatusBar({ onQuiet }) {
   if (enrichment.queued > 0) {
     const stage = enrichment.stage ? ` — ${enrichment.stage}` : ''
     const lot = enrichment.lot_title ? ` (${enrichment.lot_title.slice(0, 40)})` : ''
+    // Queue composition + throughput, straight from postgres: what kinds of
+    // work are waiting and how fast the queue is actually moving.
+    const parts = []
+    if (enrichment.enrich_queued > 0) parts.push(`${enrichment.enrich_queued} enrich`)
+    if (enrichment.inspect_queued > 0) parts.push(`${enrichment.inspect_queued} inspect`)
+    const mix = parts.length > 1 ? ` (${parts.join(' · ')})` : ''
+    const rate = enrichment.done_last_5min > 0
+      ? ` · ${Math.round(enrichment.done_last_5min / 5)}/min · ~${Math.ceil(enrichment.queued / Math.max(1, enrichment.done_last_5min / 5))} min left`
+      : ''
     lines.push({
       key: 'enrichment',
-      text: `Enriching ${enrichment.queued} lot${enrichment.queued === 1 ? '' : 's'}${lot}${stage}`,
+      text: `Queue: ${enrichment.queued}${mix}${rate}${lot}${stage}`,
       onCancel: async () => {
         const r = await cancelEnrichment()
         alert(`Stopped ${r.cancelled} queued lots. The one in progress will finish.`)
