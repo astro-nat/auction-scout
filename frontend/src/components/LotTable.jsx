@@ -60,6 +60,16 @@ function closesIn(closesAt, now) {
   return { text, urgent: ms < 2 * 3600 * 1000 }
 }
 
+// Orange flag: the value is trustworthy (3+ comps or a strong AI
+// identification) but bidding has already passed the max-bid ceiling —
+// a real item you'd have wanted, gone over budget. Distinct from gold
+// (still under ceiling) and from plain PASS (never worth chasing).
+function isOverbid(lot, e) {
+  const trustworthy = (e.comp_count ?? 0) >= 3 || e.confidence === 'strong'
+  return trustworthy && e.max_bid != null && e.roi_status !== 'GOLD MINE'
+    && Number(lot.current_bid ?? 0) > Number(e.max_bid) && Number(e.max_bid) > 0
+}
+
 function matchesFilter(value, query) {
   if (!query) return true
   if (value == null) return false
@@ -337,11 +347,14 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
         {sorted.slice(0, renderLimit).map((lot) => {
           const e = lot.enrichment || {}
           const gold = e.roi_status === 'GOLD MINE'
+          const overbid = isOverbid(lot, e)
           return (
             <div key={lot.lot_id} style={{
               border: '1px solid var(--border)', borderRadius: 8, padding: 10, marginBottom: 10,
-              background: gold ? 'var(--gold-bg)' : 'var(--card-bg)',
-            }}>
+              background: gold ? 'var(--gold-bg)'
+                : overbid ? 'rgba(255, 140, 0, 0.14)' : 'var(--card-bg)',
+            }}
+                 title={overbid ? 'Bid has passed your max-bid ceiling' : undefined}>
               <div style={{ fontWeight: 600 }}>
                 <button
                   onClick={() => handleWatch(lot.lot_id, !lot.watched)}
@@ -493,9 +506,13 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
         {sorted.slice(0, renderLimit).map((lot) => {
           const e = lot.enrichment || {}
           const gold = e.roi_status === 'GOLD MINE'
+          const overbid = isOverbid(lot, e)
           const edited = new Set(e.user_overrides || [])
           return (
-            <tr key={lot.lot_id} style={gold ? { background: 'var(--gold-bg)' } : undefined}>
+            <tr key={lot.lot_id}
+                title={overbid ? 'Bid has passed your max-bid ceiling' : undefined}
+                style={gold ? { background: 'var(--gold-bg)' }
+                  : overbid ? { background: 'rgba(255, 140, 0, 0.14)' } : undefined}>
               <td style={cell}>
                 <button
                   onClick={() => handleWatch(lot.lot_id, !lot.watched)}
