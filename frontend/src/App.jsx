@@ -310,13 +310,15 @@ Skipping ${hard} HARD-to-ship lots.`
 
   // "Confirmed low-value" = 3+ comps agree the resale is under the cutoff.
   // Unenriched lots stay visible — unknown is not the same as confirmed cheap.
+  // "Confirmed" low-value = the price is trustworthy AND under the cutoff:
+  // either 3+ real comps agree, or the AI identified the item with strong
+  // confidence (it knows exactly what it's pricing, even off fewer comps or
+  // its own estimate). Weakly-identified lots stay visible — an uncertain
+  // cheap guess isn't proof of a cheap item.
   function isConfirmedLowValue(lot) {
     const e = lot.enrichment
-    return (
-      e?.est_resale != null &&
-      e.comp_count >= 3 &&
-      Number(e.est_resale) < lowValueCutoff
-    )
+    if (e?.est_resale == null || Number(e.est_resale) >= lowValueCutoff) return false
+    return e.comp_count >= 3 || e.confidence === 'strong'
   }
 
   // What's actually in the database for this auction, in plain words.
@@ -718,7 +720,7 @@ Skipping ${hard} HARD-to-ship lots.`
             )
           </span>
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
-                 title="Hide items whose resale (from 3+ comps) is under the cutoff">
+                 title="Hide items priced under the cutoff when the value is trustworthy — 3+ comps agree, or the AI identified the item with strong confidence">
             <input
               type="checkbox"
               checked={hideLowValue}
