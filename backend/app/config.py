@@ -37,6 +37,10 @@ WATCH_ALERT_HOURS = float(os.environ.get("WATCH_ALERT_HOURS", "2"))
 # leaves cleanup to the manual "Flush closed items" button.
 FLUSH_CLOSED_HOURS = float(os.environ.get("FLUSH_CLOSED_HOURS", "12"))
 
+# Auto-refresh current bids (and per-lot closed status) from HiBid this
+# often (hours). Free — no AI calls. 0 disables; the manual button stays.
+BID_REFRESH_HOURS = float(os.environ.get("BID_REFRESH_HOURS", "1"))
+
 # Items that are miserable/impossible to ship — HARD logistics.
 # Matched against TITLE + CATEGORY only (never descriptions — auctioneer
 # boilerplate like "we sell furniture, vehicles... our moving truck..."
