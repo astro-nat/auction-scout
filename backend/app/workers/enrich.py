@@ -158,6 +158,33 @@ def _progress(db: Session, e: models.Enrichment, text: str | None) -> None:
     db.commit()
 
 
+def process_queued_lots(items: list) -> None:
+    """Work a batch of queued lots CONCURRENTLY — the pipeline is HTTP-bound
+    (Claude, eBay, image downloads), so a small thread pool multiplies queue
+    throughput without new infrastructure. ``items`` is [(lot_db_id, task)]
+    where task is 'inspect' or anything-else-means-enrich.
+
+    Cancel-safe under parallelism: each worker re-checks status == 'queued'
+    before spending anything, so the Cancel button (which flips queued →
+    pending) still drains the pool. Ordering loosens — the first
+    ENRICH_CONCURRENCY lots start together — which is fine for a queue.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    def one(item):
+        lot_id, task = item
+        try:
+            if task == "inspect":
+                run_inspection(lot_id)
+            else:
+                run_enrichment(lot_id)
+        except Exception as exc:  # noqa: BLE001 — one lot must not kill the pool
+            logger.warning("Queued lot %s failed in pool: %s", lot_id, exc)
+
+    with ThreadPoolExecutor(max_workers=max(1, config.ENRICH_CONCURRENCY)) as pool:
+        list(pool.map(one, items))
+
+
 def run_enrichment(lot_db_id: int) -> None:
     """Entry point called from the background task. Opens its own DB session
     since it runs outside the request/response cycle's session lifetime."""

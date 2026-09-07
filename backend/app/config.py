@@ -41,6 +41,11 @@ FLUSH_CLOSED_HOURS = float(os.environ.get("FLUSH_CLOSED_HOURS", "12"))
 # often (hours). Free — no AI calls. 0 disables; the manual button stays.
 BID_REFRESH_HOURS = float(os.environ.get("BID_REFRESH_HOURS", "1"))
 
+# How many lots enrich/inspect in parallel. The work is HTTP-bound (Claude,
+# eBay, image downloads), so a few threads give a ~Nx queue speedup; keep
+# modest to respect API rate limits and container memory.
+ENRICH_CONCURRENCY = int(os.environ.get("ENRICH_CONCURRENCY", "3"))
+
 # Items that are miserable/impossible to ship — HARD logistics.
 # Matched against TITLE + CATEGORY only (never descriptions — auctioneer
 # boilerplate like "we sell furniture, vehicles... our moving truck..."

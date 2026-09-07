@@ -22,7 +22,7 @@ import threading
 
 from .. import models
 from ..database import SessionLocal
-from .enrich import run_enrichment, run_inspection, run_reprice, run_ship_analysis
+from .enrich import process_queued_lots, run_reprice, run_ship_analysis
 from .refresh import run_bid_refresh
 
 
@@ -58,7 +58,7 @@ def resume_interrupted_work() -> None:
 
     if orphans:
         print(f"Resuming {len(orphans)} queued enrichments orphaned by restart")
-        threading.Thread(target=_run_enrichment_orphans,
+        threading.Thread(target=process_queued_lots,
                          args=([tuple(o) for o in orphans],),
                          daemon=True).start()
 
@@ -66,14 +66,3 @@ def resume_interrupted_work() -> None:
 def _spawn(fn, id_list, job_id: str) -> None:
     threading.Thread(target=fn, args=(id_list,),
                      kwargs={"resume_job_id": job_id}, daemon=True).start()
-
-
-def _run_enrichment_orphans(items: list[tuple[int, str | None]]) -> None:
-    """Sequential, like a live batch (one request's BackgroundTasks run one
-    at a time). Both workers re-check status == 'queued' per lot, so the
-    Cancel button drains this loop the same way it drains a live batch."""
-    for lot_id, task in items:
-        if task == "inspect":
-            run_inspection(lot_id)
-        else:
-            run_enrichment(lot_id)

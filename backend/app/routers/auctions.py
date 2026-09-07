@@ -15,7 +15,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from .. import models, schemas
 from ..database import get_db
 from ..services import hibid, jobs
-from ..workers.enrich import run_enrichment, run_ship_analysis
+from ..workers.enrich import run_enrichment, run_ship_analysis, process_queued_lots
 from ..workers.refresh import run_bid_refresh
 from sqlalchemy.orm import Session
 
@@ -331,6 +331,5 @@ def enrich_all(auction_id: int, background_tasks: BackgroundTasks,
     ).update({"status": "queued", "queued_task": "enrich"},
              synchronize_session=False)
     db.commit()
-    for lid in lot_ids:
-        background_tasks.add_task(run_enrichment, lid)
+    background_tasks.add_task(process_queued_lots, [(lid, "enrich") for lid in lot_ids])
     return {"auction_id": auction_id, "queued": len(lot_ids)}

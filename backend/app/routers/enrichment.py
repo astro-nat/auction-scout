@@ -3,7 +3,8 @@ from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..database import get_db
-from ..workers.enrich import run_enrichment, run_inspection, run_reprice, _apply_roi
+from ..workers.enrich import (run_enrichment, run_inspection, run_reprice,
+                              process_queued_lots, _apply_roi)
 
 router = APIRouter(prefix="/lots", tags=["enrichment"])
 
@@ -43,8 +44,8 @@ def enrich_batch(payload: schemas.EnrichBatchRequest,
         lot.enrichment.status = "queued"
         lot.enrichment.queued_task = "enrich"
     db.commit()
-    for lot in ordered:
-        background_tasks.add_task(run_enrichment, lot.id)
+    background_tasks.add_task(process_queued_lots,
+                              [(lot.id, "enrich") for lot in ordered])
     return {"queued": len(ordered)}
 
 
@@ -95,8 +96,8 @@ def reinspect_no_comps(background_tasks: BackgroundTasks,
         lot.enrichment.status = "queued"
         lot.enrichment.queued_task = "inspect"
     db.commit()
-    for lot in rows:
-        background_tasks.add_task(run_inspection, lot.id)
+    background_tasks.add_task(process_queued_lots,
+                              [(lot.id, "inspect") for lot in rows])
     return {"queued": len(rows)}
 
 
