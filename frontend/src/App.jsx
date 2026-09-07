@@ -215,10 +215,11 @@ They're listed below — use "Enrich" to price them.`)
   }
 
   async function handleRefreshBids() {
+    // No popup on success — the status bar showing the job IS the feedback,
+    // and this runs often (button + hourly timer).
     try {
       const r = await refreshBids()
-      if (!r.queued) { alert('No imported open auctions to refresh.'); return }
-      alert(`Refreshing bids for ${r.auctions} auctions — progress shows in the top bar. ROI updates as each finishes.`)
+      if (!r.queued && !r.already_running) alert('No imported open auctions to refresh.')
     } catch (e) { alertOnce(e.message) }
   }
 
