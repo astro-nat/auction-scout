@@ -340,14 +340,23 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
     if e.est_resale:
         penalty = LOGISTICS_PENALTY.get(lot.logistics_ease or "NEUTRAL", 25.0)
         effective_bid = float(max(lot.current_bid or 0, lot.next_bid or 0))
+        # Use the auction house's real premium when we know it (18% houses
+        # were being graded at the 15% default).
+        mult = getattr(lot.auction, "buyer_premium_mult", None) if lot.auction else None
+        premium = (float(mult) - 1) if mult else financials.BUYERS_PREMIUM
         lead = financials.evaluate_lead(
             resale_value=float(e.est_resale),
             current_bid=effective_bid,
             logistics_penalty=penalty,
             dts=0.0,  # no sell-through data yet — don't fail lots on it
+            buyers_premium=premium,
         )
         e.max_bid = lead.max_bid
         e.est_roi = lead.roi
+        # The all-in number the ROI is actually computed against: hammer +
+        # premium + tax + shipping + packing buffer. Stored so the UI can
+        # show WHY a $15 "est cost" item returns 12% and not 300%.
+        e.all_in_cost = lead.total_cost
         # One listing's asking price isn't evidence — every wrong gold mine
         # in the Watermark audit ($2 bills "worth" $260, a $487 pearl ring)
         # traced to a single generic active comp. The numbers stay for

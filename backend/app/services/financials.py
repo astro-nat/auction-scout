@@ -78,13 +78,20 @@ def evaluate_lead(resale_value: float,
                   logistics_penalty: float = 0.0,
                   dts: float = 999.0,
                   max_dts: float = MAX_DTS,
-                  target_roi: float | None = None) -> LeadEvaluation:
+                  target_roi: float | None = None,
+                  buyers_premium: float = BUYERS_PREMIUM) -> LeadEvaluation:
     """Grade a lot at its current bid. Viable = bid under the ROI ceiling AND
-    the item actually moves on eBay (dts within bounds)."""
+    the item actually moves on eBay (dts within bounds).
+
+    buyers_premium comes from the auction when known — an 18% house was
+    being graded at the 15% default, so its ROI and ceiling were both
+    slightly generous."""
     if target_roi is None:
         target_roi = current_target_roi()
-    ceiling = max_bid(resale_value, logistics_penalty, target_roi)
-    total_cost = current_bid * acquisition_multiplier() + logistics_penalty + BUFFER
+    ceiling = max_bid(resale_value, logistics_penalty, target_roi,
+                      buyers_premium=buyers_premium)
+    total_cost = (current_bid * acquisition_multiplier(buyers_premium)
+                  + logistics_penalty + BUFFER)
     profit = resale_value * (1 - PLATFORM_FEE) - total_cost
     roi = profit / total_cost if total_cost > 0 else 0.0
     is_viable = current_bid <= ceiling and dts <= max_dts and ceiling > 0

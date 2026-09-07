@@ -70,6 +70,23 @@ function isOverbid(lot, e) {
     && Number(lot.current_bid ?? 0) > Number(e.max_bid) && Number(e.max_bid) > 0
 }
 
+// Why a $15 lot showing $60 resale returns 12% and not 300%: the ROI
+// denominator is the ALL-IN cost (hammer + premium + tax + shipping +
+// packing), and the resale side is net of eBay's cut.
+function roiTooltip(lot, e) {
+  if (e.est_roi == null) return undefined
+  const lines = [`Return on the all-in cost, not the hammer price.`]
+  if (e.all_in_cost != null) {
+    lines.push(`All-in ${money(e.all_in_cost)} = bid ${money(lot.est_cost)} (w/ premium)`
+      + ` + shipping + packing buffer + tax`)
+  }
+  if (e.est_resale != null) {
+    lines.push(`Resale ${money(e.est_resale)} minus ~15% marketplace fee`
+      + (e.profit != null ? ` → profit ${money(e.profit)}` : ''))
+  }
+  return lines.join(String.fromCharCode(10))
+}
+
 function matchesFilter(value, query) {
   if (!query) return true
   if (value == null) return false
@@ -644,12 +661,19 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
                 )}
               </td>
               <td style={cell}>{money(e.max_bid)}</td>
-              <td style={{ ...cell, whiteSpace: 'nowrap',
+              <td title={roiTooltip(lot, e)}
+                  style={{ ...cell, whiteSpace: 'nowrap',
+                           cursor: e.est_roi != null ? 'help' : undefined,
                            color: e.est_roi == null ? undefined
                              : Number(e.est_roi) < 0 ? '#e05555'
                              : e.roi_status === 'GOLD MINE' ? '#2e9e4f' : undefined,
                            fontWeight: e.roi_status === 'GOLD MINE' ? 600 : undefined }}>
                 {e.est_roi == null ? '—' : `${Math.round(Number(e.est_roi) * 100)}%`}
+                {e.all_in_cost != null && (
+                  <div style={{ color: 'var(--muted)', fontSize: 11 }}>
+                    all-in {money(e.all_in_cost)}
+                  </div>
+                )}
               </td>
               <td style={cell}>
                 {gold ? '🟢' : e.roi_status === 'PASS' ? '🔴' : ''}{' '}

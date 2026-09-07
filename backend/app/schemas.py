@@ -27,6 +27,7 @@ class EnrichmentOut(BaseModel):
     comp_count: int = 0
     price_source: Optional[str] = None
     max_bid: Optional[Decimal] = None
+    all_in_cost: Optional[Decimal] = None
     est_roi: Optional[float] = None
     profit: Optional[Decimal] = None
     roi_status: Optional[str] = None

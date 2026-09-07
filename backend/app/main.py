@@ -32,6 +32,7 @@ _MIGRATIONS = [
     "ALTER TABLE lots ADD COLUMN IF NOT EXISTS hidden BOOLEAN DEFAULT FALSE",
     "ALTER TABLE lots ADD COLUMN IF NOT EXISTS closes_at TIMESTAMP",
     "CREATE TABLE IF NOT EXISTS settings (key VARCHAR PRIMARY KEY, value VARCHAR)",
+    "ALTER TABLE enrichment ADD COLUMN IF NOT EXISTS all_in_cost NUMERIC",
 ]
 
 def _run_migrations() -> list[str]:
