@@ -33,7 +33,7 @@ export default function App() {
   })
   const [hideUnshippable, setHideUnshippable] = useState(true)
   const [showHiddenLots, setShowHiddenLots] = useState(false)
-  const [importedIndex, setImportedIndex] = useState({})
+  const [importedRows, setImportedRows] = useState({})
 
   const [lotTotal, setLotTotal] = useState(0)
   const loadGen = useRef(0)
@@ -63,24 +63,24 @@ export default function App() {
     fetchLotCount(args).then((r) => setLotTotal(r.total)).catch(console.error)
   }, [selectedAuction, filters])
 
-  const rememberAuctions = useCallback((list) => {
+  // Accumulate imported auctions as FULL rows, separately from the visible
+  // list: scans replace `auctions` with whatever HiBid returned, and your
+  // imported auctions must stay pinned on screen (and in the items-tab
+  // dropdown) regardless. `full` marks a complete GET /auctions payload —
+  // only then do we prune entries the server no longer has.
+  const rememberAuctions = useCallback((list, { full = false } = {}) => {
     setAuctionIndex((prev) => {
       const next = { ...prev }
       for (const a of list) next[a.id] = a.name
       return next
     })
-    // Accumulate imported auctions separately — they feed the items-tab
-    // filter dropdown, and must survive the auctions list being replaced
-    // by scan results. Gold/city refresh on every sighting.
-    setImportedIndex((prev) => {
+    setImportedRows((prev) => {
       const next = { ...prev }
-      for (const a of list) {
-        if (a.lots_imported > 0) {
-          next[a.id] = {
-            name: a.name,
-            city: [a.city, a.state].filter(Boolean).join(', '),
-            gold: a.gold_count ?? 0,
-          }
+      for (const a of list) if (a.lots_imported > 0) next[a.id] = a
+      if (full) {
+        const present = new Set(list.map((a) => a.id))
+        for (const id of Object.keys(next)) {
+          if (!present.has(Number(id))) delete next[id]
         }
       }
       return next
@@ -89,7 +89,9 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    fetchAuctions().then(rememberAuctions).then(setAuctions).catch(console.error)
+    fetchAuctions()
+      .then((list) => rememberAuctions(list, { full: true }))
+      .then(setAuctions).catch(console.error)
   }, [rememberAuctions])
   useEffect(() => { fetchCategories().then(setCategories).catch(console.error) }, [])
   useEffect(() => { loadLots() }, [loadLots])
@@ -120,7 +122,7 @@ export default function App() {
   // counts update after an import/enrichment without wiping scan results.
   const syncAuctionStats = useCallback(async () => {
     const fresh = await fetchAuctions()
-    rememberAuctions(fresh)
+    rememberAuctions(fresh, { full: true })
     const byId = Object.fromEntries(fresh.map((a) => [a.id, a]))
     setAuctions((prev) => {
       if (!prev.length) return fresh
@@ -328,10 +330,14 @@ Skipping ${hard} HARD-to-ship lots.`
     ? auctions.filter((a) => !isUnshippable(a))
     : auctions
 
-  // Imported auctions surface as their own group above everything else —
-  // they're the ones with your items and enrichment money in them.
-  const importedAuctions = visibleAuctions.filter((a) => a.lots_imported > 0)
-  const discoveredAuctions = visibleAuctions.filter((a) => !(a.lots_imported > 0))
+  // Imported auctions stay pinned at the top from their own accumulated
+  // store — a scan replacing the visible list can't knock them off screen.
+  // The no-ship filter only applies to discovered auctions; imported ones
+  // are yours either way.
+  const importedAuctions = Object.values(importedRows)
+    .sort((a, b) => new Date(a.closing_date ?? '9999-01-01') - new Date(b.closing_date ?? '9999-01-01'))
+  const importedIds = new Set(Object.keys(importedRows).map(Number))
+  const discoveredAuctions = visibleAuctions.filter((a) => !importedIds.has(a.id))
   const auctionSections = [
     ...(importedAuctions.length ? [{ label: `📥 Imported (${importedAuctions.length})`, rows: importedAuctions }] : []),
     ...(discoveredAuctions.length ? [{ label: importedAuctions.length ? `Discovered (${discoveredAuctions.length})` : null, rows: discoveredAuctions }] : []),
@@ -407,21 +413,25 @@ Skipping ${hard} HARD-to-ship lots.`
       {view === 'auctions' && (
       <section style={{ marginBottom: '1.5rem' }}>
         {/* Form wrapper: pressing Enter in any filter field runs the scan */}
-        <form onSubmit={(ev) => { ev.preventDefault(); handleScan() }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
-          <input
-            value={scan.search_text}
-            onChange={(ev) => setScanField('search_text', ev.target.value)}
-            placeholder="Keyword (auction name/content)…"
-            style={{ flex: isMobile ? '1 1 100%' : '1 1 240px', padding: 6, fontSize: 14 }}
-          />
+        <form onSubmit={(ev) => { ev.preventDefault(); handleScan() }}
+              style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {/* Row 1: what to look for */}
+        <input
+          value={scan.search_text}
+          onChange={(ev) => setScanField('search_text', ev.target.value)}
+          placeholder="Keyword (auction name/content)…"
+          style={{ padding: 8, fontSize: 14, width: '100%', maxWidth: isMobile ? '100%' : 480,
+                   boxSizing: 'border-box' }}
+        />
+        {/* Row 2: narrowing filters, evenly gapped */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           <select value={scan.category_id} onChange={(ev) => setScanField('category_id', ev.target.value)}
-                  style={{ flex: 1, padding: 6, fontSize: 14, minWidth: 140 }}>
+                  style={{ flex: isMobile ? '1 1 45%' : '0 1 auto', padding: 6, fontSize: 14, minWidth: 140 }}>
             <option value={-1}>All categories</option>
             {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
           <select value={scan.auction_type} onChange={(ev) => setScanField('auction_type', ev.target.value)}
-                  style={{ flex: 1, padding: 6, fontSize: 14, minWidth: 120 }}>
+                  style={{ flex: isMobile ? '1 1 45%' : '0 1 auto', padding: 6, fontSize: 14, minWidth: 130 }}>
             <option value="ALL">All auction types</option>
             <option value="ONLINE">Online Only</option>
             <option value="WEBCAST">Live Webcast</option>
@@ -432,7 +442,7 @@ Skipping ${hard} HARD-to-ship lots.`
                   onChange={(ev) => setScanField('status', ev.target.value)}
                   disabled={scanIsAnywhere}
                   title={scanIsAnywhere ? 'Anywhere is locked to "Closing soon" so it can\'t return every auction on HiBid' : undefined}
-                  style={{ flex: 1, padding: 6, fontSize: 14, minWidth: 110 }}>
+                  style={{ flex: isMobile ? '1 1 45%' : '0 1 auto', padding: 6, fontSize: 14, minWidth: 110 }}>
             <option value="OPEN">Open</option>
             <option value="CLOSING">Closing soon</option>
             <option value="HOT">Hot</option>
@@ -441,11 +451,12 @@ Skipping ${hard} HARD-to-ship lots.`
           <input
             value={scan.zip}
             onChange={(ev) => setScanField('zip', ev.target.value)}
-            placeholder="Zip (default 77058)"
-            style={{ flex: 1, padding: 6, fontSize: 14, minWidth: 100, maxWidth: 150 }}
+            placeholder="Zip (77058)"
+            style={{ flex: isMobile ? '1 1 45%' : '0 1 auto', padding: 6, fontSize: 14,
+                     minWidth: 90, maxWidth: 130, boxSizing: 'border-box' }}
           />
           <select value={scan.radius_miles} onChange={(ev) => setScanField('radius_miles', ev.target.value)}
-                  style={{ flex: 1, padding: 6, fontSize: 14, minWidth: 100, maxWidth: 130 }}>
+                  style={{ flex: isMobile ? '1 1 45%' : '0 1 auto', padding: 6, fontSize: 14, minWidth: 100 }}>
             <option value={25}>25 miles</option>
             <option value={50}>50 miles</option>
             <option value={100}>100 miles</option>
@@ -454,29 +465,33 @@ Skipping ${hard} HARD-to-ship lots.`
             <option value={-1}>Anywhere</option>
           </select>
         </div>
-        <button type="submit" disabled={!!busy}
-                style={isMobile ? { width: '100%', padding: 10, fontSize: 15 } : undefined}>
-          Scan auctions
-        </button>
+        {/* Row 3: go + the results-shaping toggle */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
+          <button type="submit" disabled={!!busy}
+                  style={isMobile ? { flex: '1 1 100%', padding: 10, fontSize: 15 }
+                                  : { padding: '8px 18px' }}>
+            Scan auctions
+          </button>
+          {busy && <span>{busy}</span>}
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, whiteSpace: 'nowrap' }}
+                 title="Shipping analysis found these don't ship, and they're outside your pickup radius — nothing you could actually buy">
+            <input
+              type="checkbox"
+              checked={hideUnshippable}
+              onChange={(ev) => setHideUnshippable(ev.target.checked)}
+            /> Hide no-ship outside my radius
+            {hideUnshippable && auctions.length - visibleAuctions.length > 0 && (
+              <span style={{ color: 'var(--muted)' }}>
+                ({auctions.length - visibleAuctions.length} hidden)
+              </span>
+            )}
+          </label>
+        </div>
         </form>
-        {busy && <span style={{ marginLeft: '1rem' }}>{busy}</span>}
-        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 6, fontSize: 13 }}
-               title="Shipping analysis found these don't ship, and they're outside your pickup radius — nothing you could actually buy">
-          <input
-            type="checkbox"
-            checked={hideUnshippable}
-            onChange={(ev) => setHideUnshippable(ev.target.checked)}
-          /> Hide no-ship auctions outside my radius
-          {hideUnshippable && auctions.length - visibleAuctions.length > 0 && (
-            <span style={{ color: 'var(--muted)' }}>
-              ({auctions.length - visibleAuctions.length} hidden)
-            </span>
-          )}
-        </label>
-        {visibleAuctions.length > 0 && (isMobile ? (
+        {(importedAuctions.length + discoveredAuctions.length) > 0 && (isMobile ? (
           <details style={{ marginTop: '0.75rem' }} open={!selectedAuction}>
             <summary style={{ fontWeight: 600, padding: '4px 0' }}>
-              Auctions ({visibleAuctions.length})
+              Auctions ({importedAuctions.length + discoveredAuctions.length})
             </summary>
             {auctionRowsForDisplay.slice(0, auctionLimit).map((a) => a.header ? (
               <div key={`hdr-${a.header}`} style={{ fontWeight: 700, fontSize: 15, marginTop: 12 }}>
@@ -530,10 +545,10 @@ Skipping ${hard} HARD-to-ship lots.`
                 </div>
               </div>
             ))}
-            {visibleAuctions.length > auctionLimit && (
+            {auctionRowsForDisplay.length > auctionLimit && (
               <button style={{ width: '100%', padding: 8, marginTop: 8 }}
                       onClick={() => setAuctionLimit((n) => n + 50)}>
-                Show more auctions ({visibleAuctions.length - auctionLimit} more)
+                Show more auctions ({auctionRowsForDisplay.length - auctionLimit} more)
               </button>
             )}
           </details>
@@ -601,9 +616,9 @@ Skipping ${hard} HARD-to-ship lots.`
             </tbody>
           </table>
         ))}
-        {!isMobile && visibleAuctions.length > auctionLimit && (
+        {!isMobile && auctionRowsForDisplay.length > auctionLimit && (
           <button style={{ marginTop: 8 }} onClick={() => setAuctionLimit((n) => n + 50)}>
-            Show more auctions ({visibleAuctions.length - auctionLimit} more)
+            Show more auctions ({auctionRowsForDisplay.length - auctionLimit} more)
           </button>
         )}
       </section>
@@ -620,12 +635,12 @@ Skipping ${hard} HARD-to-ship lots.`
           style={{ padding: 8, fontSize: 14, width: isMobile ? '100%' : 'auto',
                    maxWidth: isMobile ? '100%' : 420, alignSelf: 'flex-start' }}
         >
-          <option value="">All auctions ({Object.keys(importedIndex).length} imported)</option>
-          {Object.entries(importedIndex)
-            .sort((a, b) => (b[1].gold - a[1].gold) || a[1].name.localeCompare(b[1].name))
-            .map(([id, info]) => (
-              <option key={id} value={id}>
-                {info.gold} gold | [ {info.city || '—'} ] | {info.name}
+          <option value="">All auctions ({Object.keys(importedRows).length} imported)</option>
+          {Object.values(importedRows)
+            .sort((a, b) => ((b.gold_count ?? 0) - (a.gold_count ?? 0)) || a.name.localeCompare(b.name))
+            .map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.gold_count ?? 0} gold | [ {[a.city, a.state].filter(Boolean).join(', ') || '—'} ] | {a.name}
               </option>
             ))}
         </select>
