@@ -41,6 +41,7 @@ export default function App() {
   }, [])
 
   const [lotTotal, setLotTotal] = useState(0)
+  const [lotsLoadState, setLotsLoadState] = useState('loading')
   const loadGen = useRef(0)
 
   const loadLots = useCallback(() => {
@@ -53,15 +54,28 @@ export default function App() {
     // first page renders immediately, the rest stream in behind it. One
     // 6000-row payload crashed phone tabs; four 2000-row parses don't.
     // The generation counter aborts a stale chain when the user switches
-    // auction or filters mid-load.
+    // auction or filters mid-load. A failed page retries twice with
+    // backoff (the server can be busy mid-enrichment); only then does the
+    // view admit defeat — silently showing an empty list read as
+    // "Nothing imported yet", which was a lie.
     const gen = ++loadGen.current
-    const loadPage = (offset, acc) =>
+    setLotsLoadState('loading')
+    const loadPage = (offset, acc, attempt = 0) =>
       fetchLots({ ...args, offset }).then((page) => {
         if (gen !== loadGen.current) return
         const all = offset ? [...acc, ...page] : page
         setLots(all)
+        setLotsLoadState('ok')
         if (page.length === 2000) loadPage(all.length, all)
-      }).catch(console.error)
+      }).catch((e) => {
+        if (gen !== loadGen.current) return
+        if (attempt < 2) {
+          setTimeout(() => loadPage(offset, acc, attempt + 1), 4000 * (attempt + 1))
+        } else {
+          console.error(e)
+          if (offset === 0) setLotsLoadState('error')
+        }
+      })
     loadPage(0, [])
     // The real total comes from the database so the UI never passes off a
     // page size as the whole set.
@@ -796,10 +810,20 @@ Skipping ${hard} HARD-to-ship lots.`
         </button>
       </div>
       {lots.length === 0 ? (
-        <p style={{ color: 'var(--muted)' }}>
-          Nothing imported yet. Go to <strong>Auctions</strong>, find an auction,
-          and press <strong>Import</strong> — its lots land here.
-        </p>
+        lotsLoadState === 'loading' ? (
+          <p style={{ color: 'var(--muted)' }}><span className="spinner" /> Loading your items…</p>
+        ) : lotsLoadState === 'error' || lotTotal > 0 ? (
+          <p style={{ color: 'var(--muted)' }}>
+            Couldn't load your {lotTotal ? lotTotal.toLocaleString() : ''} items —
+            the server is probably busy with a big job right now.{' '}
+            <button onClick={loadLots}>Try again</button>
+          </p>
+        ) : (
+          <p style={{ color: 'var(--muted)' }}>
+            Nothing imported yet. Go to <strong>Auctions</strong>, find an auction,
+            and press <strong>Import</strong> — its lots land here.
+          </p>
+        )
       ) : (
         <LotTable lots={visibleLots} onLotUpdated={handleLotUpdated} onRefresh={loadLots} />
       )}
