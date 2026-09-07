@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { enrichLot, inspectLot, fetchLot, patchEnrichment, enrichBatch, setWatch, setHidden } from '../api'
+import { enrichLot, inspectLot, fetchLot, patchEnrichment, enrichBatch, setWatch, setHidden, alertOnce } from '../api'
 import useMediaQuery from '../useMediaQuery'
 
 const cell = { padding: '4px 10px', borderBottom: '1px solid var(--border)' }
@@ -185,35 +185,48 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
   }
 
   async function handleEnrich(lotId) {
-    await enrichLot(lotId)
-    setPollingIds((prev) => new Set(prev).add(lotId))
-    poll(lotId)
+    try {
+      await enrichLot(lotId)
+      setPollingIds((prev) => new Set(prev).add(lotId))
+      poll(lotId)
+    } catch (e) { alertOnce(e.message) }
   }
 
   async function handleInspect(lotId) {
-    await inspectLot(lotId)
-    setPollingIds((prev) => new Set(prev).add(lotId))
-    poll(lotId)
+    try {
+      await inspectLot(lotId)
+      setPollingIds((prev) => new Set(prev).add(lotId))
+      poll(lotId)
+    } catch (e) { alertOnce(e.message) }
   }
 
   async function handleCorrect(lotId, field, value) {
-    const updated = await patchEnrichment(lotId, { [field]: value === '' ? null : value })
-    onLotUpdated(updated)
+    try {
+      const updated = await patchEnrichment(lotId, { [field]: value === '' ? null : value })
+      onLotUpdated(updated)
+    } catch (e) { alertOnce(e.message) }
   }
 
   async function handleWatch(lotId, watched) {
-    const updated = await setWatch(lotId, watched)
-    onLotUpdated(updated)
+    try {
+      const updated = await setWatch(lotId, watched)
+      onLotUpdated(updated)
+    } catch (e) { alertOnce(e.message) }
   }
 
   async function handleHide(lotId, hidden) {
-    const updated = await setHidden(lotId, hidden)
-    onLotUpdated(updated)
+    try {
+      const updated = await setHidden(lotId, hidden)
+      onLotUpdated(updated)
+    } catch (e) { alertOnce(e.message) }
   }
 
   function poll(lotId) {
     const interval = setInterval(async () => {
-      const updated = await fetchLot(lotId)
+      // Transient fetch failures (server restarting) just skip a beat —
+      // the next tick retries; no popups from a background poll.
+      let updated
+      try { updated = await fetchLot(lotId) } catch { return }
       if (updated.enrichment?.status === 'success' || updated.enrichment?.status === 'failed') {
         clearInterval(interval)
         setPollingIds((prev) => {

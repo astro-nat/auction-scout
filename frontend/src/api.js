@@ -5,12 +5,37 @@ const API_BASE =
   import.meta.env.VITE_API_BASE || `http://${window.location.hostname}:8000`
 
 async function request(path, options = {}) {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  })
-  if (!res.ok) throw new Error(`${options.method || 'GET'} ${path}: ${res.status}`)
+  const what = `${options.method || 'GET'} ${path}`
+  let res
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      headers: { 'Content-Type': 'application/json' },
+      ...options,
+    })
+  } catch {
+    // fetch() rejects with a bare "Failed to fetch" on any network-level
+    // problem — say what was being attempted and the likely cause instead.
+    throw new Error(`Can't reach the server right now (${what}). `
+      + `It's probably restarting after a deploy or briefly overloaded — `
+      + `wait a few seconds and try again.`)
+  }
+  if (!res.ok) {
+    // FastAPI puts the human-readable reason in {"detail": ...}.
+    let detail = ''
+    try { detail = (await res.json()).detail || '' } catch { /* not JSON */ }
+    throw new Error(`${what} failed (${res.status})${detail ? `: ${detail}` : ''}`)
+  }
   return res.json()
+}
+
+// Deduped alert — repeated identical errors within a few seconds (e.g. a
+// couple of clicks during a server restart) show one popup, not a storm.
+let _lastAlert = { msg: '', t: 0 }
+export function alertOnce(msg) {
+  const now = Date.now()
+  if (msg === _lastAlert.msg && now - _lastAlert.t < 5000) return
+  _lastAlert = { msg, t: now }
+  window.alert(msg)
 }
 
 export function fetchLots({ auctionId, status, roiStatus, boloOnly } = {}) {

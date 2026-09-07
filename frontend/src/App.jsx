@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, scanAuctions, importLots, enrichAll, flushClosed, analyzeShipping, refreshBids } from './api'
+import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, scanAuctions, importLots, enrichAll, flushClosed, analyzeShipping, refreshBids, reinspectNoComps, alertOnce } from './api'
 import LotTable from './components/LotTable'
 import StatusBar from './components/StatusBar'
 import useMediaQuery from './useMediaQuery'
@@ -89,7 +89,7 @@ export default function App() {
       rememberAuctions(found)
       setAuctions(found)
       setAuctionLimit(50)
-    } catch (e) { alert(e.message) } finally { setBusy('') }
+    } catch (e) { alertOnce(e.message) } finally { setBusy('') }
   }
 
   // Called when the status bar sees the server go idle — pull fresh data so
@@ -149,7 +149,7 @@ export default function App() {
             + `.
 
 They're listed below — use "Enrich" to price them.`)
-    } catch (e) { alert(e.message); setBusy('') }
+    } catch (e) { alertOnce(e.message); setBusy('') }
   }
 
   async function handleRefreshBids() {
@@ -157,7 +157,7 @@ They're listed below — use "Enrich" to price them.`)
       const r = await refreshBids()
       if (!r.queued) { alert('No imported open auctions to refresh.'); return }
       alert(`Refreshing bids for ${r.auctions} auctions — progress shows in the top bar. ROI updates as each finishes.`)
-    } catch (e) { alert(e.message) }
+    } catch (e) { alertOnce(e.message) }
   }
 
   async function handleInspectNoValue() {
@@ -172,7 +172,7 @@ They're listed below — use "Enrich" to price them.`)
       if (!window.confirm(msg)) return
       const r = await reinspectNoComps()
       alert(`Queued ${r.queued} items for inspection.`)
-    } catch (e) { alert(e.message) }
+    } catch (e) { alertOnce(e.message) }
   }
 
   async function handleFlushClosed() {
@@ -190,7 +190,7 @@ They're listed below — use "Enrich" to price them.`)
             + (r.auctions ? ` and removed ${r.auctions} empty closed auctions` : '')
             + '.')
       refreshAll()
-    } catch (e) { alert(e.message); setBusy('') }
+    } catch (e) { alertOnce(e.message); setBusy('') }
   }
 
   async function handleAnalyzeShipping() {
@@ -205,7 +205,7 @@ They're listed below — use "Enrich" to price them.`)
       if (!window.confirm(msg)) return
       const r = await analyzeShipping()
       if (!r.queued) alert('Nothing to analyze.')
-    } catch (e) { alert(e.message) }
+    } catch (e) { alertOnce(e.message) }
   }
 
   function openAuctionItems(auctionId) {
@@ -250,7 +250,7 @@ Skipping ${hard} HARD-to-ship lots.`
         : 'Nothing to enrich — every lot in this auction is already done.')
       await syncAuctionStats()
       loadLots()
-    } catch (e) { alert(e.message) }
+    } catch (e) { alertOnce(e.message) }
   }
 
   function handleLotUpdated(updated) {
