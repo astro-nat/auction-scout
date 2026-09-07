@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { enrichLot, inspectLot, fetchLot, patchEnrichment, enrichBatch, setWatch, setHidden, alertOnce, parseUtc } from '../api'
 import useMediaQuery from '../useMediaQuery'
 
@@ -145,7 +145,7 @@ const MOBILE_SORTS = [
   { label: 'Est Cost (low first)', key: 'est_cost', dir: 1 },
 ]
 
-export default function LotTable({ lots, onLotUpdated, onRefresh }) {
+export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }) {
   const isMobile = useMediaQuery('(max-width: 768px)')
   const [pollingIds, setPollingIds] = useState(new Set())
   // Countdown clock — a 30s tick keeps every "closes in" cell live.
@@ -156,6 +156,16 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
   }, [])
   const [sort, setSort] = useState({ key: null, dir: 1 })
   const [colFilters, setColFilters] = useState({})
+  // Rows the user just enriched/inspected hold their screen position (and
+  // App exempts them from hide filters) so the result can be read before
+  // sorting sweeps it away. Pins release when the user re-sorts/re-filters.
+  const pinnedPos = useRef(new Map())
+
+  function pinLot(lotId) {
+    const idx = sorted.findIndex((l) => l.lot_id === lotId)
+    if (idx >= 0) pinnedPos.current.set(lotId, idx)
+    onLotTouched?.(lotId)
+  }
   // Render cap: building thousands of DOM rows eats real browser memory.
   // All lots stay loaded for filtering/sorting; we just paint them in pages.
   const [renderLimit, setRenderLimit] = useState(150)
@@ -190,7 +200,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
     return lots.filter((l) => active.every((c) => matchesFilter(c.get(l), colFilters[c.key].trim())))
   }, [lots, colFilters])
 
-  const sorted = useMemo(() => {
+  const sortedBase = useMemo(() => {
     if (!sort.key) return filtered
     const col = COLUMNS.find((c) => c.key === sort.key)
     return [...filtered].sort((a, b) => {
@@ -205,16 +215,35 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
     })
   }, [filtered, sort])
 
+  // Splice pinned rows back to where the user last saw them.
+  const sorted = useMemo(() => {
+    const pins = pinnedPos.current
+    if (!pins.size) return sortedBase
+    const pinned = []
+    const rest = []
+    for (const l of sortedBase) {
+      if (pins.has(l.lot_id)) pinned.push(l)
+      else rest.push(l)
+    }
+    if (!pinned.length) return sortedBase
+    pinned.sort((a, b) => pins.get(a.lot_id) - pins.get(b.lot_id))
+    for (const l of pinned) rest.splice(Math.min(pins.get(l.lot_id), rest.length), 0, l)
+    return rest
+  }, [sortedBase])
+
   function handleSort(key) {
+    pinnedPos.current.clear()
     setSort((prev) => (prev.key === key ? { key, dir: -prev.dir } : { key, dir: 1 }))
   }
 
   function setFilter(key, value) {
+    pinnedPos.current.clear()
     setColFilters((prev) => ({ ...prev, [key]: value }))
   }
 
   async function handleEnrich(lotId) {
     try {
+      pinLot(lotId)
       await enrichLot(lotId)
       setPollingIds((prev) => new Set(prev).add(lotId))
       poll(lotId)
@@ -223,6 +252,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
 
   async function handleInspect(lotId) {
     try {
+      pinLot(lotId)
       await inspectLot(lotId)
       setPollingIds((prev) => new Set(prev).add(lotId))
       poll(lotId)

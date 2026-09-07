@@ -43,6 +43,12 @@ export default function App() {
   const [lotTotal, setLotTotal] = useState(0)
   const [lotsLoadState, setLotsLoadState] = useState('loading')
   const loadGen = useRef(0)
+  // lot_id -> timestamp of the user's last enrich/inspect on it; these rows
+  // are exempt from hide filters so the result can actually be read.
+  const touchedRef = useRef({})
+  const markTouched = useCallback((lotId) => {
+    touchedRef.current[lotId] = Date.now()
+  }, [])
 
   const loadLots = useCallback(() => {
     const args = {
@@ -413,6 +419,11 @@ Skipping ${hard} HARD-to-ship lots.`
     return lots
       .filter((l) => {
         if (!showHiddenLots && l.hidden) return false
+        // Lots the user just enriched/inspected are exempt from the hide
+        // rules for a while — a fresh result that instantly trips a filter
+        // vanishes before it can be read. (The manual 🚫 hide still wins.)
+        if (touchedRef.current[l.lot_id] &&
+            Date.now() - touchedRef.current[l.lot_id] < 15 * 60 * 1000) return true
         if (hideLowValue && isConfirmedLowValue(l)) return false
         if (hideHardShip && l.logistics_ease === 'HARD') return false
         if (hideClosed && isClosedItem(l)) return false
@@ -827,7 +838,8 @@ Skipping ${hard} HARD-to-ship lots.`
           </p>
         )
       ) : (
-        <LotTable lots={visibleLots} onLotUpdated={handleLotUpdated} onRefresh={loadLots} />
+        <LotTable lots={visibleLots} onLotUpdated={handleLotUpdated} onRefresh={loadLots}
+                  onLotTouched={markTouched} />
       )}
       </>)}
       </div>
