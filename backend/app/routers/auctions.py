@@ -288,7 +288,7 @@ async def import_lots(auction_id: int, category_id: int = -1,
                 if jobs.is_cancelled(job):
                     cancelled = True
                     break            # keep what's saved so far
-                jobs.update(job, current=i)
+                jobs.update(job, current=i, detail=(data.get("title") or "")[:45])
             row = db.query(models.Lot).filter(models.Lot.lot_id == data["lot_id"]).first()
             if row:
                 # bids/status/time-left always come fresh; analysis fields stay

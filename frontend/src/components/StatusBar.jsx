@@ -54,9 +54,12 @@ export default function StatusBar({ onQuiet }) {
   for (const job of jobs) {
     // Counts first: on a phone the auction name is long and the tail gets
     // ellipsised, which is exactly where the numbers used to live.
-    const text = job.total
+    // detail = exactly what the job is touching right now (lot title,
+    // auction name) — the counts alone made the bar feel vague.
+    const detail = job.detail ? ` — ${job.detail}` : ''
+    const text = (job.total
       ? `${job.current} of ${job.total} · ${job.label}`
-      : job.label
+      : job.label) + detail
     lines.push({
       key: job.id, text, current: job.current, total: job.total,
       onCancel: job.cancelled ? null : () => cancelJob(job.id),
