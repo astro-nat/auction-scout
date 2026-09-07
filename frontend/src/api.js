@@ -158,3 +158,10 @@ export function reinspectNoComps(dryRun = false) {
   const q = dryRun ? '?dry_run=true' : ''
   return request(`/lots/reinspect-no-comps${q}`, { method: 'POST' })
 }
+
+// Backend timestamps are naive UTC — append Z so the browser doesn't
+// misread them as local time (that misread hid a 5-hour closing-time bug).
+export function parseUtc(s) {
+  if (!s) return null
+  return new Date(/Z$|[+-]\d\d:\d\d$/.test(s) ? s : s + 'Z')
+}

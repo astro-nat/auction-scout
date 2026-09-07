@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, scanAuctions, importLots, enrichAll, flushClosed, refreshBids, reinspectNoComps, fetchSettings, saveTargetRoi, alertOnce } from './api'
+import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, scanAuctions, importLots, enrichAll, flushClosed, refreshBids, reinspectNoComps, fetchSettings, saveTargetRoi, alertOnce, parseUtc } from './api'
 import LotTable from './components/LotTable'
 import StatusBar from './components/StatusBar'
 import useMediaQuery from './useMediaQuery'
@@ -363,7 +363,7 @@ Skipping ${hard} HARD-to-ship lots.`
   // The no-ship filter only applies to discovered auctions; imported ones
   // are yours either way.
   const importedAuctions = Object.values(importedRows)
-    .sort((a, b) => new Date(a.closing_date ?? '9999-01-01') - new Date(b.closing_date ?? '9999-01-01'))
+    .sort((a, b) => (parseUtc(a.closing_date) ?? new Date('9999-01-01')) - (parseUtc(b.closing_date) ?? new Date('9999-01-01')))
   const importedIds = new Set(Object.keys(importedRows).map(Number))
   const discoveredAuctions = visibleAuctions.filter((a) => !importedIds.has(a.id))
   const auctionSections = [
@@ -376,7 +376,7 @@ Skipping ${hard} HARD-to-ship lots.`
   ])
 
   // An auction is "hot" when its gold-mine lots add up to real money.
-  const isClosed = (a) => a.closing_date && new Date(a.closing_date) < new Date()
+  const isClosed = (a) => a.closing_date && parseUtc(a.closing_date) < new Date()
   const isHotAuction = (a) => Number(a.gold_profit ?? 0) >= 100
   const goldBadge = (a) =>
     a.gold_count > 0
@@ -537,7 +537,7 @@ Skipping ${hard} HARD-to-ship lots.`
                 </div>
                 <div style={{ fontSize: 13, color: 'var(--muted)', margin: '4px 0' }}>
                   {isClosed(a) ? '⏹ CLOSED · ' : ''}{a.city}, {a.state} · {a.lot_count ?? '—'} lots
-                  · closes {a.closing_date ? new Date(a.closing_date).toLocaleDateString() : '—'}
+                  · closes {a.closing_date ? parseUtc(a.closing_date).toLocaleDateString() : '—'}
                   {a.buyer_premium_mult ? ` · ${Math.round((a.buyer_premium_mult - 1) * 100)}% premium` : ''}
                   {hasCategoryCount(a)
                     ? ` · ${a.category_lot_count} in ${scanCategoryName ?? 'category'}` : ''}
@@ -625,7 +625,7 @@ Skipping ${hard} HARD-to-ship lots.`
                       <div style={{ fontSize: 11, color: 'var(--muted)' }}>{a.category_lot_count} match</div>
                     )}
                   </td>
-                  <td>{a.closing_date ? new Date(a.closing_date).toLocaleDateString() : '—'}</td>
+                  <td>{a.closing_date ? parseUtc(a.closing_date).toLocaleDateString() : '—'}</td>
                   <td style={{ textAlign: 'center' }}>
                     {a.buyer_premium_mult ? `${Math.round((a.buyer_premium_mult - 1) * 100)}%` : '—'}
                   </td>

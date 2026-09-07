@@ -55,8 +55,12 @@ def check_closing_watches() -> int:
                           models.Auction.closing_date > now,
                           models.Auction.closing_date <= cutoff)
                   .all())
+        from zoneinfo import ZoneInfo
         for lot in lots:
-            closes = lot.auction.closing_date.strftime("%I:%M %p").lstrip("0")
+            # Stored as naive UTC — show the user their local (Central) time.
+            closes = (lot.auction.closing_date.replace(tzinfo=ZoneInfo("UTC"))
+                      .astimezone(ZoneInfo("America/Chicago"))
+                      .strftime("%I:%M %p").lstrip("0"))
             bid = f"${float(lot.current_bid):.2f}" if lot.current_bid else "no bids"
             body = (f"{lot.title}\n"
                     f"Current bid: {bid} — auction closes ~{closes}")

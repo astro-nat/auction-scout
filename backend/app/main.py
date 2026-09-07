@@ -132,6 +132,23 @@ def recover_orphaned_jobs():
     # Phone alerts for watched lots closing soon (no-op without NTFY_TOPIC).
     from .workers.notify import start_notifier
     start_notifier()
+    # One-time repair: closing dates ingested before the timezone fix were
+    # stored as naive US-Central but compared against UTC, making auctions
+    # look closed 5 hours early (the auto-flush once deleted a still-open
+    # auction). Shift the old rows to UTC exactly once, guarded by a
+    # settings flag so restarts can't re-apply it.
+    from .services import settings as settings_store
+    try:
+        if not settings_store.get("tz_fix_2026_09"):
+            with engine.begin() as conn:
+                conn.execute(text(
+                    "UPDATE auctions SET closing_date = closing_date + interval '5 hours' "
+                    "WHERE closing_date IS NOT NULL"))
+            settings_store.set("tz_fix_2026_09", "done")
+            print("Applied one-time closing-date timezone shift (+5h to UTC)")
+    except Exception as exc:  # noqa: BLE001
+        print(f"tz fix skipped: {exc}")
+
     # 12-hourly closed-item flush (FLUSH_CLOSED_HOURS=0 disables).
     from .workers.maintenance import start_maintenance
     start_maintenance()

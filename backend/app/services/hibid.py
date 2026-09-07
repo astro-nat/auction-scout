@@ -149,7 +149,16 @@ async def _graphql(client: httpx.AsyncClient, operation: str, query: str,
 
 def _parse_event_end(auction: dict) -> Optional[datetime]:
     """eventDateEnd may be null or date-only; enrich the time-of-day from
-    eventDateInfo's 'h:mm AM/PM' token, else assume end of day."""
+    eventDateInfo's 'h:mm AM/PM' token, else assume end of day.
+
+    HiBid serves these in the auction's LOCAL time (the info text says
+    "6:00 pm CST") with no timezone field, while the server clock is UTC —
+    comparing them raw made every auction look closed FIVE HOURS early,
+    and the auto-flush once deleted a still-open auction over it. Times
+    are interpreted as US Central (this tool's sourcing region) and stored
+    as naive UTC, the same convention as every other timestamp here.
+    """
+    from zoneinfo import ZoneInfo
     raw = auction.get("eventDateEnd")
     if not raw:
         return None
@@ -165,7 +174,8 @@ def _parse_event_end(auction: dict) -> Optional[datetime]:
             dt = dt.replace(hour=hour, minute=int(m.group(2)))
         else:
             dt = dt.replace(hour=23, minute=59)
-    return dt
+    return (dt.replace(tzinfo=ZoneInfo("America/Chicago"))
+              .astimezone(ZoneInfo("UTC")).replace(tzinfo=None))
 
 
 async def discover_auctions(zip_code: str | None = None,

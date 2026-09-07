@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { enrichLot, inspectLot, fetchLot, patchEnrichment, enrichBatch, setWatch, setHidden, alertOnce } from '../api'
+import { enrichLot, inspectLot, fetchLot, patchEnrichment, enrichBatch, setWatch, setHidden, alertOnce, parseUtc } from '../api'
 import useMediaQuery from '../useMediaQuery'
 
 const cell = { padding: '4px 10px', borderBottom: '1px solid var(--border)' }
@@ -37,7 +37,7 @@ const COLUMNS = [
   { key: 'title', label: 'Title', get: (l) => l.title?.toLowerCase(), filter: 'text' },
   { key: 'auction', label: 'Auction', get: (l) => l.auction_name, filter: 'values' },
   { key: 'category', label: 'Category', get: (l) => l.category, filter: 'values' },
-  { key: 'closes', label: 'Closes', get: (l) => l.closes_at ? new Date(l.closes_at).getTime() : Number.MAX_SAFE_INTEGER, filter: null },
+  { key: 'closes', label: 'Closes', get: (l) => l.closes_at ? parseUtc(l.closes_at).getTime() : Number.MAX_SAFE_INTEGER, filter: null },
   { key: 'bid', label: 'Bid', get: (l) => num(l.current_bid), filter: 'range' },
   { key: 'est_cost', label: 'Est Cost', get: (l) => num(l.est_cost), filter: 'range' },
   { key: 'ship', label: 'Ship', get: (l) => l.logistics_ease, filter: 'values' },
@@ -52,7 +52,7 @@ const COLUMNS = [
 // hours; "closed" once past; em-dash when HiBid gave no time.
 function closesIn(closesAt, now) {
   if (!closesAt) return { text: '—', urgent: false }
-  const ms = new Date(closesAt).getTime() - now
+  const ms = parseUtc(closesAt).getTime() - now
   if (ms <= 0) return { text: 'closed', urgent: false }
   const m = Math.floor(ms / 60000)
   const d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60), mm = m % 60
