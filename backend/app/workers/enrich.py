@@ -312,9 +312,17 @@ Identify each INDIVIDUALLY SELLABLE item you can actually read or recognize in
 the photo — CD/DVD/book spines, game boxes, branded products, etc. For each,
 give an eBay-searchable title (under 60 chars) AND your estimate of what that
 item actually SELLS for secondhand in visible condition — a realistic eBay
-sold price, not an asking price and not retail. For apparel/shoes, ALWAYS
+sold price, not an asking price and not retail. Title items the way buyers
+SEARCH: lead with the brand/franchise collectors type ("Ty Beanie Baby Peanut
+Elephant Light Blue", not "vintage elephant plush"). For apparel/shoes, ALWAYS
 carry the audience and size when shown (kids/youth/toddler/boys/girls/men's/
 women's, size) — a kids item priced against adult listings is a wrong price.
+For collectibles with famous rare variants (Beanie Babies, coins, cards):
+price the EXACT variant you can see — color and tag generation matter — and
+assume the COMMON variant unless the rare one's features are clearly
+confirmed. Mass-produced 90s collectibles (Beanie Babies, Precious Moments,
+Boyds) really sell for $5-25 each despite the legends; a light blue Peanut
+is a $10 elephant, only the royal blue one is the famous one.
 Skip anything you can't specifically identify — never guess or pad the list.
 Max 12 items.
 

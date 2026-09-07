@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, scanAuctions, importLots, enrichAll, flushClosed, analyzeShipping } from './api'
+import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, scanAuctions, importLots, enrichAll, flushClosed, analyzeShipping, refreshBids } from './api'
 import LotTable from './components/LotTable'
 import StatusBar from './components/StatusBar'
 import useMediaQuery from './useMediaQuery'
@@ -33,6 +33,7 @@ export default function App() {
   })
   const [hideUnshippable, setHideUnshippable] = useState(true)
   const [showHiddenLots, setShowHiddenLots] = useState(false)
+  const [importedIndex, setImportedIndex] = useState({})
 
   const [lotTotal, setLotTotal] = useState(0)
 
@@ -52,6 +53,14 @@ export default function App() {
     setAuctionIndex((prev) => {
       const next = { ...prev }
       for (const a of list) next[a.id] = a.name
+      return next
+    })
+    // Accumulate imported auctions separately — they feed the items-tab
+    // filter dropdown, and must survive the auctions list being replaced
+    // by scan results.
+    setImportedIndex((prev) => {
+      const next = { ...prev }
+      for (const a of list) if (a.lots_imported > 0) next[a.id] = a.name
       return next
     })
     return list
@@ -141,6 +150,14 @@ export default function App() {
 
 They're listed below — use "Enrich" to price them.`)
     } catch (e) { alert(e.message); setBusy('') }
+  }
+
+  async function handleRefreshBids() {
+    try {
+      const r = await refreshBids()
+      if (!r.queued) { alert('No imported open auctions to refresh.'); return }
+      alert(`Refreshing bids for ${r.auctions} auctions — progress shows in the top bar. ROI updates as each finishes.`)
+    } catch (e) { alert(e.message) }
   }
 
   async function handleFlushClosed() {
@@ -289,6 +306,19 @@ Skipping ${hard} HARD-to-ship lots.`
     ? auctions.filter((a) => !isUnshippable(a))
     : auctions
 
+  // Imported auctions surface as their own group above everything else —
+  // they're the ones with your items and enrichment money in them.
+  const importedAuctions = visibleAuctions.filter((a) => a.lots_imported > 0)
+  const discoveredAuctions = visibleAuctions.filter((a) => !(a.lots_imported > 0))
+  const auctionSections = [
+    ...(importedAuctions.length ? [{ label: `📥 Imported (${importedAuctions.length})`, rows: importedAuctions }] : []),
+    ...(discoveredAuctions.length ? [{ label: importedAuctions.length ? `Discovered (${discoveredAuctions.length})` : null, rows: discoveredAuctions }] : []),
+  ]
+  const auctionRowsForDisplay = auctionSections.flatMap((s) => [
+    ...(s.label ? [{ header: s.label }] : []),
+    ...s.rows,
+  ])
+
   // An auction is "hot" when its gold-mine lots add up to real money.
   const isClosed = (a) => a.closing_date && new Date(a.closing_date) < new Date()
   const isHotAuction = (a) => Number(a.gold_profit ?? 0) >= 100
@@ -419,7 +449,11 @@ Skipping ${hard} HARD-to-ship lots.`
             <summary style={{ fontWeight: 600, padding: '4px 0' }}>
               Auctions ({visibleAuctions.length})
             </summary>
-            {visibleAuctions.slice(0, auctionLimit).map((a) => (
+            {auctionRowsForDisplay.slice(0, auctionLimit).map((a) => a.header ? (
+              <div key={`hdr-${a.header}`} style={{ fontWeight: 700, fontSize: 15, marginTop: 12 }}>
+                {a.header}
+              </div>
+            ) : (
               <div key={a.id} style={{
                 border: isHotAuction(a) ? '2px solid #2e9e4f' : '1px solid var(--border)',
                 borderRadius: 8, padding: 10, marginTop: 8,
@@ -487,7 +521,13 @@ Skipping ${hard} HARD-to-ship lots.`
               </tr>
             </thead>
             <tbody>
-              {visibleAuctions.slice(0, auctionLimit).map((a) => (
+              {auctionRowsForDisplay.slice(0, auctionLimit).map((a) => a.header ? (
+                <tr key={`hdr-${a.header}`}>
+                  <td colSpan={7} style={{ paddingTop: 10, fontWeight: 700, fontSize: 15 }}>
+                    {a.header}
+                  </td>
+                </tr>
+              ) : (
                 <tr key={a.id} style={{
                   background: isHotAuction(a) ? 'var(--gold-bg)'
                     : selectedAuction === a.id ? 'var(--highlight)' : undefined,
@@ -542,6 +582,18 @@ Skipping ${hard} HARD-to-ship lots.`
 
       {view === 'items' && (<>
       <section style={{ marginBottom: '0.75rem' }}>
+        <select
+          value={selectedAuction ?? ''}
+          onChange={(ev) => setSelectedAuction(ev.target.value ? Number(ev.target.value) : null)}
+          title="Show items from one imported auction only"
+          style={{ padding: 6, fontSize: 14, maxWidth: isMobile ? '100%' : 320,
+                   marginRight: '1rem', marginBottom: isMobile ? 6 : 0 }}
+        >
+          <option value="">All auctions ({Object.keys(importedIndex).length} imported)</option>
+          {Object.entries(importedIndex)
+            .sort((a, b) => a[1].localeCompare(b[1]))
+            .map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+        </select>
         <label>
           <input
             type="checkbox"
@@ -599,6 +651,10 @@ Skipping ${hard} HARD-to-ship lots.`
         )}
 
         <button style={{ marginLeft: '1rem' }} onClick={loadLots}>Refresh</button>
+        <button style={{ marginLeft: '0.5rem' }} onClick={handleRefreshBids}
+                title="Re-pull current bids from HiBid for every imported open auction and recompute ROI. Free — progress shows in the top bar.">
+          Refresh bids
+        </button>
         <button style={{ marginLeft: '0.5rem' }} onClick={handleFlushClosed}
                 title="Permanently delete all items whose auction has closed (asks first)">
           Flush closed items

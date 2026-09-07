@@ -16,6 +16,7 @@ from .. import models, schemas
 from ..database import get_db
 from ..services import hibid, jobs
 from ..workers.enrich import run_enrichment, run_ship_analysis
+from ..workers.refresh import run_bid_refresh
 from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/auctions", tags=["auctions"])
@@ -146,6 +147,25 @@ async def analyze_shipping(background_tasks: BackgroundTasks,
     # list persists on the job row; texts would bloat it).
     background_tasks.add_task(run_ship_analysis, [a.id for a in targets])
     return {"auctions": len(targets), "queued": True}
+
+
+@router.post("/refresh-bids", status_code=202)
+def refresh_bids(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """Re-pull current bids from HiBid for every imported, still-open
+    auction and recompute ROI at the new bids. Free — no AI calls."""
+    imported = (db.query(models.Lot.auction_id)
+                  .filter(models.Lot.auction_id.isnot(None)).distinct())
+    targets = (db.query(models.Auction.id)
+                 .filter(models.Auction.id.in_(imported),
+                         models.Auction.hibid_id.isnot(None))
+                 .filter((models.Auction.closing_date.is_(None))
+                         | (models.Auction.closing_date >= datetime.now()))
+                 .all())
+    ids = [t[0] for t in targets]
+    if not ids:
+        return {"auctions": 0, "queued": False}
+    background_tasks.add_task(run_bid_refresh, ids)
+    return {"auctions": len(ids), "queued": True}
 
 
 @router.get("/categories")

@@ -112,3 +112,7 @@ export function setWatch(lotId, watched) {
 export function setHidden(lotId, hidden) {
   return request(`/lots/${lotId}/hide?hidden=${hidden}`, { method: 'POST' })
 }
+
+export function refreshBids() {
+  return request('/auctions/refresh-bids', { method: 'POST' })
+}

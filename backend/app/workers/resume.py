@@ -23,6 +23,7 @@ import threading
 from .. import models
 from ..database import SessionLocal
 from .enrich import run_enrichment, run_inspection, run_reprice, run_ship_analysis
+from .refresh import run_bid_refresh
 
 
 def resume_interrupted_work() -> None:
@@ -37,6 +38,9 @@ def resume_interrupted_work() -> None:
             elif row.kind == "ship-analysis" and payload.get("auction_ids"):
                 print(f"Resuming shipping analysis {row.id} at {row.current}/{row.total}")
                 _spawn(run_ship_analysis, payload["auction_ids"], row.id)
+            elif row.kind == "bid-refresh" and payload.get("auction_ids"):
+                print(f"Resuming bid refresh {row.id} at {row.current}/{row.total}")
+                _spawn(run_bid_refresh, payload["auction_ids"], row.id)
             else:
                 # scan/import run inside a request handler; that request died
                 # with the old process, so the row is just stale.
