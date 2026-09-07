@@ -338,6 +338,15 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
   if (!lots.length) return <p>No lots yet — scan auctions and import one above.</p>
 
   const enrichableCount = enrichable.length
+  // What's actually on screen right now vs. what the filters matched.
+  const shownCount = Math.min(renderLimit, sorted.length)
+  const countLine = (
+    <span style={{ fontSize: 13, color: 'var(--muted)' }}>
+      Showing <strong style={{ color: 'var(--fg, inherit)' }}>{shownCount.toLocaleString()}</strong>
+      {' '}of {sorted.length.toLocaleString()} item{sorted.length === 1 ? '' : 's'}
+      {sorted.length !== lots.length && ` (${lots.length.toLocaleString()} loaded, rest filtered out)`}
+    </span>
+  )
 
   if (isMobile) {
     return (
@@ -373,6 +382,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
             Enrich the {enrichableCount} shown
           </button>
           {anyQueued && <span style={{ flexBasis: '100%' }}><span className="spinner" />{lots.filter((l) => l.enrichment?.status === 'queued').length} lots in the queue… auto-refreshing</span>}
+          <div style={{ flexBasis: '100%' }}>{countLine}</div>
         </div>
         {sorted.slice(0, renderLimit).map((lot) => {
           const e = lot.enrichment || {}
@@ -479,6 +489,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
         Enrich the {enrichableCount} shown
       </button>
       {anyQueued && <span style={{ marginLeft: '0.75rem' }}><span className="spinner" />{lots.filter((l) => l.enrichment?.status === 'queued').length} lots in the queue… auto-refreshing</span>}
+      <span style={{ marginLeft: '0.75rem' }}>{countLine}</span>
     </div>
     <table style={{ borderCollapse: 'collapse', fontSize: 14 }}>
       {/* Sticks below the status bar when one is showing (see StatusBar's
