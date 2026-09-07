@@ -281,7 +281,17 @@ Skipping ${hard} HARD-to-ship lots.`
   }
 
   function handleLotUpdated(updated) {
-    setLots((prev) => prev.map((l) => (l.lot_id === updated.lot_id ? updated : l)))
+    setLots((prev) => {
+      const i = prev.findIndex((l) => l.lot_id === updated.lot_id)
+      if (i === -1) return prev
+      // A poll tick that changed nothing must not change state: replacing
+      // the array re-copies and re-sorts every lot on screen, and during a
+      // long inspection those no-op ticks arrive for minutes on end.
+      if (JSON.stringify(prev[i]) === JSON.stringify(updated)) return prev
+      const next = [...prev]
+      next[i] = updated
+      return next
+    })
   }
 
   // "Confirmed low-value" = 3+ comps agree the resale is under the cutoff.

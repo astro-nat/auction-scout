@@ -241,21 +241,30 @@ export default function LotTable({ lots, onLotUpdated, onRefresh }) {
   }
 
   function poll(lotId) {
-    const interval = setInterval(async () => {
-      // Transient fetch failures (server restarting) just skip a beat —
-      // the next tick retries; no popups from a background poll.
+    // Self-scheduling (setTimeout after each response), NOT setInterval:
+    // an interval keeps firing while the server is slow — which it is
+    // during the very inspection being polled — stacking dozens of
+    // in-flight requests whose responses then land as a render storm.
+    const tick = async () => {
       let updated
-      try { updated = await fetchLot(lotId) } catch { return }
+      try {
+        updated = await fetchLot(lotId)
+      } catch {
+        setTimeout(tick, 8000)   // server busy — back off, retry
+        return
+      }
+      onLotUpdated(updated)
       if (updated.enrichment?.status === 'success' || updated.enrichment?.status === 'failed') {
-        clearInterval(interval)
         setPollingIds((prev) => {
           const next = new Set(prev)
           next.delete(lotId)
           return next
         })
+        return
       }
-      onLotUpdated(updated)
-    }, 3000)
+      setTimeout(tick, 4000)
+    }
+    setTimeout(tick, 3000)
   }
 
   // "Visible" means the rows actually on screen (the render window), not
