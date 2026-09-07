@@ -160,6 +160,21 @@ They're listed below — use "Enrich" to price them.`)
     } catch (e) { alert(e.message) }
   }
 
+  async function handleInspectNoValue() {
+    try {
+      const peek = await reinspectNoComps(true)
+      if (!peek.lots) { alert('Every enriched item in an open auction already has a value.'); return }
+      const cost = (peek.lots * 0.01).toFixed(2)
+      const msg = `Inspect ${peek.lots} items that have no resale value yet?\n\n`
+        + `AI reads each one's full-size photo, identifies the items, and prices `
+        + `them (real comps first, its own estimate as fallback). Roughly $${cost} `
+        + `of API usage. Progress shows in the bar at the top.`
+      if (!window.confirm(msg)) return
+      const r = await reinspectNoComps()
+      alert(`Queued ${r.queued} items for inspection.`)
+    } catch (e) { alert(e.message) }
+  }
+
   async function handleFlushClosed() {
     try {
       const peek = await flushClosed(true)
@@ -654,6 +669,10 @@ Skipping ${hard} HARD-to-ship lots.`
         <button style={{ marginLeft: '0.5rem' }} onClick={handleRefreshBids}
                 title="Re-pull current bids from HiBid for every imported open auction and recompute ROI. Free — progress shows in the top bar.">
           Refresh bids
+        </button>
+        <button style={{ marginLeft: '0.5rem' }} onClick={handleInspectNoValue}
+                title="Bulk-inspect every enriched item that still has no resale value — AI reads the photo and prices it (asks first, shows cost)">
+          Inspect no-value items
         </button>
         <button style={{ marginLeft: '0.5rem' }} onClick={handleFlushClosed}
                 title="Permanently delete all items whose auction has closed (asks first)">

@@ -116,3 +116,8 @@ export function setHidden(lotId, hidden) {
 export function refreshBids() {
   return request('/auctions/refresh-bids', { method: 'POST' })
 }
+
+export function reinspectNoComps(dryRun = false) {
+  const q = dryRun ? '?dry_run=true' : ''
+  return request(`/lots/reinspect-no-comps${q}`, { method: 'POST' })
+}
