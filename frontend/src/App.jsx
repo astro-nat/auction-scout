@@ -764,7 +764,7 @@ Skipping ${hard} HARD-to-ship lots.`
         {selectedAuction ? (
           <>
             <span>
-              Catalogue of <strong>{auctionNames[selectedAuction] ?? 'this auction'}</strong>
+              Catalogue of <strong>{auctionIndex[selectedAuction] ?? 'this auction'}</strong>
               {' '}— {lotTotal || lots.length} lot{(lotTotal || lots.length) === 1 ? '' : 's'} imported
             </span>
             <button onClick={() => setSelectedAuction(null)}>Show items from every auction</button>
