@@ -164,6 +164,8 @@ def refresh_bids(background_tasks: BackgroundTasks, db: Session = Depends(get_db
     ids = [t[0] for t in targets]
     if not ids:
         return {"auctions": 0, "queued": False}
+    if jobs.has_active("bid-refresh"):
+        return {"auctions": 0, "queued": False, "already_running": True}
     background_tasks.add_task(run_bid_refresh, ids)
     return {"auctions": len(ids), "queued": True}
 

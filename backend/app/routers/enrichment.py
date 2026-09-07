@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..database import get_db
+from ..services import jobs
 from ..workers.enrich import (run_enrichment, run_inspection, run_reprice,
                               process_queued_lots, _apply_roi)
 
@@ -65,6 +66,10 @@ def reprice(background_tasks: BackgroundTasks, auction_id: int | None = None,
     lot_ids = [row[0] for row in q.all()]
     if not lot_ids:
         return {"repricing": 0}
+    # Deploys resume orphaned reprices, so stacking a second one is easy to
+    # do by accident — and N concurrent reprices burn N× the comp lookups.
+    if jobs.has_active("reprice"):
+        return {"repricing": 0, "already_running": True}
     background_tasks.add_task(run_reprice, lot_ids)
     return {"repricing": len(lot_ids)}
 

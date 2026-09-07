@@ -122,12 +122,21 @@ def cancel(job_id: str) -> bool:
 
 
 def is_cancelled(job_id: str) -> bool:
+    """A MISSING row also reads as cancelled: force-dismissing a stuck job
+    deletes its row, and any thread still alive behind it must stop too —
+    otherwise deletion would leave an unstoppable headless worker."""
     db = SessionLocal()
     try:
         job = db.query(models.Job).filter(models.Job.id == job_id).first()
-        return bool(job and job.cancelled)
+        return job is None or bool(job.cancelled)
     finally:
         db.close()
+
+
+def has_active(kind: str) -> bool:
+    """Is a non-cancelled job of this kind running? Endpoints use this to
+    refuse stacking a second reprice/bid-refresh on top of a live one."""
+    return any(j.get("kind") == kind and not j.get("cancelled") for j in active())
 
 
 def _as_dict(job: "models.Job", with_payload: bool = False) -> dict:
