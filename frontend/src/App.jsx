@@ -126,7 +126,11 @@ export default function App() {
     const byId = Object.fromEntries(fresh.map((a) => [a.id, a]))
     setAuctions((prev) => {
       if (!prev.length) return fresh
-      return prev.map((a) => (byId[a.id] ? { ...a, ...byId[a.id] } : a))
+      // Update rows in place AND drop the ones the server no longer lists —
+      // an auction missing from the full listing has closed (or been
+      // purged), and keeping it made the list fill with dead auctions the
+      // longer the tab stayed open.
+      return prev.filter((a) => byId[a.id]).map((a) => ({ ...a, ...byId[a.id] }))
     })
   }, [rememberAuctions])
 
