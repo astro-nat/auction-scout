@@ -242,6 +242,9 @@ def _enrich(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
             or match.get("category") in {
                 "luxury", "luxury_mid", "luxury_watch", "sneakers",
                 "designer_eyewear", "premium_eyewear",
+                # 14K/sterling values hinge on the metal being real —
+                # the Watermark audit's top golds were unflagged jewelry.
+                "precious_metals", "gold", "silver", "jewelry",
             }
         )
 
@@ -317,8 +320,14 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
         )
         e.max_bid = lead.max_bid
         e.est_roi = lead.roi
+        # One listing's asking price isn't evidence — every wrong gold mine
+        # in the Watermark audit ($2 bills "worth" $260, a $487 pearl ring)
+        # traced to a single generic active comp. The numbers stay for
+        # context; the GOLD MINE badge requires at least 2 agreeing comps.
+        thin_evidence = (e.comp_count or 0) < 2
         e.profit = lead.profit
-        e.roi_status = "PASS" if (red_flag or lot.unreachable_pickup) else lead.status
+        e.roi_status = ("PASS" if (red_flag or lot.unreachable_pickup or thin_evidence)
+                        else lead.status)
     else:
         # No usable price means no usable verdict. Leaving the previous run's
         # numbers in place is how a lot whose comps were just rejected stayed
