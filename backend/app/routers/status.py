@@ -68,18 +68,19 @@ def patch_settings(payload: dict,
     """Save a new ROI target and immediately reprice every enriched lot under
     it (free — reuses stored AI results). 1-10000 sanity range."""
     from ..services import settings as settings_store
-    from ..workers.enrich import run_reprice
+    from ..workers.enrich import run_regrade
     pct = payload.get("target_roi_pct")
     if not isinstance(pct, (int, float)) or not (1 <= pct <= 10000):
         raise HTTPException(status_code=422,
                             detail="target_roi_pct must be a number from 1 to 10000")
     settings_store.set("target_roi_pct", str(float(pct)))
-    lot_ids = [row[0] for row in
-               db.query(models.Lot.id).join(models.Enrichment)
-                 .filter(models.Enrichment.enriched_title.isnot(None)).all()]
-    if lot_ids:
-        background_tasks.add_task(run_reprice, lot_ids)
-    return {"target_roi_pct": pct, "repricing": len(lot_ids)}
+    # Re-GRADE, not re-price: the ROI target doesn't change what anything is
+    # worth, so this is arithmetic over stored values — no comp lookups.
+    n = (db.query(models.Enrichment)
+           .filter(models.Enrichment.est_resale.isnot(None)).count())
+    if n:
+        background_tasks.add_task(run_regrade)
+    return {"target_roi_pct": pct, "regrading": n}
 
 
 @router.post("/jobs/{job_id}/cancel")

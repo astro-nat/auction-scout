@@ -29,7 +29,7 @@ from datetime import datetime, timezone
 
 import anthropic
 import httpx
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from ..database import SessionLocal
 from .. import models, config
@@ -553,6 +553,44 @@ def _download_image(url: str | None) -> bytes | None:
     except Exception:
         pass
     return None
+
+
+def run_regrade() -> None:
+    """Recompute ROI verdicts ONLY — no comp lookups, no AI, no network.
+
+    Changing the target ROI doesn't change what an item is worth, just
+    whether its current bid still clears the bar, so max_bid/profit/
+    est_roi/roi_status are pure arithmetic over values already stored.
+    Seconds, not the ~30 minutes a full reprice spends re-querying eBay.
+    (Use run_reprice when the PRICING rules changed and the resale
+    estimates themselves need rebuilding.)
+    """
+    db: Session = SessionLocal()
+    job = jobs.start("regrade", "Re-grading items at the new ROI target")
+    changed = 0
+    try:
+        rows = (db.query(models.Lot)
+                  .join(models.Enrichment)
+                  .options(joinedload(models.Lot.enrichment))
+                  .filter(models.Enrichment.est_resale.isnot(None))
+                  .all())
+        jobs.update(job, total=len(rows))
+        for i, lot in enumerate(rows, 1):
+            e = lot.enrichment
+            # Hand-corrected PRICES are protected, but the verdict derived
+            # from them still follows the current ROI target.
+            before = e.roi_status
+            _apply_roi(lot, e)
+            if e.roi_status != before:
+                changed += 1
+            if i % 200 == 0:
+                jobs.update(job, current=i)
+        db.commit()
+        jobs.update(job, current=len(rows))
+    finally:
+        jobs.finish(job)
+        db.close()
+    print(f"Re-grade complete: {changed} verdicts changed")
 
 
 def run_reprice(lot_db_ids: list[int], resume_job_id: str | None = None) -> None:

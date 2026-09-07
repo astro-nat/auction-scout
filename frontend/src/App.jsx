@@ -210,7 +210,7 @@ They're listed below — use "Enrich" to price them.`)
     if (!pct || pct < 1) { alert('Enter a target ROI percent, e.g. 150.'); return }
     try {
       const r = await saveTargetRoi(pct)
-      alert(`Target ROI set to ${r.target_roi_pct}%. Re-grading ${r.repricing} enriched items now (free) — gold mines update as it runs.`)
+      alert(`Target ROI set to ${r.target_roi_pct}%. Re-grading ${r.regrading} items — takes a few seconds.`)
     } catch (e) { alertOnce(e.message) }
   }
 
