@@ -683,8 +683,7 @@ Skipping ${hard} HARD-to-ship lots.`
           </span>
         )}
 
-        <button style={{ marginLeft: '1rem' }} onClick={loadLots}>Refresh</button>
-        <button style={{ marginLeft: '0.5rem' }} onClick={handleRefreshBids}
+        <button style={{ marginLeft: '1rem' }} onClick={handleRefreshBids}
                 title="Re-pull current bids from HiBid for every imported open auction and recompute ROI. Free — progress shows in the top bar.">
           Refresh bids
         </button>
