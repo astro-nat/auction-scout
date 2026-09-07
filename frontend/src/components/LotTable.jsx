@@ -138,10 +138,10 @@ function EditableCell({ display, rawValue, onSave, options, inputType = 'text', 
 
 // Mobile sort choices — a dropdown replaces click-to-sort headers on phones.
 const MOBILE_SORTS = [
-  { label: 'Sort: default', key: null, dir: 1 },
+  { label: 'ROI % (high first)', key: 'roi', dir: -1 },
+  { label: 'Sort: unsorted', key: null, dir: 1 },
   { label: 'Est Resale (high first)', key: 'est_resale', dir: -1 },
   { label: 'Max Bid (high first)', key: 'max_bid', dir: -1 },
-  { label: 'ROI % (high first)', key: 'roi', dir: -1 },
   { label: 'Current Bid (low first)', key: 'bid', dir: 1 },
   { label: 'Est Cost (low first)', key: 'est_cost', dir: 1 },
 ]
@@ -155,7 +155,9 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
     const t = setInterval(() => setNow(Date.now()), 30000)
     return () => clearInterval(t)
   }, [])
-  const [sort, setSort] = useState({ key: null, dir: 1 })
+  // Best return first is the default view — that's the question the app
+  // exists to answer. Click any header (or the mobile Sort menu) to change it.
+  const [sort, setSort] = useState({ key: 'roi', dir: -1 })
   const [colFilters, setColFilters] = useState({})
   // Rows the user just enriched/inspected hold their screen position (and
   // App exempts them from hide filters) so the result can be read before

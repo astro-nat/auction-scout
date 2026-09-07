@@ -23,6 +23,7 @@ at startup.
 
 import asyncio
 import json
+import re
 import base64
 import logging
 from datetime import datetime, timezone
@@ -57,6 +58,22 @@ LOGISTICS_PENALTY = {"EASY": 15.0, "NEUTRAL": 25.0, "HARD": 60.0}
 # ACTIVE_REALIZATION in services/pricing.py.
 import os
 AI_ESTIMATE_REALIZATION = float(os.environ.get("AI_ESTIMATE_REALIZATION", "0.8"))
+
+
+# Titles that describe a PILE, not a product. These route to the itemized
+# vision pass instead of the single-item enrich: comping "Lot of Assorted
+# Kitchen Items" as one product is meaningless, while inspect identifies
+# and prices each thing it can see. Deliberately narrow — "set" and "pair"
+# are excluded because a flatware set or a pair of lamps is usually one
+# sellable unit, not a pile.
+_MULTI_ITEM_RE = re.compile(
+    r"\b(lots?|bundles?|assorted|miscellaneous|misc\.?"
+    r"|(?:box|bag|tote|crate|tray|group|grouping|collection|mix)\s+of)\b",
+    re.IGNORECASE)
+
+
+def looks_multi_item(title: str) -> bool:
+    return bool(_MULTI_ITEM_RE.search(title or ""))
 
 
 def _sane_estimate(v) -> float | None:
@@ -199,6 +216,17 @@ def run_enrichment(lot_db_id: int) -> None:
         # Cancelling a batch flips queued lots back to 'pending'; anything
         # not still queued was cancelled before its turn came up.
         if e.status != "queued":
+            return
+
+        # Multi-item lots go to the itemized vision pass instead: pricing a
+        # "Lot of Assorted Tools" as if it were one product is meaningless.
+        # Needs a photo to inspect; without one, fall through to enrich.
+        if looks_multi_item(lot.title) and (lot.fullsize_url or lot.hd_thumbnail_url
+                                            or lot.thumbnail_url):
+            e.queued_task = "inspect"
+            db.commit()
+            db.close()
+            run_inspection(lot_db_id)
             return
         e.last_attempted_at = datetime.now(timezone.utc)
 
