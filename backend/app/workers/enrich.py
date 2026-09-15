@@ -259,8 +259,12 @@ def run_enrichment(lot_db_id: int) -> None:
         # Multi-item lots go to the itemized vision pass instead: pricing a
         # "Lot of Assorted Tools" as if it were one product is meaningless.
         # Needs a photo to inspect; without one, fall through to enrich.
-        if looks_multi_item(lot.title) and (lot.fullsize_url or lot.hd_thumbnail_url
-                                            or lot.thumbnail_url):
+        # A printed retail price covers the whole lot, so it makes the vision
+        # pass an expense with nothing to buy.
+        if (looks_multi_item(lot.title)
+                and pricing.retail_from_title(lot.title) is None
+                and (lot.fullsize_url or lot.hd_thumbnail_url
+                     or lot.thumbnail_url)):
             e.queued_task = "inspect"
             db.commit()
             db.close()
@@ -315,12 +319,30 @@ def _enrich(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
         )
 
     # --- 2. AI title + condition verdict ---
+    # Unless the house already told us everything the model would: the retail
+    # price is printed on the front of the title, and the condition grade
+    # with it. Reading those costs nothing, so an entire Amazon overstock
+    # catalogue enriches without a single model call.
     ai = None
-    if len(description.strip()) >= MIN_DESC_FOR_TEXT_PASS:
+    from_title = pricing.retail_from_title(title) is not None
+    if from_title:
+        _progress(db, e, "reading the price off the title…")
+        if "enriched_title" not in protected:
+            e.enriched_title = pricing.title_without_retail_prefix(title)[:80] or None
+        if "verdict" not in protected:
+            e.verdict = pricing.condition_from_title(title)
+        e.confidence = "strong"
+        e.ai_source = "title"
+        if "notes" not in protected:
+            e.notes = ("Retail price and condition read from the lot title — "
+                       "no AI spend on this lot.")
+    elif len(description.strip()) >= MIN_DESC_FOR_TEXT_PASS:
         _progress(db, e, "AI reading the description…")
         ai = _call_text(title, description)
         e.ai_source = "text"
-    if ai is None or not ai.get("confident"):
+    # The photo pass is the expensive one — never reach for it on a lot whose
+    # price and condition were already free.
+    if not from_title and (ai is None or not ai.get("confident")):
         _progress(db, e, "AI examining the photo…")
         image_bytes = _download_image(lot.thumbnail_url or lot.hd_thumbnail_url)
         if image_bytes:

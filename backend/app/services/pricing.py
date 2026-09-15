@@ -93,6 +93,48 @@ def retail_from_title(title: str) -> Optional[float]:
     return value if _RETAIL_MIN <= value <= _RETAIL_MAX else None
 
 
+# Condition words the liquidation houses stamp ahead of the price, mapped to
+# the same verdict vocabulary the AI pass uses. Reading them off the title is
+# free, so a lot whose price is already printed needs no model call at all.
+_TITLE_CONDITION = [
+    (re.compile(r"\b(?:missing|incomplete|damaged|dented|torn|cracked|"
+                r"for\s+parts)\b", re.IGNORECASE), "broken, damaged, or for parts"),
+    (re.compile(r"\b(?:sealed|brand\s+new|nib|nwt|nip)\b", re.IGNORECASE),
+     "mint condition or working perfectly"),
+    (re.compile(r"\b(?:opened|open\s+box|used|pre-?owned|refurb(?:ished)?|"
+                r"like\s+new|stained|scratched|tested)\b", re.IGNORECASE),
+     "normal wear and tear"),
+]
+
+
+def condition_from_title(title: str) -> str:
+    """Condition verdict from the words a liquidation house puts up front.
+
+    Only the prefix is read — the words that appear before the price are the
+    house's condition grade, whereas the same word later in the string is
+    usually part of the product ("Compound W Freeze Off", "New York Yankees").
+
+    Defaults to normal wear: overstock is mostly unused, and the resale
+    figure is already halved, so a second haircut would double-discount.
+    """
+    m = _TITLE_RETAIL_RE.match(title or "")
+    prefix = (title or "")[:m.start(1)] if m else (title or "")[:24]
+    for pattern, verdict in _TITLE_CONDITION:
+        if pattern.search(prefix):
+            return verdict
+    return "normal wear and tear"
+
+
+def title_without_retail_prefix(title: str) -> str:
+    """The product name with the house's price and condition stamp removed —
+    what you'd actually type into a search box."""
+    m = _TITLE_RETAIL_RE.match(title or "")
+    if not m:
+        return (title or "").strip()
+    rest = (title or "")[m.end():].lstrip(" -:|,").strip()
+    return rest or (title or "").strip()
+
+
 def price_from_title(title: str) -> Optional[dict]:
     """A comps-shaped result built from the title's retail price, or None.
 
