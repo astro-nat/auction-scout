@@ -89,3 +89,11 @@ def test_thousands_separator():
 
 def test_comma_value_above_the_ceiling_still_rejected():
     assert pricing.retail_from_title("$12,000 Tractor") is None
+
+
+def test_condition_from_title_defaults_to_no_discount():
+    """The halved retail is the discount; a second multiplier would stack."""
+    from app.workers.enrich import CONDITION_MULTIPLIER
+    verdict = pricing.condition_from_title("$729 New Rev-a-shelf Two-Tier Wire")
+    assert CONDITION_MULTIPLIER[verdict] == 1.0
+    assert pricing.price_from_title("$729 New Rev-a-shelf")["est_resale"] == 364.50

@@ -748,8 +748,17 @@ def run_reprice(lot_db_ids: list[int], resume_job_id: str | None = None) -> None
                     if not marks & {"logistics_ease", "logistics_ease_ai"}:
                         lot.logistics_ease = classify_logistics(
                             lot.title or "", lot.category or "", lot.description or "")
-                    comps = (pricing.price_from_title(lot.title)
-                             or pricing.lookup_comps(e.enriched_title or lot.title))
+                    comps = pricing.price_from_title(lot.title)
+                    if comps:
+                        # The halved retail already carries the discount, so
+                        # the stale AI verdict must not be applied on top of
+                        # it — a $729 shelf came back at $255 (x0.5 x0.7)
+                        # instead of $364. Re-read the grade from the same
+                        # title the price came from.
+                        if "verdict" not in marks:
+                            e.verdict = pricing.condition_from_title(lot.title)
+                    else:
+                        comps = pricing.lookup_comps(e.enriched_title or lot.title)
                     mult = CONDITION_MULTIPLIER.get(e.verdict, 1.0)
                     e.est_resale = (round(float(comps["est_resale"]) * mult, 2)
                                     if comps["est_resale"] else None)
