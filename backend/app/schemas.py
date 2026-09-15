@@ -94,6 +94,9 @@ class AuctionOut(BaseModel):
     hibid_id: Optional[int] = None
     name: str
     auctioneer: Optional[str] = None
+    auctioneer_id: Optional[int] = None
+    favorite: bool = False          # a watched auction house
+    hidden: bool = False            # dismissed by the user
     lot_count: Optional[int] = None
     city: Optional[str] = None
     state: Optional[str] = None

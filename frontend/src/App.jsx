@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, scanAuctions, importLots, enrichAll, flushClosed, refreshBids, reinspectNoComps, fetchSettings, saveTargetRoi, alertOnce, parseUtc } from './api'
+import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, scanAuctions, importLots, enrichAll, flushClosed, refreshBids, reinspectNoComps, fetchSettings, saveTargetRoi, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, alertOnce, parseUtc } from './api'
 import LotTable from './components/LotTable'
 import StatusBar from './components/StatusBar'
 import useMediaQuery from './useMediaQuery'
@@ -384,6 +384,39 @@ Skipping ${hard} HARD-to-ship lots.`
     ? auctions.filter((a) => !isUnshippable(a))
     : auctions
 
+  // Watch / unwatch an auction house. Optimistic: the star flips at once and
+  // reverts if the call fails, because the only visible effect otherwise is a
+  // re-sort that looks like nothing happened.
+  const toggleFavorite = useCallback(async (auction) => {
+    if (!auction.auctioneer_id) return
+    const next = !auction.favorite
+    const apply = (fav) => setAuctions((prev) => prev.map((a) =>
+      a.auctioneer_id === auction.auctioneer_id ? { ...a, favorite: fav } : a))
+    apply(next)
+    try {
+      if (next) {
+        await addFavoriteHouse({ auctionId: auction.id, name: auction.auctioneer })
+      } else {
+        await removeFavoriteHouse(auction.auctioneer_id)
+      }
+    } catch (err) {
+      apply(!next)
+      alertOnce(`Could not ${next ? 'watch' : 'unwatch'} that house: ${err.message}`)
+    }
+  }, [])
+
+  // Dismiss an auction. Removed from the list immediately rather than waiting
+  // for a refetch — the point of the button is that it goes away.
+  const hideAuction = useCallback(async (auction) => {
+    setAuctions((prev) => prev.filter((a) => a.id !== auction.id))
+    try {
+      await setAuctionHidden(auction.id, true)
+    } catch (err) {
+      setAuctions((prev) => [...prev, auction])
+      alertOnce(`Could not hide that auction: ${err.message}`)
+    }
+  }, [])
+
   // Imported auctions stay pinned at the top from their own accumulated
   // store — a scan replacing the visible list can't knock them off screen.
   // The no-ship filter only applies to discovered auctions; imported ones
@@ -391,10 +424,16 @@ Skipping ${hard} HARD-to-ship lots.`
   const importedAuctions = Object.values(importedRows)
     .sort((a, b) => (parseUtc(a.closing_date) ?? new Date('9999-01-01')) - (parseUtc(b.closing_date) ?? new Date('9999-01-01')))
   const importedIds = new Set(Object.keys(importedRows).map(Number))
-  const discoveredAuctions = visibleAuctions.filter((a) => !importedIds.has(a.id))
+  const notImported = visibleAuctions.filter((a) => !importedIds.has(a.id))
+  // Watched auction houses sit above the rest of the discovered list: a house
+  // you've starred is one you already trust, so its sales are worth seeing
+  // before a stranger's that happens to close sooner.
+  const watchedAuctions = notImported.filter((a) => a.favorite)
+  const discoveredAuctions = notImported.filter((a) => !a.favorite)
   const auctionSections = [
     ...(importedAuctions.length ? [{ label: `📥 Imported (${importedAuctions.length})`, rows: importedAuctions }] : []),
-    ...(discoveredAuctions.length ? [{ label: importedAuctions.length ? `Discovered (${discoveredAuctions.length})` : null, rows: discoveredAuctions }] : []),
+    ...(watchedAuctions.length ? [{ label: `⭐ Watched houses (${watchedAuctions.length})`, rows: watchedAuctions }] : []),
+    ...(discoveredAuctions.length ? [{ label: (importedAuctions.length || watchedAuctions.length) ? `Discovered (${discoveredAuctions.length})` : null, rows: discoveredAuctions }] : []),
   ]
   const auctionRowsForDisplay = auctionSections.flatMap((s) => [
     ...(s.label ? [{ header: s.label }] : []),
@@ -563,8 +602,35 @@ Skipping ${hard} HARD-to-ship lots.`
                 background: isHotAuction(a) ? 'var(--gold-bg)'
                   : selectedAuction === a.id ? 'var(--highlight)' : 'var(--card-bg)',
               }}>
-                <div style={{ fontWeight: 600 }}>
+                <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <button
+                    onClick={() => toggleFavorite(a)}
+                    disabled={!a.auctioneer_id}
+                    title={!a.auctioneer_id
+                      ? 'Auction house unknown — re-scan to pick it up'
+                      : a.favorite
+                        ? `Unwatch ${a.auctioneer || 'this house'}`
+                        : `Watch ${a.auctioneer || 'this house'} — its sales sort to the top`}
+                    style={{
+                      border: 'none', background: 'none', padding: 0,
+                      fontSize: 15, lineHeight: 1,
+                      cursor: a.auctioneer_id ? 'pointer' : 'default',
+                      opacity: a.auctioneer_id ? 1 : 0.3,
+                      filter: a.favorite ? 'none' : 'grayscale(1)',
+                    }}>
+                    {a.favorite ? '⭐' : '☆'}
+                  </button>
                   <a href={a.source_url} target="_blank" rel="noreferrer">{a.name}</a>
+                  <button
+                    onClick={() => hideAuction(a)}
+                    title="Not interested — hide this auction"
+                    style={{
+                      marginLeft: 'auto', border: 'none', background: 'none',
+                      padding: '0 2px', fontSize: 14, lineHeight: 1,
+                      color: 'var(--muted)', cursor: 'pointer',
+                    }}>
+                    ✕
+                  </button>
                 </div>
                 <div style={{ fontSize: 13, color: 'var(--muted)', margin: '4px 0' }}>
                   {isClosed(a) ? '⏹ CLOSED · ' : ''}{a.city}, {a.state} · {a.lot_count ?? '—'} lots

@@ -103,6 +103,25 @@ export function fetchAuctions() {
   return request('/auctions')
 }
 
+// Watched auction houses. Keyed by HiBid's company id — the number in
+// hibid.com/company/149798/budget-barn — so a house that renames itself
+// stays watched. This is AuctionScout's own list, not HiBid's stars:
+// reading those would need your HiBid login.
+export function addFavoriteHouse({ auctionId, company, name }) {
+  return request('/auctions/favorites', {
+    method: 'POST',
+    body: JSON.stringify({ auction_id: auctionId, company, name }),
+  })
+}
+
+export function removeFavoriteHouse(companyId) {
+  return request(`/auctions/favorites/${companyId}`, { method: 'DELETE' })
+}
+
+export function setAuctionHidden(auctionId, hidden) {
+  return request(`/auctions/${auctionId}/hide?hidden=${hidden}`, { method: 'POST' })
+}
+
 export function fetchCategories() {
   return request('/auctions/categories')
 }

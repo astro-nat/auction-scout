@@ -14,6 +14,7 @@ class Auction(Base):
     hibid_id = Column(Integer, unique=True, index=True)  # HiBid event id
     name = Column(String, nullable=False)
     auctioneer = Column(String)
+    auctioneer_id = Column(Integer, index=True)   # HiBid company id
     lot_count = Column(Integer)
     city = Column(String)
     state = Column(String)
@@ -24,6 +25,10 @@ class Auction(Base):
     buyer_premium_mult = Column(Float)   # 1.15 = 15% premium; None = unknown
     cond_ship = Column(Boolean, default=False)  # "shipping on some lots only"
     imported_at = Column(DateTime)   # when lots were last pulled
+    # Dismissed by the user — a scan keeps re-finding the same
+    # auctions, and a house you've judged once shouldn't have to be
+    # judged again every time. Kept in the DB, just out of the list.
+    hidden = Column(Boolean, default=False)
     # Result of the last category-filtered scan: how many of this auction's
     # lots matched, and which HiBid category that count refers to. Persisted
     # so the "Import N <category>" button survives a page refresh.
@@ -162,3 +167,21 @@ class Job(Base):
     # (e.g. {"lot_ids": [...]} for reprice). None for request-scoped kinds.
     payload = Column(JSONB)
     started_at = Column(DateTime, server_default=func.now())
+
+
+class FavoriteAuctioneer(Base):
+    """An auction house the user wants surfaced first.
+
+    Keyed by HiBid's company id — the number in a company URL, e.g.
+    hibid.com/company/149798/budget-barn — so a house that renames itself
+    stays favourited.
+
+    This is AuctionScout's own list, not a mirror of HiBid's stars: reading
+    those would mean holding the user's HiBid login, which this app doesn't
+    do and shouldn't.
+    """
+    __tablename__ = "favorite_auctioneers"
+
+    auctioneer_id = Column(Integer, primary_key=True)   # HiBid company id
+    name = Column(String)
+    created_at = Column(DateTime, server_default=func.now())

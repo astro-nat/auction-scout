@@ -75,7 +75,7 @@ query AuctionMap($zip: String, $miles: Int, $searchText: String, $categoryId: Ca
   ) {
     mapMarkers {
       auction {
-        id eventName auctioneer { name __typename } lotCount geoLong geoLat
+        id eventName auctioneer { id name __typename } lotCount geoLong geoLat
         eventAddress eventCity eventZip eventState eventDateBegin eventDateInfo eventDateEnd __typename
       } __typename
     } __typename
@@ -227,6 +227,10 @@ async def discover_auctions(zip_code: str | None = None,
                     "hibid_id": aid,
                     "name": a.get("eventName") or f"Auction {aid}",
                     "auctioneer": (a.get("auctioneer") or {}).get("name"),
+                    # HiBid's company id — the number in
+                    # hibid.com/company/149798/budget-barn. Stored so a
+                    # favourited house keeps matching when it renames itself.
+                    "auctioneer_id": (a.get("auctioneer") or {}).get("id"),
                     "lot_count": a.get("lotCount"),
                     "city": a.get("eventCity"),
                     "state": a.get("eventState"),

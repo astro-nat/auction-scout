@@ -14,7 +14,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 
 from .. import models, schemas
 from ..database import get_db
-from ..services import hibid, jobs
+from ..services import favorites, hibid, jobs
 from ..workers.enrich import run_enrichment, run_ship_analysis, process_queued_lots
 from ..workers.refresh import run_bid_refresh
 from sqlalchemy.orm import Session
@@ -23,7 +23,8 @@ router = APIRouter(prefix="/auctions", tags=["auctions"])
 
 
 @router.get("", response_model=List[schemas.AuctionOut])
-def list_auctions(include_closed: bool = False, db: Session = Depends(get_db)):
+def list_auctions(include_closed: bool = False, include_hidden: bool = False,
+                  db: Session = Depends(get_db)):
     """Open auctions (closed ones stay in the DB but drop off the list),
     each annotated with its gold-mine tally: how many enriched lots are
     GOLD MINEs and their summed potential profit."""
@@ -38,8 +39,63 @@ def list_auctions(include_closed: bool = False, db: Session = Depends(get_db)):
         q = q.filter(or_(models.Auction.closing_date.is_(None),
                          models.Auction.closing_date >= datetime.now(),
                          models.Auction.id.in_(imported)))
+    if not include_hidden:
+        # Dismissed auctions stay out unless you ask for them — except ones
+        # you've imported lots from, where the card has to stay or the items
+        # look orphaned.
+        imported_ids = (db.query(models.Lot.auction_id)
+                          .filter(models.Lot.auction_id.isnot(None)).distinct())
+        q = q.filter(or_(models.Auction.hidden.is_(False),
+                         models.Auction.hidden.is_(None),
+                         models.Auction.id.in_(imported_ids)))
     auctions = q.order_by(models.Auction.closing_date).all()
+    # Watched auction houses first, each group still soonest-closing first.
+    # A house you've starred is one you already trust, so its sales are worth
+    # seeing before a stranger's that happens to close an hour earlier.
+    starred = favorites.ids(db)
+    auctions.sort(key=lambda a: (
+        a.auctioneer_id not in starred,
+        a.closing_date or datetime.max,
+    ))
     return _attach_stats(db, auctions)
+
+
+@router.get("/favorites")
+def list_favorites(db: Session = Depends(get_db)):
+    """Auction houses pinned to the top of the list."""
+    rows = (db.query(models.FavoriteAuctioneer)
+              .order_by(models.FavoriteAuctioneer.name).all())
+    return [{"auctioneer_id": r.auctioneer_id, "name": r.name} for r in rows]
+
+
+@router.post("/favorites", status_code=201)
+def add_favorite(payload: dict, db: Session = Depends(get_db)):
+    """Favourite an auction house.
+
+    Takes whatever's to hand: a pasted company URL
+    ("https://hibid.com/company/149798/budget-barn"), a bare id, or an
+    auction_id already in the database.
+    """
+    company_id = favorites.parse_company_id(payload.get("company") or
+                                            payload.get("auctioneer_id") or "")
+    name = payload.get("name")
+    if company_id is None and payload.get("auction_id"):
+        auction = (db.query(models.Auction)
+                     .filter(models.Auction.id == payload["auction_id"]).first())
+        if auction and auction.auctioneer_id:
+            company_id, name = auction.auctioneer_id, auction.auctioneer
+    if company_id is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Need a HiBid company URL, a company id, or an auction_id "
+                   "whose auctioneer is known")
+    row = favorites.add(db, company_id, name)
+    return {"auctioneer_id": row.auctioneer_id, "name": row.name}
+
+
+@router.delete("/favorites/{company_id}")
+def remove_favorite(company_id: int, db: Session = Depends(get_db)):
+    return {"removed": favorites.remove(db, company_id)}
 
 
 def _attach_stats(db: Session, auctions: list) -> list:
@@ -80,11 +136,13 @@ def _attach_stats(db: Session, auctions: list) -> list:
     )
     stats = {r[0]: r[1:] for r in stat_rows}
 
+    starred = favorites.ids(db)
     for a in auctions:
         a.gold_count, a.gold_profit = gold.get(a.id, (0, 0))
         (a.lots_imported, a.lots_enriched, a.lots_pending,
          a.lots_failed, a.lots_inspected,
          a.lots_hard_pending) = stats.get(a.id, (0, 0, 0, 0, 0, 0))
+        a.favorite = a.auctioneer_id in starred
     return auctions
 
 
@@ -317,6 +375,25 @@ async def import_lots(auction_id: int, category_id: int = -1,
         jobs.finish(job)
     return {"auction_id": auction_id, "fetched": len(lots),
             "created": created, "updated": updated, "cancelled": cancelled}
+
+
+@router.post("/{auction_id}/hide", response_model=schemas.AuctionOut)
+def set_auction_hidden(auction_id: int, hidden: bool = True,
+                       db: Session = Depends(get_db)):
+    """Dismiss an auction you're not interested in (or bring it back).
+
+    Scans keep re-surfacing the same houses, so a judgement made once should
+    stick. The row and any lots you imported stay — this only takes it off
+    the list.
+    """
+    auction = (db.query(models.Auction)
+                 .filter(models.Auction.id == auction_id).first())
+    if not auction:
+        raise HTTPException(status_code=404, detail="Auction not found")
+    auction.hidden = hidden
+    db.commit()
+    db.refresh(auction)
+    return _attach_stats(db, [auction])[0]
 
 
 @router.post("/{auction_id}/enrich-all", status_code=202)
