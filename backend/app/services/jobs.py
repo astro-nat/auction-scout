@@ -18,11 +18,32 @@ also keeps it safe across threads: sync background tasks run in a threadpool
 while async routes update from the event loop.
 """
 
+import logging
 import uuid
 from typing import Optional
 
 from .. import models
 from ..database import SessionLocal
+
+logger = logging.getLogger(__name__)
+
+# Long, network-bound jobs. Only one of these runs at a time: they all hold a
+# transaction open across their slow HTTP calls, so running three together
+# just means three of them crawling while the connection pool starves every
+# request behind them.
+HEAVY_KINDS = ("reprice", "ship-analysis", "bid-refresh", "import", "scan")
+
+
+def heavy_running(ignore: Optional[str] = None) -> Optional[str]:
+    """The kind of the heavy job currently running, if any.
+
+    `ignore` lets a caller ask "is anything OTHER than me running".
+    """
+    for job in active():
+        kind = job.get("kind")
+        if kind in HEAVY_KINDS and kind != ignore and not job.get("cancelled"):
+            return kind
+    return None
 
 
 def start(kind: str, label: str, total: Optional[int] = None,
@@ -55,25 +76,43 @@ def update(job_id: str, current: Optional[int] = None,
         values["label"] = label
     if not values:
         return
-    db = SessionLocal()
+    # Progress is cosmetic plus a resume checkpoint — never worth killing the
+    # job over. This call sits outside the per-item try/except in run_reprice,
+    # so a pool timeout here used to unwind the whole loop and strand a row
+    # that showed progress forever without advancing.
+    db = None
     try:
+        db = SessionLocal()
         (db.query(models.Job)
            .filter(models.Job.id == job_id)
            .update(values, synchronize_session=False))
         db.commit()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Job %s progress update skipped: %s", job_id, exc)
     finally:
-        db.close()
+        if db is not None:
+            db.close()
 
 
 def finish(job_id: str) -> None:
-    db = SessionLocal()
-    try:
-        (db.query(models.Job)
-           .filter(models.Job.id == job_id)
-           .delete(synchronize_session=False))
-        db.commit()
-    finally:
-        db.close()
+    """Clear the row. Retried once: this runs in a finally block, and a row
+    that outlives its worker is exactly the ghost job the status bar shows
+    forever."""
+    for attempt in (1, 2):
+        db = None
+        try:
+            db = SessionLocal()
+            (db.query(models.Job)
+               .filter(models.Job.id == job_id)
+               .delete(synchronize_session=False))
+            db.commit()
+            return
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Job %s cleanup failed (attempt %d): %s",
+                           job_id, attempt, exc)
+        finally:
+            if db is not None:
+                db.close()
 
 
 def get(job_id: str) -> Optional[dict]:
@@ -87,12 +126,19 @@ def get(job_id: str) -> Optional[dict]:
 
 
 def active() -> list[dict]:
-    db = SessionLocal()
+    db = None
     try:
+        db = SessionLocal()
         rows = db.query(models.Job).order_by(models.Job.started_at).all()
         return [_as_dict(j) for j in rows]
+    except Exception as exc:  # noqa: BLE001
+        # /status is how the user sees trouble — it has to answer even when
+        # the pool is what's in trouble.
+        logger.warning("Job listing unavailable: %s", exc)
+        return []
     finally:
-        db.close()
+        if db is not None:
+            db.close()
 
 
 def cancel(job_id: str) -> bool:
@@ -125,12 +171,20 @@ def is_cancelled(job_id: str) -> bool:
     """A MISSING row also reads as cancelled: force-dismissing a stuck job
     deletes its row, and any thread still alive behind it must stop too —
     otherwise deletion would leave an unstoppable headless worker."""
-    db = SessionLocal()
+    db = None
     try:
+        db = SessionLocal()
         job = db.query(models.Job).filter(models.Job.id == job_id).first()
         return job is None or bool(job.cancelled)
+    except Exception as exc:  # noqa: BLE001
+        # Couldn't ask. A missing row means cancelled, but a failed LOOKUP
+        # means nothing — treating it as a cancel would quietly abandon a
+        # long job every time the pool got busy.
+        logger.warning("Cancel check for %s failed, continuing: %s", job_id, exc)
+        return False
     finally:
-        db.close()
+        if db is not None:
+            db.close()
 
 
 def has_active(kind: str) -> bool:

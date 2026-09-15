@@ -68,8 +68,12 @@ def reprice(background_tasks: BackgroundTasks, auction_id: int | None = None,
         return {"repricing": 0}
     # Deploys resume orphaned reprices, so stacking a second one is easy to
     # do by accident — and N concurrent reprices burn N× the comp lookups.
-    if jobs.has_active("reprice"):
-        return {"repricing": 0, "already_running": True}
+    busy = jobs.heavy_running()
+    if busy:
+        # Any long job, not just another reprice: they share one connection
+        # pool and each holds a transaction open across its HTTP calls, so
+        # stacking them starves every request behind them.
+        return {"repricing": 0, "already_running": True, "blocked_by": busy}
     background_tasks.add_task(run_reprice, lot_ids)
     return {"repricing": len(lot_ids)}
 

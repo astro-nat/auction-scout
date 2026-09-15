@@ -145,6 +145,10 @@ async def analyze_shipping(background_tasks: BackgroundTasks,
     # Hand the worker ids only — it fetches the shipping/terms text itself,
     # which keeps this response instant and makes the run resumable (the id
     # list persists on the job row; texts would bloat it).
+    busy = jobs.heavy_running()
+    if busy:
+        return {"auctions": 0, "queued": False,
+                "already_running": True, "blocked_by": busy}
     background_tasks.add_task(run_ship_analysis, [a.id for a in targets])
     return {"auctions": len(targets), "queued": True}
 
@@ -164,8 +168,10 @@ def refresh_bids(background_tasks: BackgroundTasks, db: Session = Depends(get_db
     ids = [t[0] for t in targets]
     if not ids:
         return {"auctions": 0, "queued": False}
-    if jobs.has_active("bid-refresh"):
-        return {"auctions": 0, "queued": False, "already_running": True}
+    busy = jobs.heavy_running()
+    if busy:
+        return {"auctions": 0, "queued": False,
+                "already_running": True, "blocked_by": busy}
     background_tasks.add_task(run_bid_refresh, ids)
     return {"auctions": len(ids), "queued": True}
 

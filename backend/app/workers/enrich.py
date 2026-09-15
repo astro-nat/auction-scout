@@ -748,7 +748,9 @@ def run_reprice(lot_db_ids: list[int], resume_job_id: str | None = None) -> None
                     if not marks & {"logistics_ease", "logistics_ease_ai"}:
                         lot.logistics_ease = classify_logistics(
                             lot.title or "", lot.category or "", lot.description or "")
-                    comps = pricing.price_from_title(lot.title)
+                    lot_title = lot.title or ""
+                    search_title = e.enriched_title or lot_title
+                    comps = pricing.price_from_title(lot_title)
                     if comps:
                         # The halved retail already carries the discount, so
                         # the stale AI verdict must not be applied on top of
@@ -756,23 +758,40 @@ def run_reprice(lot_db_ids: list[int], resume_job_id: str | None = None) -> None
                         # instead of $364. Re-read the grade from the same
                         # title the price came from.
                         if "verdict" not in marks:
-                            e.verdict = pricing.condition_from_title(lot.title)
+                            e.verdict = pricing.condition_from_title(lot_title)
                     else:
-                        comps = pricing.lookup_comps(e.enriched_title or lot.title)
-                    mult = CONDITION_MULTIPLIER.get(e.verdict, 1.0)
-                    e.est_resale = (round(float(comps["est_resale"]) * mult, 2)
-                                    if comps["est_resale"] else None)
-                    e.price_low = (round(float(comps["price_low"]) * mult, 2)
-                                   if comps["price_low"] else None)
-                    e.price_high = (round(float(comps["price_high"]) * mult, 2)
-                                    if comps["price_high"] else None)
-                    e.comp_count = comps["comp_count"]
-                    e.price_source = comps["price_source"]
-                    if mult != 1.0 and comps["price_source"]:
-                        e.price_source += f" ×{mult:g} condition"
-                    _apply_roi(lot, e)
-                    db.commit()
-                    repriced += 1
+                        # Hand the connection back before going out to the
+                        # network. A comp lookup walks several query variants
+                        # at up to 40s each, and holding an open transaction
+                        # through all of it is what starved the pool: three
+                        # long jobs did this at once while every request
+                        # queued behind them.
+                        db.commit()
+                        comps = pricing.lookup_comps(search_title)
+                        lot = (db.query(models.Lot)
+                                 .filter(models.Lot.id == lot_db_id).first())
+                        e = lot.enrichment if lot else None
+                    if e is None:
+                        # Deleted while we were off querying comps. Fall
+                        # through to the checkpoint update rather than
+                        # `continue` — `current` has to advance on every
+                        # lot or resume replays this one forever.
+                        comps = None
+                    if comps is not None:
+                        mult = CONDITION_MULTIPLIER.get(e.verdict, 1.0)
+                        e.est_resale = (round(float(comps["est_resale"]) * mult, 2)
+                                        if comps["est_resale"] else None)
+                        e.price_low = (round(float(comps["price_low"]) * mult, 2)
+                                       if comps["price_low"] else None)
+                        e.price_high = (round(float(comps["price_high"]) * mult, 2)
+                                        if comps["price_high"] else None)
+                        e.comp_count = comps["comp_count"]
+                        e.price_source = comps["price_source"]
+                        if mult != 1.0 and comps["price_source"]:
+                            e.price_source += f" ×{mult:g} condition"
+                        _apply_roi(lot, e)
+                        db.commit()
+                        repriced += 1
                 except Exception as exc:  # noqa: BLE001 — one bad lot must not stop the run
                     logger.warning("Reprice failed for lot %s: %s", lot_db_id, exc)
             # `current` must advance on every lot — skipped ones included —

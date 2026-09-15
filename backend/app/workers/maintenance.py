@@ -66,9 +66,13 @@ def _start_bid_refresh_loop() -> None:
         time.sleep(STARTUP_DELAY_SECONDS * 2)
         while True:
             try:
-                # A refresh may already be running (manual button, or the
-                # previous tick on a slow HiBid day) — never stack two.
-                if not any(j.get("kind") == "bid-refresh" for j in jobs.active()):
+                # Skip this tick if ANY long job holds the pool — the hourly
+                # refresh is not worth crawling a reprice to a halt. The next
+                # tick picks it up.
+                busy = jobs.heavy_running()
+                if busy:
+                    logger.info("Auto bid refresh skipped — %s is running", busy)
+                else:
                     db = SessionLocal()
                     try:
                         imported = (db.query(models.Lot.auction_id)
