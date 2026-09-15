@@ -48,9 +48,47 @@ bolo_matcher = BoloMatcher()    # hot-reloads its JSON files on mtime change
 MAX_ATTEMPTS = 2
 MIN_DESC_FOR_TEXT_PASS = 80     # below this the description carries no signal
 
-# Shipping-effort penalty ($) by logistics tier — an input to the ROI math,
-# not a real shipping quote.
-LOGISTICS_PENALTY = {"EASY": 15.0, "NEUTRAL": 25.0, "HARD": 60.0}
+# What it actually costs YOU to move one item, by logistics tier.
+#
+# Outbound postage is NOT in here: listings use eBay calculated shipping, so
+# the buyer pays the carrier. What the seller still eats is (a) packing
+# materials and (b) eBay's final-value fee, which is charged on the shipping
+# the buyer paid as well as on the item. So each tier is roughly:
+#     EASY    ~$2 mailer/small box  + 15% of ~$9  postage  = $3.50
+#     NEUTRAL ~$4 box and fill      + 15% of ~$16 postage  = $6.50
+#     HARD    ~$12 heavy/fragile    + 15% of ~$60 postage  = $21.00
+#
+# The old table was $15/$25/$60 and sat on top of a separate $15 "packing
+# buffer" — $30 of flat overhead on an EASY item, which was 91% of the
+# median lot's all-in cost and swamped everything the ROI was meant to show.
+LOGISTICS_COST = {"EASY": 3.50, "NEUTRAL": 6.50, "HARD": 21.00}
+
+# Getting the lot FROM the auction house is a separate, real cost that the
+# model ignored entirely — ship_cost_estimate was read off each auction's
+# terms page and then never used by anything. It's zero when you drive out
+# and collect the lot yourself.
+#
+# The auction quotes a typical small-item rate, so scale it by how bulky
+# this particular lot is.
+INBOUND_TIER_MULT = {"EASY": 1.0, "NEUTRAL": 1.5, "HARD": 4.0}
+# Used when an auction ships but its terms haven't been read yet.
+DEFAULT_INBOUND_SHIP = 15.0
+
+
+def _inbound_shipping(lot: models.Lot) -> float:
+    """What the auction house charges to get this lot to you.
+
+    Per-lot rather than per-shipment: winning five lots from one auction
+    usually combines into one box, so this is conservative by design — it
+    prices each lot as if you bought only that one.
+    """
+    auction = lot.auction
+    source = (lot.source or (auction.source if auction else None) or "").lower()
+    if "pickup" in source:
+        return 0.0          # local pickup — you collect it, nothing to pay
+    quoted = getattr(auction, "ship_cost_estimate", None) if auction else None
+    base = float(quoted) if quoted else DEFAULT_INBOUND_SHIP
+    return round(base * INBOUND_TIER_MULT.get(lot.logistics_ease or "NEUTRAL", 1.5), 2)
 
 # When itemized inspection finds no comps for an item, the model's own
 # sold-price estimate (from the same vision call) fills the gap — discounted,
@@ -310,9 +348,18 @@ def _enrich(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
 
     # --- 3. Comps (skipped entirely when the user hand-set the resale) ---
     if "est_resale" not in protected:
-        _progress(db, e, "searching eBay for comparable sales…")
-        search_title = e.enriched_title or title
-        comps = pricing.lookup_comps(search_title)
+        # Liquidation catalogues (Amazon returns/overstock) print the retail
+        # price at the front of the title. That beats a comp search on this
+        # kind of stock — the goods are new and generic, so keyword comps
+        # come back full of unrelated listings — and it costs nothing.
+        titled = pricing.price_from_title(title)
+        if titled:
+            _progress(db, e, "using the retail price in the title…")
+            comps = titled
+        else:
+            _progress(db, e, "searching eBay for comparable sales…")
+            search_title = e.enriched_title or title
+            comps = pricing.lookup_comps(search_title)
         mult = CONDITION_MULTIPLIER.get(e.verdict, 1.0)
         e.est_resale = (round(float(comps["est_resale"]) * mult, 2)
                         if comps["est_resale"] else None)
@@ -338,7 +385,10 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
     red_flag = e.verdict in ("broken, damaged, or for parts",
                              "untested or unknown condition")
     if e.est_resale:
-        penalty = LOGISTICS_PENALTY.get(lot.logistics_ease or "NEUTRAL", 25.0)
+        # Everything logistics costs on this lot: freight in from the
+        # auction house, plus packing and fee drag on the way back out.
+        penalty = (LOGISTICS_COST.get(lot.logistics_ease or "NEUTRAL", 6.50)
+                   + _inbound_shipping(lot))
         effective_bid = float(max(lot.current_bid or 0, lot.next_bid or 0))
         # Use the auction house's real premium when we know it (18% houses
         # were being graded at the 15% default).
@@ -354,14 +404,17 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
         e.max_bid = lead.max_bid
         e.est_roi = lead.roi
         # The all-in number the ROI is actually computed against: hammer +
-        # premium + tax + shipping + packing buffer. Stored so the UI can
+        # premium + tax + freight in, packing and fee drag. Stored so the UI can
         # show WHY a $15 "est cost" item returns 12% and not 300%.
         e.all_in_cost = lead.total_cost
         # One listing's asking price isn't evidence — every wrong gold mine
         # in the Watermark audit ($2 bills "worth" $260, a $487 pearl ring)
         # traced to a single generic active comp. The numbers stay for
         # context; the GOLD MINE badge requires at least 2 agreeing comps.
-        thin_evidence = (e.comp_count or 0) < 2
+        # A retail price printed in the lot title is the exception: it's one
+        # data point but an authoritative one, not a hopeful asking price.
+        from_title = (e.price_source or "").startswith("retail $")
+        thin_evidence = (e.comp_count or 0) < 2 and not from_title
         e.profit = lead.profit
         e.roi_status = ("PASS" if (red_flag or lot.unreachable_pickup or thin_evidence)
                         else lead.status)
@@ -673,7 +726,8 @@ def run_reprice(lot_db_ids: list[int], resume_job_id: str | None = None) -> None
                     if not marks & {"logistics_ease", "logistics_ease_ai"}:
                         lot.logistics_ease = classify_logistics(
                             lot.title or "", lot.category or "", lot.description or "")
-                    comps = pricing.lookup_comps(e.enriched_title or lot.title)
+                    comps = (pricing.price_from_title(lot.title)
+                             or pricing.lookup_comps(e.enriched_title or lot.title))
                     mult = CONDITION_MULTIPLIER.get(e.verdict, 1.0)
                     e.est_resale = (round(float(comps["est_resale"]) * mult, 2)
                                     if comps["est_resale"] else None)

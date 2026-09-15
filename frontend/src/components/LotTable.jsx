@@ -77,8 +77,12 @@ function roiTooltip(lot, e) {
   if (e.est_roi == null) return undefined
   const lines = [`Return on the all-in cost, not the hammer price.`]
   if (e.all_in_cost != null) {
-    lines.push(`All-in ${money(e.all_in_cost)} = bid ${money(lot.est_cost)} (w/ premium)`
-      + ` + shipping + packing buffer + tax`)
+    const pickup = /pickup/i.test(lot.source || '')
+    lines.push(`All-in ${money(e.all_in_cost)} = bid ${money(lot.est_cost)} (w/ premium + tax)`
+      + (pickup ? ` + packing` : ` + freight in + packing`))
+    lines.push(pickup
+      ? `Local pickup, so nothing to pay to get it here.`
+      : `Buyer pays the outbound postage, so that isn't your cost.`)
   }
   if (e.est_resale != null) {
     lines.push(`Resale ${money(e.est_resale)} minus ~15% marketplace fee`

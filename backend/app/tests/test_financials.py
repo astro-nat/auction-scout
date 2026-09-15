@@ -42,3 +42,14 @@ def test_settings_missing_falls_back_to_env(monkeypatch):
     from app.services import settings as settings_store
     monkeypatch.setattr(settings_store, "get", lambda key: None)
     assert financials.current_target_roi() == financials.TARGET_ROI
+
+
+def test_buffer_no_longer_double_counts_packing():
+    """Packing moved into the caller's per-tier logistics figure; charging it
+    again here put $30 of flat overhead on every item."""
+    assert financials.BUFFER == 0.0
+    lead = financials.evaluate_lead(resale_value=60.0, current_bid=10.0,
+                                    logistics_penalty=3.5, dts=10,
+                                    target_roi=1.5, buyers_premium=0.15)
+    # hammer 10 x 1.2325 = 12.325, + 3.50 logistics, nothing else
+    assert lead.total_cost == round(10 * 1.2325 + 3.5, 2)

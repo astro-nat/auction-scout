@@ -27,6 +27,92 @@ logger = logging.getLogger(__name__)
 
 SOLDCOMPS_API_KEY = os.environ.get("SOLDCOMPS_API_KEY", "")
 
+# --- Retail price printed in the lot title ------------------------------
+# Amazon returns/overstock houses lead every title with the item's retail
+# price: "$30 Hagerty Flatware Silver Dip", "New $122 Suptek 3-Shelf
+# Bracket". On those catalogs it's a far better signal than comps — the
+# goods are new, generic, and drown a keyword comp search in noise.
+#
+# Anchored at the START (after an optional condition word) on purpose. A
+# mid-title dollar amount is nearly always something else: "Get $5.00 Store
+# Credit", "$1 Starts", a model number, a promo.
+_TITLE_RETAIL_RE = re.compile(
+    r"""^\s*
+        (?:(?:brand\s+new|open\s+box|like\s+new|pre-?owned|refurb(?:ished)?|
+              new|opened|sealed|unsealed|used|tested|untested|missing|
+              incomplete|damaged|dented|torn|scratched|cracked|stained|
+              boxed|nib|nwt|nip)
+           [\s\-:|,]*){0,3}
+        \$\s?(\d{1,3}(?:,\d{3})+(?:\.\d{2})?|\d{1,4}(?:\.\d{2})?)\b
+    """,
+    re.IGNORECASE | re.VERBOSE)
+
+# Bid-speak rather than a sticker price: "$1 Starts", "$10 off", "$5 Store
+# Credit". Only checked in the short run of text AFTER the amount — scanning
+# the whole title rejected "New $35 NEW Compound W Freeze Off Wart Remover"
+# on the "Off" in the product name.
+_RETAIL_BID_SPEAK = re.compile(
+    r"^\W*(?:start(?:s|ing)?|bid|bids|bidding|increment|reserve|minimum|min|"
+    r"off|credit|coupon|rebate|discount)\b",
+    re.IGNORECASE)
+
+# Face value, not a retail sticker: a $50 gift card resells for about $45,
+# not half. Checked across the whole title. Currency itself needs no entry
+# here — "1976 $2 Bill" doesn't lead with the price, so the anchor rejects it.
+_RETAIL_FACE_VALUE = re.compile(
+    r"\b(?:gift\s?card|giftcard|e-?gift|gift\s+certificate|voucher|"
+    r"store\s+credit)\b",
+    re.IGNORECASE)
+
+# Liquidation goods resell for roughly half their retail sticker.
+MSRP_REALIZATION = float(os.environ.get("MSRP_REALIZATION", "0.5"))
+# Outside this range the leading number is almost certainly not a price.
+_RETAIL_MIN, _RETAIL_MAX = 3.0, 5000.0
+
+
+def retail_from_title(title: str) -> Optional[float]:
+    """The retail price a liquidation house stamped on the front of a title.
+
+    Returns None when the title has no leading price, when the number is
+    implausible as retail, or when the dollar figure is a face value rather
+    than a sticker price.
+    """
+    if not title:
+        return None
+    m = _TITLE_RETAIL_RE.match(title)
+    if not m:
+        return None
+    if _RETAIL_FACE_VALUE.search(title):
+        return None
+    if _RETAIL_BID_SPEAK.match(title[m.end():m.end() + 24]):
+        return None
+    try:
+        value = float(m.group(1).replace(",", ""))   # "$1,200"
+    except ValueError:
+        return None
+    return value if _RETAIL_MIN <= value <= _RETAIL_MAX else None
+
+
+def price_from_title(title: str) -> Optional[dict]:
+    """A comps-shaped result built from the title's retail price, or None.
+
+    Same shape as lookup_comps so callers can use the two interchangeably.
+    comp_count is 1 — a single data point, but an authoritative one: the
+    price the item actually sells for new.
+    """
+    retail = retail_from_title(title)
+    if retail is None:
+        return None
+    est = round(retail * MSRP_REALIZATION, 2)
+    return {
+        "est_resale": est,
+        "price_low": round(est * 0.75, 2),
+        "price_high": round(est * 1.25, 2),
+        "comp_count": 1,
+        "price_source": f"retail ${retail:g} in title ×{MSRP_REALIZATION:g}",
+    }
+
+
 # Active eBay listings are ASKING prices — what sellers hope for, often for
 # new stock — while we're valuing a used lot from an auction. Realized sale
 # prices run well below asking, so discount them. Sold-price sources

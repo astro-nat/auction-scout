@@ -27,7 +27,13 @@ def current_target_roi() -> float:
 BUYERS_PREMIUM = 0.15     # auction house premium on the hammer price
 SALES_TAX = 0.0825        # TX sales tax, applied on hammer + premium
 PLATFORM_FEE = 0.15       # eBay final-value fee on the resale side
-BUFFER = 15.0             # flat $ for packing/misc per lot
+# Per-lot misc allowance on top of the caller's logistics cost. Was $15 of
+# "packing", which double-counted the shipping penalty the caller already
+# passed in — together they put $30 of flat overhead on every item, 91% of
+# the median lot's all-in cost. Packing now lives in the per-tier logistics
+# figure (workers/enrich.LOGISTICS_COST), so this is zero unless a caller
+# has a real per-lot cost that belongs nowhere else.
+BUFFER = 0.0
 MAX_DTS = 90.0            # days-to-sell ceiling for viability
 
 

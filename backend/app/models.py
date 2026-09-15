@@ -118,8 +118,8 @@ class Enrichment(Base):
     # --- ROI verdict ---
     max_bid = Column(Numeric)          # highest hammer price that still hits target ROI
     # Everything you actually pay to buy AND resell: hammer + premium +
-    # tax + shipping + packing buffer. This is the ROI denominator, and
-    # it's much larger than est_cost (hammer + premium only).
+    # tax + freight in, packing and fee drag. This is the ROI denominator,
+    # and it's much larger than est_cost (hammer + premium only).
     all_in_cost = Column(Numeric)
     est_roi = Column(Float)            # at current bid
     profit = Column(Numeric)
