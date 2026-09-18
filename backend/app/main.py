@@ -1,5 +1,6 @@
 import threading
 import time
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -108,35 +109,10 @@ for attempt in range(10):
         print(f"Database not ready (attempt {attempt + 1}/10): {exc}")
         time.sleep(3)
 
-app = FastAPI(title="AuctionScout")
-
-import os
-
-# Deployed frontend origin(s), comma-separated — e.g.
-# FRONTEND_ORIGIN=https://auctionscout-frontend.up.railway.app
-_frontend_origins = [
-    o.strip() for o in os.environ.get("FRONTEND_ORIGIN", "").split(",") if o.strip()
-]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=_frontend_origins,
-    # Dev looseness: the Vite dev server from the laptop (localhost) or a
-    # phone on the same LAN. Either this regex OR the origins list may match.
-    allow_origin_regex=r"http://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+):5173",
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-app.include_router(lots.router)
-app.include_router(enrichment.router)
-app.include_router(auctions.router)
-app.include_router(status.router)
-
-
-@app.on_event("startup")
-def startup():
-    """The API owns the schema and nothing else.
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Startup work, in the lifespan style (on_event is deprecated). The API
+    owns the schema and nothing else.
 
     Background work lives in the worker process (`python -m app.worker`):
     enrichment, repricing, shipping analysis, bid refreshes, the maintenance
@@ -168,6 +144,34 @@ def startup():
     # dead the moment this process starts.
     from .workers.resume import clear_request_scoped_jobs
     clear_request_scoped_jobs()
+
+    yield  # the app serves requests; nothing to do at shutdown
+
+
+app = FastAPI(title="AuctionScout", lifespan=lifespan)
+
+import os
+
+# Deployed frontend origin(s), comma-separated — e.g.
+# FRONTEND_ORIGIN=https://auctionscout-frontend.up.railway.app
+_frontend_origins = [
+    o.strip() for o in os.environ.get("FRONTEND_ORIGIN", "").split(",") if o.strip()
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_frontend_origins,
+    # Dev looseness: the Vite dev server from the laptop (localhost) or a
+    # phone on the same LAN. Either this regex OR the origins list may match.
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+):5173",
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(lots.router)
+app.include_router(enrichment.router)
+app.include_router(auctions.router)
+app.include_router(status.router)
 
 
 @app.get("/health")
