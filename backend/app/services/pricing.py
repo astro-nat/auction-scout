@@ -17,6 +17,8 @@ import math
 import os
 import re
 import statistics
+import threading
+import time
 from typing import Optional
 
 import httpx
@@ -339,21 +341,157 @@ def _iqr_filter(prices: list[float]) -> list[float]:
 
 # ---------------------------------------------------------------- comp sources
 
+# --- SoldComps pacing ------------------------------------------------------
+# One lot asks for up to four query variants, the worker runs three lots at
+# once, and an itemised lot asks four per item — so a single "enrich these"
+# could fire fifty requests in a second or two. That earned a wall of HTTP
+# 429s, and because a 429 returned "no comps" the lot quietly fell through to
+# eBay ASKING prices. The rate limit wasn't just noise in the log; it was
+# silently swapping real sold data for the weaker signal.
+SOLDCOMPS_RPS = float(os.environ.get("SOLDCOMPS_RPS", "2"))
+SOLDCOMPS_MAX_RETRIES = int(os.environ.get("SOLDCOMPS_MAX_RETRIES", "3"))
+# Repeated variants of similar titles ("Vintage Souvenir Plates Set" vs
+# "Vintage Souvenir Set") ask the same thing minutes apart. Sold prices over
+# a 90-day window don't move in fifteen minutes.
+SOLDCOMPS_CACHE_SECONDS = float(os.environ.get("SOLDCOMPS_CACHE_SECONDS", "900"))
+_CACHE_MAX_ENTRIES = 2000
+# After this many 429s in a row, stop asking for a while. Pacing should keep
+# us clear; if it hasn't, the budget is gone and hammering only makes the
+# backoff worse for everything behind us.
+_BREAKER_THRESHOLD = 5
+_BREAKER_COOLDOWN = float(os.environ.get("SOLDCOMPS_COOLDOWN_SECONDS", "120"))
+
+
+class _Throttle:
+    """Least-surprising rate limiter: hand out evenly spaced slots.
+
+    Shared by every worker thread, so the limit is a property of the process
+    rather than of one call site. The sleep happens OUTSIDE the lock — held
+    through the sleep, threads would serialise instead of pipelining.
+    """
+
+    def __init__(self, rps: float):
+        self._interval = 1.0 / rps if rps > 0 else 0.0
+        self._lock = threading.Lock()
+        self._next = 0.0
+
+    def wait(self) -> None:
+        if self._interval <= 0:
+            return
+        with self._lock:
+            now = time.monotonic()
+            slot = max(now, self._next)
+            self._next = slot + self._interval
+        delay = slot - time.monotonic()
+        if delay > 0:
+            time.sleep(delay)
+
+
+_throttle = _Throttle(SOLDCOMPS_RPS)
+_cache: dict[str, tuple[float, list]] = {}
+_cache_lock = threading.Lock()
+_breaker_lock = threading.Lock()
+_consecutive_429 = 0
+_blocked_until = 0.0
+
+
+def _cache_get(key: str):
+    with _cache_lock:
+        hit = _cache.get(key)
+        if hit and hit[0] > time.monotonic():
+            return hit[1]
+        if hit:
+            _cache.pop(key, None)
+    return None
+
+
+def _cache_put(key: str, value: list) -> None:
+    with _cache_lock:
+        if len(_cache) >= _CACHE_MAX_ENTRIES:
+            _cache.clear()          # crude, but this is a cache, not a store
+        _cache[key] = (time.monotonic() + SOLDCOMPS_CACHE_SECONDS, value)
+
+
+def _breaker_open() -> bool:
+    with _breaker_lock:
+        return time.monotonic() < _blocked_until
+
+
+def _note_429() -> None:
+    global _consecutive_429, _blocked_until
+    with _breaker_lock:
+        _consecutive_429 += 1
+        if _consecutive_429 >= _BREAKER_THRESHOLD and time.monotonic() >= _blocked_until:
+            _blocked_until = time.monotonic() + _BREAKER_COOLDOWN
+            logger.warning(
+                "SoldComps rate-limited %d times in a row — pausing sold-comp "
+                "lookups for %.0fs. Prices during this window come from eBay "
+                "active listings, which are asking prices.",
+                _consecutive_429, _BREAKER_COOLDOWN)
+
+
+def _note_ok() -> None:
+    global _consecutive_429
+    with _breaker_lock:
+        _consecutive_429 = 0
+
+
+def _retry_after_seconds(response, attempt: int) -> float:
+    """Honour the server's own Retry-After when it sends one."""
+    raw = response.headers.get("Retry-After") if response is not None else None
+    if raw:
+        try:
+            return min(float(raw), 30.0)
+        except ValueError:
+            pass
+    return min(2.0 ** attempt, 30.0)   # 1s, 2s, 4s…
+
+
 def _soldcomps_lookup(query: str, count: int = 120) -> list[tuple[float, str]]:
-    """SoldComps API — real sold prices over the last 90 days."""
+    """SoldComps API — real sold prices over the last 90 days.
+
+    Paced, cached and retried, because a 429 here is not a harmless miss:
+    an empty result sends the lot to eBay active listings, so being rate
+    limited quietly downgrades a sold-price estimate to an asking-price one.
+    """
     if not SOLDCOMPS_API_KEY:
         return []
-    try:
-        with httpx.Client(timeout=40.0) as client:
-            r = client.get(
-                "https://api.sold-comps.com/v1/scrape",
-                headers={"Authorization": f"Bearer {SOLDCOMPS_API_KEY}"},
-                params={"keyword": query, "count": min(max(count, 1), 240),
-                        "daysToScrape": 90},
-            )
+    key = f"{query}|{count}"
+    cached = _cache_get(key)
+    if cached is not None:
+        return cached
+    if _breaker_open():
+        return []
+
+    last_status = None
+    for attempt in range(SOLDCOMPS_MAX_RETRIES):
+        _throttle.wait()
+        try:
+            with httpx.Client(timeout=40.0) as client:
+                r = client.get(
+                    "https://api.sold-comps.com/v1/scrape",
+                    headers={"Authorization": f"Bearer {SOLDCOMPS_API_KEY}"},
+                    params={"keyword": query, "count": min(max(count, 1), 240),
+                            "daysToScrape": 90},
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("SoldComps failed for %r: %s", query, exc)
+            return []
+
+        last_status = r.status_code
+        if r.status_code == 429:
+            _note_429()
+            if attempt < SOLDCOMPS_MAX_RETRIES - 1 and not _breaker_open():
+                time.sleep(_retry_after_seconds(r, attempt))
+                continue
+            logger.warning("SoldComps rate-limited on %r, giving up after %d "
+                           "attempts", query, attempt + 1)
+            return []
         if r.status_code != 200:
             logger.warning("SoldComps HTTP %s for %r", r.status_code, query)
             return []
+
+        _note_ok()
         out = []
         for item in r.json().get("items", []) or []:
             raw = str(item.get("soldPrice") or "").replace("$", "").replace(",", "")
@@ -363,11 +501,13 @@ def _soldcomps_lookup(query: str, count: int = 120) -> list[tuple[float, str]]:
                 continue
             if _PRICE_MIN < p < _PRICE_MAX:
                 out.append((p, item.get("title") or ""))
+        # Cached even when empty: "nothing sold matching this" is an answer,
+        # and re-asking it per variant is what built the burst.
+        _cache_put(key, out)
         return out
-    except Exception as exc:
-        logger.warning("SoldComps failed for %r: %s", query, exc)
-        return []
 
+    logger.warning("SoldComps gave up on %r (last status %s)", query, last_status)
+    return []
 
 def _active_lookup(query: str) -> list[tuple[float, str]]:
     """eBay Browse active fixed-price listings — the always-available fallback."""
