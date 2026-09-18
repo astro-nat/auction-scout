@@ -493,6 +493,17 @@ ship = how hard the WHOLE lot is to ship, exactly one of "EASY" (fits a padded m
 
 MAX_INSPECT_ITEMS = 12
 
+# The smallest item worth listing on its own. Summing every item in a mixed
+# lot flatters it badly: thirty things at $12 totals $360, but that is thirty
+# photographs, thirty listings and thirty parcels for $12 apiece. Nobody
+# works that lot, so it should not outrank a single $300 item.
+MIN_ITEM_VALUE = float(os.environ.get("MIN_ITEM_VALUE", "20"))
+
+# What everything under that threshold is worth together — sold as one
+# bundle, which is how filler actually moves, rather than individually or
+# not at all. 0 disables the credit entirely.
+FILLER_REALIZATION = float(os.environ.get("FILLER_REALIZATION", "0.2"))
+
 
 def run_inspection(lot_db_id: int) -> None:
     """Itemized vision pass for mixed lots ("Lot of 10 CDs"): read the photo,
@@ -555,9 +566,11 @@ def _inspect(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
 
     items = (result.get("items") or [])[:MAX_INSPECT_ITEMS]
     lines = []
-    total = 0.0
-    priced = 0
+    total = 0.0          # items worth listing on their own
+    filler_total = 0.0   # everything under MIN_ITEM_VALUE, bundled
+    priced = 0           # comp-priced KEEPERS — what the lot's value rests on
     ai_priced = 0
+    filler = 0
     for i, item in enumerate(items, 1):
         item_title = (item.get("title") or "").strip()
         if not item_title:
@@ -566,20 +579,39 @@ def _inspect(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
         comps = pricing.lookup_comps(item_title)
         if comps["est_resale"]:
             # Real market data always wins over the model's guess.
-            total += float(comps["est_resale"])
-            priced += 1
-            lines.append(f"{item_title} → ${comps['est_resale']} ({comps['comp_count']} comps)")
-            continue
-        # No comps — fall back to the AI's own sold-price estimate from the
-        # same vision call, discounted because model guesses skew optimistic.
-        ai_val = _sane_estimate(item.get("est_value")) if AI_ESTIMATE_REALIZATION > 0 else None
-        if ai_val is not None:
-            val = round(ai_val * AI_ESTIMATE_REALIZATION, 2)
-            total += val
-            ai_priced += 1
-            lines.append(f"{item_title} → ${val} (AI estimate, no comps)")
+            value, tag = float(comps["est_resale"]), f"{comps['comp_count']} comps"
+            from_comps = True
         else:
-            lines.append(f"{item_title} → no comps")
+            # No comps — fall back to the AI's own sold-price estimate from
+            # the same vision call, discounted because model guesses skew
+            # optimistic.
+            ai_val = (_sane_estimate(item.get("est_value"))
+                      if AI_ESTIMATE_REALIZATION > 0 else None)
+            if ai_val is None:
+                lines.append(f"{item_title} → no comps")
+                continue
+            value = round(ai_val * AI_ESTIMATE_REALIZATION, 2)
+            tag = "AI estimate, no comps"
+            from_comps = False
+        if value < MIN_ITEM_VALUE:
+            # Filler. Counted as part of one bundled sale, not as its own
+            # listing — otherwise a crate of $12 oddments outranks a real item.
+            filler_total += value
+            filler += 1
+            lines.append(f"{item_title} → ${value} ({tag}) · filler")
+            continue
+        total += value
+        if from_comps:
+            priced += 1
+        else:
+            ai_priced += 1
+        lines.append(f"{item_title} → ${value} ({tag})")
+
+    bundled = round(filler_total * FILLER_REALIZATION, 2)
+    if filler:
+        lines.append(f"[{filler} items under ${MIN_ITEM_VALUE:g} → "
+                     f"${bundled} bundled, from ${round(filler_total, 2)} summed]")
+    total += bundled
 
     protected = set(e.user_overrides or [])
     summary = result.get("summary") or ""
@@ -594,8 +626,11 @@ def _inspect(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
                   and prior_comps > priced)
     kept = " · kept pre-inspection price (stronger comps)" if keep_prior else ""
     if "notes" not in protected:
-        e.notes = (f"[inspected: {len(items)} items, {priced} comp-priced, "
-                   f"{ai_priced} AI-estimated{kept}] {summary}\n" + "\n".join(lines))
+        head = (f"[inspected: {len(items)} items, {priced} comp-priced, "
+                f"{ai_priced} AI-estimated")
+        if filler:
+            head += f", {filler} filler under ${MIN_ITEM_VALUE:g}"
+        e.notes = f"{head}{kept}] {summary}\n" + "\n".join(lines)
     e.ai_source = "vision-itemized"
     # Vision saw the whole lot — trust its ship-tier call over the title regex.
     ship = (result.get("ship") or "").upper()
@@ -613,7 +648,11 @@ def _inspect(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
             bits = [f"{priced} from comps"] if priced else []
             if ai_priced:
                 bits.append(f"{ai_priced} AI-estimated ×{AI_ESTIMATE_REALIZATION:g}")
-            e.price_source = f"itemized vision ({' + '.join(bits)} of {len(items)} items)"
+            if filler:
+                bits.append(f"{filler} filler bundled ×{FILLER_REALIZATION:g}")
+            sellable = priced + ai_priced
+            e.price_source = (f"itemized vision ({' + '.join(bits) or 'nothing priced'}"
+                              f" — {sellable} of {len(items)} worth listing)")
             _apply_roi(lot, e)
 
 
