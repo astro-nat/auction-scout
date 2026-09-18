@@ -73,7 +73,14 @@ def list_lots(
 
     from datetime import datetime
     now = datetime.now()
-    rows = q.offset(offset).limit(limit).all()
+    # LIMIT/OFFSET without ORDER BY has no stability guarantee, and the UI
+    # chains pages to assemble the full set. Under concurrent writes — which
+    # is every bid refresh and every enrichment run — Postgres reshuffles
+    # rows between pages: a 2,169-lot auction paged during updates came back
+    # with 20 lots duplicated and 20 missing entirely. Order by primary key
+    # so the pages tile. The client re-sorts for display anyway; this only
+    # has to be deterministic.
+    rows = q.order_by(models.Lot.id).offset(offset).limit(limit).all()
     for lot in rows:
         # Serve the auction's name and closed-state with the lot, so the UI
         # never has to guess from a separately-fetched auction list.
