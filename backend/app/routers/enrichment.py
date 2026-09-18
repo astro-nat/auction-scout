@@ -83,6 +83,37 @@ def reprice(auction_id: int | None = None,
     return {"repricing": len(lot_ids)}
 
 
+@router.post("/enrich-category", status_code=202)
+def enrich_category(category: str, skip_hard: bool = False, dry_run: bool = False,
+                    db: Session = Depends(get_db)):
+    """Queue enrichment for every pending/failed lot in one category, across
+    ALL imported auctions — but only open ones: pricing a lot you can no
+    longer bid on spends money on nothing. Same contract as an auction's
+    enrich-all: already-successful lots are skipped, skip_hard leaves out
+    HARD-to-ship lots, dry_run only counts so the UI can show cost first."""
+    q = (db.query(models.Lot.id).join(models.Enrichment)
+           .join(models.Auction, models.Lot.auction_id == models.Auction.id)
+           .filter(models.Lot.category == category,
+                   models.Enrichment.status.in_(["pending", "failed"]),
+                   (models.Auction.closing_date.is_(None))
+                   | (models.Auction.closing_date >= datetime.now())))
+    if skip_hard:
+        q = q.filter(models.Lot.logistics_ease != "HARD")
+    lot_ids = [row[0] for row in q.all()]
+    if dry_run:
+        return {"category": category, "lots": len(lot_ids), "dry_run": True}
+    if not lot_ids:
+        return {"category": category, "queued": 0}
+    db.query(models.Enrichment).filter(
+        models.Enrichment.lot_id.in_(lot_ids)
+    ).update({"status": "queued", "queued_task": "enrich",
+              "queued_at": datetime.now(timezone.utc),
+              "queue_rank": 0, "claimed_at": None},
+             synchronize_session=False)
+    db.commit()
+    return {"category": category, "queued": len(lot_ids)}
+
+
 @router.post("/reinspect-no-comps", status_code=202)
 def reinspect_no_comps(dry_run: bool = False,
                        db: Session = Depends(get_db)):

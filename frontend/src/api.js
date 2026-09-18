@@ -38,14 +38,16 @@ export function alertOnce(msg) {
   window.alert(msg)
 }
 
-export function fetchLots({ auctionId, status, roiStatus, boloOnly, offset } = {}) {
+export function fetchLots({ auctionIds, category, status, roiStatus, boloOnly, offset } = {}) {
   const params = new URLSearchParams()
   // 2000 per page everywhere: a 6000-lot payload crashed phone tabs and
   // strained the backend. Big auctions page in with `offset` via the
   // "Load more" button instead.
   params.set('limit', '2000')
   if (offset) params.set('offset', String(offset))
-  if (auctionId) params.set('auction_id', auctionId)
+  // Repeated param = "any of these auctions" server-side.
+  for (const id of auctionIds || []) params.append('auction_id', id)
+  if (category) params.set('category', category)
   if (status) params.set('status', status)
   if (roiStatus) params.set('roi_status', roiStatus)
   if (boloOnly) params.set('bolo_only', 'true')
@@ -78,13 +80,27 @@ export function patchEnrichment(lotId, changes) {
   })
 }
 
-export function fetchLotCount({ auctionId, status, roiStatus, boloOnly } = {}) {
+export function fetchLotCount({ auctionIds, category, status, roiStatus, boloOnly } = {}) {
   const params = new URLSearchParams()
-  if (auctionId) params.set('auction_id', auctionId)
+  for (const id of auctionIds || []) params.append('auction_id', id)
+  if (category) params.set('category', category)
   if (status) params.set('status', status)
   if (roiStatus) params.set('roi_status', roiStatus)
   if (boloOnly) params.set('bolo_only', 'true')
   return request(`/lots/count?${params}`)
+}
+
+// Categories of the lots actually in the database (with enrichable counts) —
+// not to be confused with fetchCategories(), HiBid's scan-filter tree.
+export function fetchLotCategories() {
+  return request('/lots/categories')
+}
+
+export function enrichCategory(category, { skipHard = false, dryRun = false } = {}) {
+  const params = new URLSearchParams({ category })
+  if (skipHard) params.set('skip_hard', 'true')
+  if (dryRun) params.set('dry_run', 'true')
+  return request(`/lots/enrich-category?${params}`, { method: 'POST' })
 }
 
 export function fetchStatus() {

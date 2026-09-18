@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, scanAuctions, importLots, enrichAll, flushClosed, refreshBids, reinspectNoComps, fetchSettings, saveTargetRoi, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, alertOnce, parseUtc } from './api'
+import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, importLots, enrichAll, enrichCategory, flushClosed, refreshBids, reinspectNoComps, fetchSettings, saveTargetRoi, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, alertOnce, parseUtc } from './api'
 import LotTable from './components/LotTable'
 import StatusBar from './components/StatusBar'
 import useMediaQuery from './useMediaQuery'
@@ -10,7 +10,13 @@ export default function App() {
   // imported. Mixing them on one page made both harder to read.
   const [view, setView] = useState('auctions')
   const [auctions, setAuctions] = useState([])
-  const [selectedAuction, setSelectedAuction] = useState(null)
+  // Which imported auctions the items view shows — an array, not one id,
+  // so several can be ticked and read together. Empty = all of them.
+  const [selectedAuctions, setSelectedAuctions] = useState([])
+  // Items-view category filter ('' = every category), and the categories
+  // actually present in the database with their enrichable counts.
+  const [categoryFilter, setCategoryFilter] = useState('')
+  const [lotCategories, setLotCategories] = useState([])
   const [lots, setLots] = useState([])
   const [filters, setFilters] = useState({ boloOnly: false, roiStatus: '' })
   const [hideLowValue, setHideLowValue] = useState(true)
@@ -54,7 +60,8 @@ export default function App() {
 
   const loadLots = useCallback(() => {
     const args = {
-      auctionId: selectedAuction,
+      auctionIds: selectedAuctions,
+      category: categoryFilter || undefined,
       boloOnly: filters.boloOnly,
       roiStatus: filters.roiStatus || undefined,
     }
@@ -88,7 +95,7 @@ export default function App() {
     // The real total comes from the database so the UI never passes off a
     // page size as the whole set.
     fetchLotCount(args).then((r) => setLotTotal(r.total)).catch(console.error)
-  }, [selectedAuction, filters])
+  }, [selectedAuctions, categoryFilter, filters])
 
   // Accumulate imported auctions as FULL rows, separately from the visible
   // list: scans replace `auctions` with whatever HiBid returned, and your
@@ -121,6 +128,10 @@ export default function App() {
       .then(setAuctions).catch(console.error)
   }, [rememberAuctions])
   useEffect(() => { fetchCategories().then(setCategories).catch(console.error) }, [])
+  const loadLotCategories = useCallback(() => {
+    fetchLotCategories().then(setLotCategories).catch(console.error)
+  }, [])
+  useEffect(() => { loadLotCategories() }, [loadLotCategories])
   useEffect(() => { loadLots() }, [loadLots])
 
   const scanIsAnywhere = Number(scan.radius_miles) === -1
@@ -163,8 +174,9 @@ export default function App() {
 
   const refreshAll = useCallback(() => {
     syncAuctionStats().catch(console.error)
+    loadLotCategories()
     loadLots()
-  }, [loadLots, syncAuctionStats])
+  }, [loadLots, loadLotCategories, syncAuctionStats])
 
   function setScanField(field, value) {
     setScan((prev) => ({ ...prev, [field]: value }))
@@ -196,7 +208,7 @@ export default function App() {
     try {
       const r = await importLots(auctionId, scanCategoryId)
       setBusy('')
-      setSelectedAuction(auctionId)
+      setSelectedAuctions([auctionId])
       setView('items')
       await syncAuctionStats()
       alert(`Imported ${r.created} new lots into the database`
@@ -260,8 +272,34 @@ They're listed below — use "Enrich" to price them.`)
   }
 
   function openAuctionItems(auctionId) {
-    setSelectedAuction(auctionId)
+    setSelectedAuctions([auctionId])
     setView('items')
+  }
+
+  const toggleAuctionSelected = useCallback((id) => {
+    setSelectedAuctions((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])
+  }, [])
+
+  async function handleEnrichCategory() {
+    try {
+      // Dry-run first: the stored counts can be stale, and the confirm
+      // dialog should quote the number that will actually be spent on.
+      const peek = await enrichCategory(categoryFilter, { skipHard: hideHardShip, dryRun: true })
+      if (!peek.lots) {
+        alert(`Every "${categoryFilter}" item in an open auction is already enriched`
+              + (hideHardShip ? ' (HARD-to-ship items are being skipped).' : '.'))
+        return
+      }
+      const cost = (peek.lots * 0.005).toFixed(2)
+      let msg = `Enrich ${peek.lots} "${categoryFilter}" items across ALL imported auctions?\n\n`
+              + `Roughly $${cost} of API usage. Progress shows in the bar at the top.`
+      if (hideHardShip) msg += `\n\nSkipping HARD-to-ship items ("Hide HARD ship" is on).`
+      if (!window.confirm(msg)) return
+      const r = await enrichCategory(categoryFilter, { skipHard: hideHardShip })
+      alert(`Queued ${r.queued} items. Each one's status updates as it finishes.`)
+      loadLots()
+    } catch (e) { alertOnce(e.message) }
   }
 
   async function handleEnrichAll(auctionId) {
@@ -587,7 +625,7 @@ Skipping ${hard} HARD-to-ship lots.`
         </div>
         </form>
         {(importedAuctions.length + discoveredAuctions.length) > 0 && (isMobile ? (
-          <details style={{ marginTop: '0.75rem' }} open={!selectedAuction}>
+          <details style={{ marginTop: '0.75rem' }} open={!selectedAuctions.length}>
             <summary style={{ fontWeight: 600, padding: '4px 0' }}>
               Auctions ({importedAuctions.length + discoveredAuctions.length})
             </summary>
@@ -600,7 +638,7 @@ Skipping ${hard} HARD-to-ship lots.`
                 border: isHotAuction(a) ? '2px solid #2e9e4f' : '1px solid var(--border)',
                 borderRadius: 8, padding: 10, marginTop: 8,
                 background: isHotAuction(a) ? 'var(--gold-bg)'
-                  : selectedAuction === a.id ? 'var(--highlight)' : 'var(--card-bg)',
+                  : selectedAuctions.includes(a.id) ? 'var(--highlight)' : 'var(--card-bg)',
               }}>
                 <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <button
@@ -699,7 +737,7 @@ Skipping ${hard} HARD-to-ship lots.`
               ) : (
                 <tr key={a.id} style={{
                   background: isHotAuction(a) ? 'var(--gold-bg)'
-                    : selectedAuction === a.id ? 'var(--highlight)' : undefined,
+                    : selectedAuctions.includes(a.id) ? 'var(--highlight)' : undefined,
                 }}>
                   <td style={{ paddingRight: 12 }}>
                     <a href={a.source_url} target="_blank" rel="noreferrer">{a.name}</a>
@@ -752,23 +790,74 @@ Skipping ${hard} HARD-to-ship lots.`
       {view === 'items' && (<>
       <section style={{ marginBottom: '0.75rem', display: 'flex',
                         flexDirection: 'column', gap: 8 }}>
-        {/* Row 1: which auction */}
-        <select
-          value={selectedAuction ?? ''}
-          onChange={(ev) => setSelectedAuction(ev.target.value ? Number(ev.target.value) : null)}
-          title="Show items from one imported auction only"
-          style={{ padding: 8, fontSize: 14, width: isMobile ? '100%' : 'auto',
-                   maxWidth: isMobile ? '100%' : 420, alignSelf: 'flex-start' }}
-        >
-          <option value="">All auctions ({Object.keys(importedRows).length} imported)</option>
-          {Object.values(importedRows)
-            .sort((a, b) => ((b.gold_count ?? 0) - (a.gold_count ?? 0)) || a.name.localeCompare(b.name))
-            .map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.gold_count ?? 0} gold | [ {[a.city, a.state].filter(Boolean).join(', ') || '—'} ] | {a.name}
-              </option>
+        {/* Row 1: which auctions (multi-select) + which category */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-start' }}>
+          <details style={{ position: 'relative', maxWidth: isMobile ? '100%' : 440 }}>
+            <summary
+              title="Tick one or more imported auctions to see just their items"
+              style={{ padding: 8, fontSize: 14, cursor: 'pointer', userSelect: 'none',
+                       border: '1px solid var(--border)', borderRadius: 4,
+                       background: 'var(--card-bg)', whiteSpace: 'nowrap' }}>
+              {selectedAuctions.length
+                ? `${selectedAuctions.length} auction${selectedAuctions.length === 1 ? '' : 's'} selected ▾`
+                : `All auctions (${Object.keys(importedRows).length} imported) ▾`}
+            </summary>
+            <div style={{
+              position: 'absolute', top: '100%', left: 0, zIndex: 500, marginTop: 4,
+              minWidth: 280, maxWidth: 'min(440px, 92vw)', maxHeight: '50vh',
+              overflowY: 'auto', background: 'var(--card-bg)',
+              border: '1px solid var(--border)', borderRadius: 6,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.25)', padding: 8,
+            }}>
+              <button onClick={() => setSelectedAuctions([])}
+                      disabled={!selectedAuctions.length}
+                      style={{ width: '100%', padding: 6, fontSize: 13, marginBottom: 4 }}>
+                Show all auctions
+              </button>
+              {Object.values(importedRows)
+                .sort((a, b) => ((b.gold_count ?? 0) - (a.gold_count ?? 0)) || a.name.localeCompare(b.name))
+                .map((a) => (
+                  <label key={a.id}
+                         style={{ display: 'flex', gap: 6, alignItems: 'flex-start',
+                                  padding: '6px 2px', fontSize: 13, cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedAuctions.includes(a.id)}
+                      onChange={() => toggleAuctionSelected(a.id)}
+                      style={{ marginTop: 2 }}
+                    />
+                    <span>
+                      {a.gold_count ?? 0} gold | [ {[a.city, a.state].filter(Boolean).join(', ') || '—'} ] | {a.name}
+                    </span>
+                  </label>
+                ))}
+            </div>
+          </details>
+          <select
+            value={categoryFilter}
+            onChange={(ev) => setCategoryFilter(ev.target.value)}
+            title="Show only items in one HiBid category — across every auction, or just the selected ones"
+            style={{ padding: 8, fontSize: 14, maxWidth: isMobile ? '100%' : 320 }}
+          >
+            <option value="">All categories</option>
+            {lotCategories.map((c) => (
+              <option key={c.category} value={c.category}>{c.category} ({c.lots})</option>
             ))}
-        </select>
+          </select>
+          {categoryFilter && (() => {
+            const cat = lotCategories.find((c) => c.category === categoryFilter)
+            return (
+              <button
+                onClick={handleEnrichCategory}
+                disabled={!cat?.enrichable}
+                title="Queue AI enrichment for every not-yet-enriched item in this category, across ALL imported open auctions (asks first, shows cost)"
+                style={{ padding: 8, fontSize: 14 }}
+              >
+                {cat?.enrichable ? `Enrich ${cat.enrichable} in category` : 'Category fully enriched'}
+              </button>
+            )
+          })()}
+        </div>
 
         {/* Row 2: filters — inline-flex per label so a checkbox never wraps
             away from its own text, consistent gaps instead of ad-hoc margins */}
@@ -868,13 +957,16 @@ Skipping ${hard} HARD-to-ship lots.`
         background: 'var(--highlight)', border: '1px solid var(--border)',
         borderRadius: 6, padding: '8px 10px', marginBottom: 10,
       }}>
-        {selectedAuction ? (
+        {selectedAuctions.length ? (
           <>
             <span>
-              Catalogue of <strong>{auctionIndex[selectedAuction] ?? 'this auction'}</strong>
+              {selectedAuctions.length === 1
+                ? <>Catalogue of <strong>{auctionIndex[selectedAuctions[0]] ?? 'this auction'}</strong></>
+                : <>Items from <strong>{selectedAuctions.length} selected auctions</strong></>}
+              {categoryFilter && <> in <strong>{categoryFilter}</strong></>}
               {' '}— {lotTotal || lots.length} lot{(lotTotal || lots.length) === 1 ? '' : 's'} imported
             </span>
-            <button onClick={() => setSelectedAuction(null)}>Show items from every auction</button>
+            <button onClick={() => setSelectedAuctions([])}>Show items from every auction</button>
           </>
         ) : (
           <span>

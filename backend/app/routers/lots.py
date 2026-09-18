@@ -12,7 +12,7 @@ router = APIRouter(prefix="/lots", tags=["lots"])
 def count_lots(
     category: Optional[str] = None,
     status: Optional[str] = None,
-    auction_id: Optional[int] = None,
+    auction_id: Optional[List[int]] = Query(None, description="repeatable — any of these auctions"),
     roi_status: Optional[str] = None,
     bolo_only: bool = False,
     include_closed: bool = False,
@@ -24,7 +24,7 @@ def count_lots(
     if category:
         q = q.filter(models.Lot.category == category)
     if auction_id:
-        q = q.filter(models.Lot.auction_id == auction_id)
+        q = q.filter(models.Lot.auction_id.in_(auction_id))
     if status or roi_status or bolo_only:
         q = q.join(models.Enrichment)
     if status:
@@ -36,11 +36,38 @@ def count_lots(
     return {"total": q.count()}
 
 
+@router.get("/categories")
+def lot_categories(db: Session = Depends(get_db)):
+    """Distinct categories across every imported lot, with how many lots each
+    holds and how many of those are still enrichable (pending/failed, in an
+    auction that hasn't closed). Powers the items view's category filter and
+    its 'Enrich category' button. Declared before /{lot_id} so 'categories'
+    can't be swallowed as a lot id."""
+    from datetime import datetime
+    from sqlalchemy import and_, case, func, or_
+    enrichable = case(
+        (and_(models.Enrichment.status.in_(["pending", "failed"]),
+              or_(models.Auction.closing_date.is_(None),
+                  models.Auction.closing_date >= datetime.now())), 1),
+        else_=0)
+    rows = (db.query(models.Lot.category,
+                     func.count(models.Lot.id),
+                     func.sum(enrichable))
+              .join(models.Enrichment)
+              .outerjoin(models.Auction, models.Lot.auction_id == models.Auction.id)
+              .filter(models.Lot.category.isnot(None))
+              .group_by(models.Lot.category)
+              .order_by(models.Lot.category)
+              .all())
+    return [{"category": c, "lots": n, "enrichable": int(e or 0)}
+            for c, n, e in rows]
+
+
 @router.get("", response_model=List[schemas.LotOut])
 def list_lots(
     category: Optional[str] = None,
     status: Optional[str] = Query(None, description="pending | queued | success | failed"),
-    auction_id: Optional[int] = None,
+    auction_id: Optional[List[int]] = Query(None, description="repeatable — any of these auctions"),
     roi_status: Optional[str] = Query(None, description="GOLD MINE | PASS"),
     bolo_only: bool = False,
     include_closed: bool = False,
@@ -61,7 +88,7 @@ def list_lots(
     if category:
         q = q.filter(models.Lot.category == category)
     if auction_id:
-        q = q.filter(models.Lot.auction_id == auction_id)
+        q = q.filter(models.Lot.auction_id.in_(auction_id))
     if status or roi_status or bolo_only:
         q = q.join(models.Enrichment)
     if status:
