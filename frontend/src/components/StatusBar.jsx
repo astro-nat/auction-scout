@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { cancelEnrichment, cancelJob, fetchStatus } from '../api'
+import { etaText, sampleProgress } from '../lib/progress'
 
 // Publish the bar's current height as a CSS variable so sticky table
 // headers can offset themselves below it instead of hiding under it.
@@ -25,33 +26,6 @@ export default function StatusBar({ onQuiet }) {
   // show a measured pace and time-remaining, same as the enrichment queue.
   const progressRef = useRef(new Map())
 
-  function sampleProgress(jobs) {
-    const now = Date.now()
-    const map = progressRef.current
-    const seen = new Set()
-    for (const j of jobs) {
-      if (j.total == null) continue
-      seen.add(j.id)
-      const arr = map.get(j.id) ?? []
-      arr.push({ t: now, current: j.current || 0 })
-      while (arr.length > 20) arr.shift()
-      map.set(j.id, arr)
-    }
-    for (const id of [...map.keys()]) if (!seen.has(id)) map.delete(id)
-  }
-
-  function etaText(job) {
-    const arr = progressRef.current.get(job.id)
-    if (!arr || arr.length < 3 || job.total == null) return ''
-    const first = arr[0], last = arr[arr.length - 1]
-    const dt = (last.t - first.t) / 1000
-    const done = last.current - first.current
-    if (dt < 5 || done <= 0) return ''
-    const perSec = done / dt
-    const remaining = (job.total - last.current) / perSec
-    if (remaining < 90) return ` · ~${Math.max(1, Math.round(remaining / 10) * 10)}s left`
-    return ` · ~${Math.ceil(remaining / 60)} min left`
-  }
 
   useEffect(() => {
     let alive = true
@@ -61,7 +35,7 @@ export default function StatusBar({ onQuiet }) {
       try {
         const s = await fetchStatus()
         if (!alive) return
-        sampleProgress(s.jobs || [])
+        sampleProgress(progressRef.current, s.jobs || [])
         setStatus(s)
         const busy = s.jobs.length > 0 || s.enrichment.queued > 0
         // Fire once on the busy → idle edge so the page can refresh itself.
@@ -90,7 +64,7 @@ export default function StatusBar({ onQuiet }) {
     // auction name) — the counts alone made the bar feel vague.
     const detail = job.detail ? ` — ${job.detail}` : ''
     const text = (job.total
-      ? `${job.current} of ${job.total} · ${job.label}${etaText(job)}`
+      ? `${job.current} of ${job.total} · ${job.label}${etaText(progressRef.current, job)}`
       : job.label) + detail
     lines.push({
       key: job.id, text, current: job.current, total: job.total,
