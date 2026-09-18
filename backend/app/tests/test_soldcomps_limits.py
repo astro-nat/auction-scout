@@ -151,3 +151,52 @@ def test_the_throttle_spaces_requests_across_threads():
 def test_no_api_key_short_circuits(monkeypatch):
     monkeypatch.setattr(pricing, "SOLDCOMPS_API_KEY", "")
     assert pricing._soldcomps_lookup("anything") == []
+
+
+def test_a_long_retry_after_is_treated_as_quota_not_pace(monkeypatch):
+    """The real incident: the FIRST call from a cold container came back 429
+    with a ~30s Retry-After. No amount of pacing fixes an empty quota, and
+    retrying it burned a minute of worker time per query variant."""
+    monkeypatch.undo()
+    monkeypatch.setattr(pricing, "SOLDCOMPS_API_KEY", "test-key")
+    monkeypatch.setattr(pricing, "_cache", {})
+    monkeypatch.setattr(pricing, "_blocked_until", 0.0)
+    monkeypatch.setattr(pricing, "_throttle", pricing._Throttle(0))
+    slept = []
+    monkeypatch.setattr(time, "sleep", lambda s: slept.append(s))
+
+    FakeClient, calls = _client([_Resp(429, retry_after="30")])
+    monkeypatch.setattr(pricing.httpx, "Client", FakeClient)
+
+    assert pricing._soldcomps_lookup("widget") == []
+    assert len(calls) == 1, "retried a wall it could not get past"
+    assert not slept, "slept waiting for a quota that resets in hours"
+    assert pricing._breaker_open(), "kept asking after hitting the quota wall"
+
+
+def test_a_short_retry_after_is_still_retried(monkeypatch):
+    """Genuine burst throttling — a couple of seconds — should still retry."""
+    monkeypatch.undo()
+    monkeypatch.setattr(pricing, "SOLDCOMPS_API_KEY", "test-key")
+    monkeypatch.setattr(pricing, "_cache", {})
+    monkeypatch.setattr(pricing, "_blocked_until", 0.0)
+    monkeypatch.setattr(pricing, "_consecutive_429", 0)
+    monkeypatch.setattr(pricing, "_throttle", pricing._Throttle(0))
+    monkeypatch.setattr(time, "sleep", lambda *_: None)
+
+    sold = [{"soldPrice": "$12.00", "title": "widget"}]
+    FakeClient, calls = _client([_Resp(429, retry_after="2"), _Resp(200, sold)])
+    monkeypatch.setattr(pricing.httpx, "Client", FakeClient)
+
+    assert pricing._soldcomps_lookup("widget") == [(12.0, "widget")]
+    assert len(calls) == 2
+
+
+def test_the_breaker_logs_once_not_per_call(monkeypatch, caplog):
+    """A wall of identical warnings buries the one line that matters."""
+    monkeypatch.undo()
+    monkeypatch.setattr(pricing, "_blocked_until", 0.0)
+    with caplog.at_level("WARNING"):
+        pricing._open_breaker("first")
+        pricing._open_breaker("second")
+    assert sum("pausing sold-comp" in r.message for r in caplog.records) == 1

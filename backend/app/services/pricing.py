@@ -360,6 +360,11 @@ _CACHE_MAX_ENTRIES = 2000
 # backoff worse for everything behind us.
 _BREAKER_THRESHOLD = 5
 _BREAKER_COOLDOWN = float(os.environ.get("SOLDCOMPS_COOLDOWN_SECONDS", "120"))
+# A Retry-After at or above this means the quota is gone rather than the
+# request rate being too high. Pacing cannot help; only time or a bigger plan
+# can, so back off hard instead of burning worker minutes on doomed retries.
+_QUOTA_WALL_SECONDS = float(os.environ.get("SOLDCOMPS_QUOTA_WALL_SECONDS", "10"))
+_QUOTA_COOLDOWN = float(os.environ.get("SOLDCOMPS_QUOTA_COOLDOWN_SECONDS", "900"))
 
 
 class _Throttle:
@@ -417,17 +422,28 @@ def _breaker_open() -> bool:
         return time.monotonic() < _blocked_until
 
 
+def _open_breaker(reason: str, seconds: float | None = None) -> None:
+    """Stop asking for a while, and say why in terms the log reader can act on."""
+    global _blocked_until
+    cooldown = _QUOTA_COOLDOWN if seconds is None else seconds
+    with _breaker_lock:
+        if time.monotonic() < _blocked_until:
+            return                      # already paused; don't re-log per call
+        _blocked_until = time.monotonic() + cooldown
+    logger.warning(
+        "SoldComps unavailable (%s) — pausing sold-comp lookups for %.0fs. "
+        "Prices set during this window come from eBay ACTIVE listings, which "
+        "are asking prices, not sold ones.", reason, cooldown)
+
+
 def _note_429() -> None:
     global _consecutive_429, _blocked_until
     with _breaker_lock:
         _consecutive_429 += 1
-        if _consecutive_429 >= _BREAKER_THRESHOLD and time.monotonic() >= _blocked_until:
-            _blocked_until = time.monotonic() + _BREAKER_COOLDOWN
-            logger.warning(
-                "SoldComps rate-limited %d times in a row — pausing sold-comp "
-                "lookups for %.0fs. Prices during this window come from eBay "
-                "active listings, which are asking prices.",
-                _consecutive_429, _BREAKER_COOLDOWN)
+        over = _consecutive_429 >= _BREAKER_THRESHOLD
+    if over:
+        _open_breaker(reason=f"{_consecutive_429} rate limits in a row",
+                      seconds=_BREAKER_COOLDOWN)
 
 
 def _note_ok() -> None:
@@ -480,9 +496,19 @@ def _soldcomps_lookup(query: str, count: int = 120) -> list[tuple[float, str]]:
 
         last_status = r.status_code
         if r.status_code == 429:
+            wait = _retry_after_seconds(r, attempt)
+            # A long Retry-After is not "slow down", it's "you're out". The
+            # first call from a cold container came back 429 with ~30s, which
+            # no amount of pacing can fix — the plan's quota is spent.
+            # Retrying that costs a minute of worker time per query variant
+            # and cannot succeed, so stop asking and let the caller fall
+            # through to active listings immediately.
+            if wait >= _QUOTA_WALL_SECONDS:
+                _open_breaker(reason=f"Retry-After {wait:.0f}s — quota, not pace")
+                return []
             _note_429()
             if attempt < SOLDCOMPS_MAX_RETRIES - 1 and not _breaker_open():
-                time.sleep(_retry_after_seconds(r, attempt))
+                time.sleep(wait)
                 continue
             logger.warning("SoldComps rate-limited on %r, giving up after %d "
                            "attempts", query, attempt + 1)
