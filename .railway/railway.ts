@@ -36,6 +36,14 @@ export default defineRailway(() => {
       EBAY_APP_ID: diplomaticWholeness.env.EBAY_APP_ID,
       EBAY_CERT_ID: diplomaticWholeness.env.EBAY_CERT_ID,
       TARGET_ROI_PCT: diplomaticWholeness.env.TARGET_ROI_PCT,
+      // Lots worked in parallel. Down from 3 after a day of repricing spent
+      // the SoldComps quota: this caps the RATE of comp lookups, though the
+      // TOTAL is still lots x query variants, so it buys headroom against a
+      // daily limit rather than a monthly one. Enrichment getting slower no
+      // longer costs anything visible now that it runs outside the API.
+      ENRICH_CONCURRENCY: "2",
+      // Sold-comp requests per second, shared across those threads.
+      SOLDCOMPS_RPS: "1",
     },
   });
 
