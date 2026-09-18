@@ -11,31 +11,6 @@ import pytest
 from app.services import jobs
 
 
-def test_heavy_job_blocks_another_heavy_job(monkeypatch):
-    monkeypatch.setattr(jobs, "active",
-                        lambda: [{"kind": "reprice", "cancelled": False}])
-    assert jobs.heavy_running() == "reprice"
-
-
-def test_cancelled_job_does_not_block(monkeypatch):
-    monkeypatch.setattr(jobs, "active",
-                        lambda: [{"kind": "reprice", "cancelled": True}])
-    assert jobs.heavy_running() is None
-
-
-def test_light_job_does_not_block(monkeypatch):
-    """A regrade is seconds of arithmetic with no network — never a blocker."""
-    monkeypatch.setattr(jobs, "active",
-                        lambda: [{"kind": "regrade", "cancelled": False}])
-    assert jobs.heavy_running() is None
-
-
-def test_a_job_does_not_block_itself(monkeypatch):
-    monkeypatch.setattr(jobs, "active",
-                        lambda: [{"kind": "bid-refresh", "cancelled": False}])
-    assert jobs.heavy_running(ignore="bid-refresh") is None
-
-
 def test_every_long_network_job_counts_as_heavy():
     for kind in ("reprice", "ship-analysis", "bid-refresh", "import", "scan"):
         assert kind in jobs.HEAVY_KINDS

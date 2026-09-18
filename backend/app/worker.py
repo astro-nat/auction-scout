@@ -64,8 +64,10 @@ def _runner_for(kind: str):
 
 def _start_batch_job() -> bool:
     """Claim and start one pending batch job. True if we started something."""
-    if jobs.heavy_running():
-        return False          # one long job at a time — they share a pool
+    # No "is anything running?" check here any more: claim_pending() folds
+    # the one-heavy-job-at-a-time limit into its own query, so the database
+    # decides in a single statement instead of two workers both passing a
+    # check and then both claiming.
     job = jobs.claim_pending()
     if not job:
         return False
@@ -126,6 +128,7 @@ def main() -> None:
 
     while not _stop.is_set():
         try:
+            jobs.worker_heartbeat()
             did = _start_batch_job()
             did = _work_lots() or did
         except Exception:  # noqa: BLE001 — the loop outlives its own bugs

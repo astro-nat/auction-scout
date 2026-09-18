@@ -200,10 +200,8 @@ async def analyze_shipping(dry_run: bool = False,
     # Hand the worker ids only — it fetches the shipping/terms text itself,
     # which keeps this response instant and makes the run resumable (the id
     # list persists on the job row; texts would bloat it).
-    busy = jobs.heavy_running()
-    if busy:
-        return {"auctions": 0, "queued": False,
-                "already_running": True, "blocked_by": busy}
+    if jobs.has_pending("ship-analysis"):
+        return {"auctions": 0, "queued": False, "already_running": True}
     jobs.enqueue("ship-analysis", "Reading shipping policies",
                  total=len(targets),
                  payload={"auction_ids": [a.id for a in targets]})
@@ -225,10 +223,8 @@ def refresh_bids(db: Session = Depends(get_db)):
     ids = [t[0] for t in targets]
     if not ids:
         return {"auctions": 0, "queued": False}
-    busy = jobs.heavy_running()
-    if busy:
-        return {"auctions": 0, "queued": False,
-                "already_running": True, "blocked_by": busy}
+    if jobs.has_pending("bid-refresh"):
+        return {"auctions": 0, "queued": False, "already_running": True}
     jobs.enqueue("bid-refresh", "Refreshing current bids",
                  total=len(ids), payload={"auction_ids": ids})
     return {"auctions": len(ids), "queued": True}

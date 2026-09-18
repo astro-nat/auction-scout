@@ -204,3 +204,19 @@ class FavoriteAuctioneer(Base):
     auctioneer_id = Column(Integer, primary_key=True)   # HiBid company id
     name = Column(String)
     created_at = Column(DateTime, server_default=func.now())
+
+
+class WorkerHeartbeat(Base):
+    """Proof that a worker process exists.
+
+    Once the background work moved out of the API, a dead worker became
+    invisible: no request fails, nothing errors, jobs just sit at 'pending'
+    looking like they're about to start. /status reads this table so the UI
+    can say "queued, but nothing is running" instead of quietly waiting
+    forever.
+    """
+    __tablename__ = "worker_heartbeats"
+
+    id = Column(String, primary_key=True)     # host:pid, from jobs.WORKER_ID
+    last_seen = Column(DateTime, nullable=False)
+    started_at = Column(DateTime, server_default=func.now())

@@ -73,12 +73,11 @@ def reprice(auction_id: int | None = None,
         return {"repricing": 0}
     # Deploys resume orphaned reprices, so stacking a second one is easy to
     # do by accident — and N concurrent reprices burn N× the comp lookups.
-    busy = jobs.heavy_running()
-    if busy:
-        # Any long job, not just another reprice: they share one connection
-        # pool and each holds a transaction open across its HTTP calls, so
-        # stacking them starves every request behind them.
-        return {"repricing": 0, "already_running": True, "blocked_by": busy}
+    if jobs.has_pending("reprice"):
+        # Only a DUPLICATE is worth refusing now. The worker serialises long
+        # jobs by itself, so an unrelated one being busy is no reason to drop
+        # this request — it would simply wait its turn.
+        return {"repricing": 0, "already_running": True}
     jobs.enqueue("reprice", "Re-pricing lots with current comp rules",
                  total=len(lot_ids), payload={"lot_ids": lot_ids})
     return {"repricing": len(lot_ids)}

@@ -43,6 +43,9 @@ _MIGRATIONS = [
     "ALTER TABLE enrichment ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMP",
     "CREATE INDEX IF NOT EXISTS ix_enrichment_queue "
     "ON enrichment (status, queued_at, queue_rank)",
+    "CREATE TABLE IF NOT EXISTS worker_heartbeats ("
+    "id VARCHAR PRIMARY KEY, last_seen TIMESTAMP NOT NULL, "
+    "started_at TIMESTAMP DEFAULT now())",
     "CREATE INDEX IF NOT EXISTS ix_auctions_auctioneer_id ON auctions (auctioneer_id)",
 ]
 

@@ -120,6 +120,20 @@ export default function StatusBar({ onQuiet }) {
     })
   }
 
+  // Nothing consuming the queue. This is the failure the process split
+  // introduced: no request fails, nothing errors, work just sits at
+  // 'pending' looking like it's about to start. Only worth saying when
+  // there IS work — an idle app with no worker is not a problem yet.
+  const noWorker = status.workers && status.workers.live === 0
+  const pendingWork = jobs.length > 0 || enrichment.queued > 0
+  if (noWorker && pendingWork) {
+    lines.push({
+      key: 'no-worker',
+      warn: true,
+      text: 'No worker process is running — queued work is not being picked up.',
+    })
+  }
+
   if (!lines.length) return null
 
   return (
@@ -135,8 +149,12 @@ export default function StatusBar({ onQuiet }) {
         return (
           <div key={l.key} style={{ marginBottom: lines.length > 1 ? 6 : 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span className="spinner" />
-              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {/* A warning is not progress — no spinner, and it says so. */}
+              {l.warn ? <span aria-hidden="true">⚠</span> : <span className="spinner" />}
+              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis',
+                             whiteSpace: 'nowrap',
+                             color: l.warn ? '#e0a030' : undefined,
+                             fontWeight: l.warn ? 600 : undefined }}>
                 {l.text}
               </span>
               {pct !== null && (

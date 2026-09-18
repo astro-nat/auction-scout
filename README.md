@@ -131,6 +131,10 @@ Only the API runs the schema migrations, so deploy the backend first on a
 release that changes tables. The worker is safe to restart at any time:
 in-flight jobs keep their checkpoint and the reaper picks them back up.
 
+If no worker is running, `/status` says so and the app shows a warning
+rather than leaving work queued and silent — that was the one thing the
+split made worse, since a dead worker breaks no requests.
+
 ## Repo layout
 
 ```
@@ -167,9 +171,8 @@ frontend/src/
 - **Alembic migrations** — tables are auto-created; add Alembic before the
   data matters. Schema changes currently need a manual `ALTER` or a dev-DB
   reset (`docker compose down -v`).
-- **Phase 2 of the queue split** — retire the hand-rolled guards
-  (`heavy_running`) now that claiming does the job properly, and give the
-  worker a heartbeat `/status` can surface, so a dead worker is visible
-  rather than just quiet.
+- **Alembic migrations** — schema still comes from `_MIGRATIONS` in
+  `main.py`; fine while they're all additive, wrong the first time a column
+  needs changing rather than adding.
 - **Sell-through data** — DTS (days-to-sell) is stubbed to 0 in the ROI
   check; wire up sold/active counts to make illiquid items fail viability.

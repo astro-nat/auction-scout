@@ -25,17 +25,18 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import func, or_, text
+from sqlalchemy import func, or_, select, text
 
 from .. import models
 from ..database import SessionLocal
 
 logger = logging.getLogger(__name__)
 
-# Long, network-bound jobs. Only one of these runs at a time: they all hold a
-# transaction open across their slow HTTP calls, so running three together
-# just means three of them crawling while the connection pool starves every
-# request behind them.
+# Long, network-bound jobs. claim_pending() lets only one run at a time:
+# each holds a transaction open across its slow HTTP calls, so running three
+# together just means three of them crawling while the pool starves
+# everything behind them. That limit lives inside the claim query rather
+# than in a check beside it, so two workers can't both decide they're clear.
 HEAVY_KINDS = ("reprice", "ship-analysis", "bid-refresh", "import", "scan")
 
 
@@ -151,20 +152,50 @@ def enqueue(kind: str, label: str, total: Optional[int] = None,
     return job_id
 
 
-def claim_pending(kinds: Optional[list[str]] = None) -> Optional[dict]:
-    """Take the oldest pending job, or None.
+def claim_pending(kinds: Optional[list[str]] = None,
+                  max_heavy: int = 1) -> Optional[dict]:
+    """Take the oldest claimable pending job, or None.
 
-    FOR UPDATE SKIP LOCKED is what makes this safe with several workers:
-    each transaction locks the row it takes and the others step over it
-    instead of blocking or, worse, picking the same one. Unlike claim(),
-    which targets a known id, this SELECTS — so it genuinely needs it.
+    Two things happen in this one statement, on purpose.
+
+    FOR UPDATE SKIP LOCKED is what makes several workers safe: each
+    transaction locks the row it takes and the others step over it rather
+    than blocking or picking the same one. Unlike claim(), which targets a
+    known id, this SELECTS — so it genuinely needs it.
+
+    The heavy-job limit is a filter in the same query rather than a check
+    before it. Asking "is anything heavy running?" and then claiming is two
+    statements with a gap in the middle, and two workers can both pass the
+    check before either claims. Folded in here, the database decides once.
     """
     db = None
     try:
         db = SessionLocal()
+        # Serialise the whole claim. SKIP LOCKED protects the PENDING rows
+        # being selected, but the heavy-job count below reads RUNNING rows —
+        # different rows, unprotected. Under READ COMMITTED each worker's
+        # snapshot can predate the others' commits, so they all count zero
+        # and all claim: four racing workers started three heavy jobs.
+        #
+        # An advisory lock is exactly the tool for a read-modify-write that
+        # spans rows. It's held for this transaction only, and claiming takes
+        # milliseconds, so the serialisation costs nothing real.
+        db.execute(text("SELECT pg_advisory_xact_lock(:k)"),
+                   {"k": _CLAIM_LOCK_KEY})
+        # Live = running AND still reporting. A heavy job whose worker died
+        # must not hold the slot shut until the reaper gets round to it.
+        heavy_live = (select(func.count())
+                      .select_from(models.Job)
+                      .where(models.Job.state == "running",
+                             models.Job.kind.in_(HEAVY_KINDS),
+                             models.Job.heartbeat_at.isnot(None),
+                             models.Job.heartbeat_at >= _stale_cutoff())
+                      .scalar_subquery())
         q = (db.query(models.Job)
                .filter(models.Job.state == "pending",
-                       models.Job.cancelled.is_(False))
+                       models.Job.cancelled.is_(False),
+                       or_(models.Job.kind.notin_(HEAVY_KINDS),
+                           heavy_live < max_heavy))
                .order_by(models.Job.started_at)
                .with_for_update(skip_locked=True)
                .limit(1))
@@ -227,16 +258,100 @@ def claim_lots(limit: int) -> list[tuple]:
             db.close()
 
 
-def heavy_running(ignore: Optional[str] = None) -> Optional[str]:
-    """The kind of the heavy job currently running, if any.
+# A worker is presumed gone this long after its last poll. Much tighter than
+# STALE_JOB_SECONDS: this says "the process is alive", not "the job is
+# making progress", and the loop touches it every few seconds.
+WORKER_TIMEOUT_SECONDS = int(os.environ.get("WORKER_TIMEOUT_SECONDS", "90"))
 
-    `ignore` lets a caller ask "is anything OTHER than me running".
+# Arbitrary constant — any two processes agreeing on it exclude each other.
+_CLAIM_LOCK_KEY = 8274112233
+
+
+def worker_heartbeat() -> None:
+    """Record that this worker process is alive."""
+    db = None
+    try:
+        db = SessionLocal()
+        now = datetime.now(timezone.utc)
+        row = (db.query(models.WorkerHeartbeat)
+                 .filter(models.WorkerHeartbeat.id == WORKER_ID).first())
+        if row:
+            row.last_seen = now
+        else:
+            db.add(models.WorkerHeartbeat(id=WORKER_ID, last_seen=now))
+        db.commit()
+    except Exception as exc:  # noqa: BLE001 — bookkeeping never kills a worker
+        logger.warning("Worker heartbeat skipped: %s", exc)
+    finally:
+        if db is not None:
+            db.close()
+
+
+def live_workers() -> list[dict]:
+    """Workers that have checked in recently.
+
+    Empty means nothing is consuming the queue — the state that became
+    silent when the work moved out of the API. No request fails; jobs just
+    sit at 'pending' looking like they're about to start.
     """
-    for job in active():
-        kind = job.get("kind")
-        if kind in HEAVY_KINDS and kind != ignore and not job.get("cancelled"):
-            return kind
-    return None
+    db = None
+    try:
+        db = SessionLocal()
+        cutoff = func.now() - text(f"interval '{int(WORKER_TIMEOUT_SECONDS)} seconds'")
+        rows = (db.query(models.WorkerHeartbeat)
+                  .filter(models.WorkerHeartbeat.last_seen >= cutoff)
+                  .order_by(models.WorkerHeartbeat.started_at)
+                  .all())
+        return [{"id": r.id,
+                 "last_seen": r.last_seen.isoformat() if r.last_seen else None}
+                for r in rows]
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Worker listing failed: %s", exc)
+        return []
+    finally:
+        if db is not None:
+            db.close()
+
+
+def prune_workers() -> None:
+    """Drop rows for processes long gone, so the table doesn't collect one
+    per container the platform has ever started."""
+    db = None
+    try:
+        db = SessionLocal()
+        (db.query(models.WorkerHeartbeat)
+           .filter(models.WorkerHeartbeat.last_seen < func.now() - text("interval '1 day'"))
+           .delete(synchronize_session=False))
+        db.commit()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Worker prune skipped: %s", exc)
+    finally:
+        if db is not None:
+            db.close()
+
+
+def has_pending(kind: str) -> bool:
+    """Is a job of this kind already queued or running?
+
+    Replaces heavy_running() in the API. Under a queue, refusing unrelated
+    work because something else is busy is wrong — it would simply wait its
+    turn. What's still worth refusing is a DUPLICATE: three reprices from
+    three clicks do the same work three times.
+    """
+    db = None
+    try:
+        db = SessionLocal()
+        return bool(db.query(
+            db.query(models.Job)
+              .filter(models.Job.kind == kind,
+                      models.Job.cancelled.is_(False))
+              .exists()).scalar())
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Pending check for %s failed: %s", kind, exc)
+        return False
+    finally:
+        if db is not None:
+            db.close()
 
 
 def start(kind: str, label: str, total: Optional[int] = None,

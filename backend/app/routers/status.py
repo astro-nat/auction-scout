@@ -51,7 +51,13 @@ def get_status(db: Session = Depends(get_db)):
         enrichment["stage"] = working[0].progress
         enrichment["lot_title"] = working[1]
 
-    return {"jobs": jobs.active(), "enrichment": enrichment}
+    # Worker liveness. With the background work in its own process, a dead
+    # worker produces no errors at all — jobs just sit at 'pending' looking
+    # like they're about to start. Saying so is the difference between
+    # "still going" and "nothing is running this".
+    workers = jobs.live_workers()
+    return {"jobs": jobs.active(), "enrichment": enrichment,
+            "workers": {"live": len(workers), "ids": [w["id"] for w in workers]}}
 
 
 @router.get("/settings")

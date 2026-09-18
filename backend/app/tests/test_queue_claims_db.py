@@ -124,10 +124,70 @@ def test_enqueue_leaves_the_job_for_someone_else_to_claim():
 
 
 def test_two_workers_never_claim_the_same_job():
-    ids = [jobs.enqueue("reprice", "queue-test", payload={"lot_ids": [i]})
-           for i in range(4)]
+    """Light kinds, so the one-heavy-job-at-a-time limit isn't what's being
+    measured here — this is purely about two workers taking the same row."""
+    ids = [jobs.enqueue("regrade", "queue-test") for _ in range(4)]
     with ThreadPoolExecutor(max_workers=4) as pool:
         got = list(pool.map(lambda _: jobs.claim_pending(), range(4)))
     claimed = [g["id"] for g in got if g]
     assert sorted(claimed) == sorted(ids)
     assert len(claimed) == len(set(claimed))
+
+
+def _clear_jobs():
+    db = SessionLocal()
+    db.query(models.Job).filter(models.Job.label == "queue-test").delete()
+    db.commit()
+    db.close()
+
+
+@pytest.fixture
+def clean_jobs():
+    _clear_jobs()
+    yield
+    _clear_jobs()
+
+
+def test_only_one_heavy_job_runs_at_a_time(clean_jobs):
+    """The limit lives in the claim query, not in a check beside it."""
+    jobs.enqueue("reprice", "queue-test", payload={"lot_ids": [1]})
+    jobs.enqueue("ship-analysis", "queue-test", payload={"auction_ids": [1]})
+    assert jobs.claim_pending() is not None
+    assert jobs.claim_pending() is None, "two heavy jobs claimed at once"
+
+
+def test_a_light_job_is_not_blocked_by_a_heavy_one(clean_jobs):
+    """A regrade is seconds of arithmetic with no network — it should never
+    wait behind a half-hour reprice."""
+    jobs.enqueue("reprice", "queue-test", payload={"lot_ids": [1]})
+    jobs.enqueue("regrade", "queue-test")
+    assert jobs.claim_pending()["kind"] == "reprice"
+    assert jobs.claim_pending()["kind"] == "regrade"
+
+
+def test_a_heavy_job_whose_worker_died_does_not_hold_the_slot(clean_jobs):
+    """Otherwise one dead job blocks every heavy job until the reaper runs."""
+    jobs.enqueue("reprice", "queue-test", payload={"lot_ids": [1]})
+    first = jobs.claim_pending()
+    jobs.enqueue("bid-refresh", "queue-test", payload={"auction_ids": [1]})
+    assert jobs.claim_pending() is None          # first one still reporting
+    db = SessionLocal()
+    db.query(models.Job).filter(models.Job.id == first["id"]).update(
+        {"heartbeat_at": None})
+    db.commit()
+    db.close()
+    assert jobs.claim_pending() is not None, "dead job held the slot shut"
+
+
+def test_concurrent_workers_cannot_both_start_a_heavy_job(clean_jobs):
+    for _ in range(4):
+        jobs.enqueue("reprice", "queue-test", payload={"lot_ids": [1]})
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        got = [g for g in pool.map(lambda _: jobs.claim_pending(), range(4)) if g]
+    assert len(got) == 1, f"{len(got)} heavy jobs started together"
+
+
+def test_duplicate_requests_are_refused_but_unrelated_ones_are_not(clean_jobs):
+    jobs.enqueue("reprice", "queue-test", payload={"lot_ids": [1]})
+    assert jobs.has_pending("reprice") is True
+    assert jobs.has_pending("ship-analysis") is False

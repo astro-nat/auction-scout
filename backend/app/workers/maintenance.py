@@ -71,9 +71,10 @@ def _start_bid_refresh_loop() -> None:
                 # Skip this tick if ANY long job holds the pool — the hourly
                 # refresh is not worth crawling a reprice to a halt. The next
                 # tick picks it up.
-                busy = jobs.heavy_running()
-                if busy:
-                    logger.info("Auto bid refresh skipped — %s is running", busy)
+                # Enqueue rather than run: the worker loop serialises heavy
+                # jobs, so this no longer has to decide whether to skip.
+                if jobs.has_pending("bid-refresh"):
+                    logger.info("Auto bid refresh skipped — one is already queued")
                 else:
                     db = SessionLocal()
                     try:
@@ -90,7 +91,11 @@ def _start_bid_refresh_loop() -> None:
                     finally:
                         db.close()
                     if ids:
-                        run_bid_refresh(ids)   # blocks this loop until done — that's fine
+                        # Queue it like any other caller would. Running it
+                        # inline here blocked this loop for the duration and
+                        # dodged the worker's one-heavy-job-at-a-time limit.
+                        jobs.enqueue("bid-refresh", "Refreshing current bids",
+                                     total=len(ids), payload={"auction_ids": ids})
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Auto bid refresh failed: %s", exc)
             time.sleep(config.BID_REFRESH_HOURS * 3600)
@@ -143,6 +148,7 @@ def _start_reaper() -> None:
                     threading.Thread(target=runners[kind], args=(ids,),
                                      kwargs={"resume_job_id": row["id"]},
                                      daemon=True).start()
+                jobs.prune_workers()
             except Exception as exc:  # noqa: BLE001 — the reaper must outlive its own bugs
                 logger.warning("Reaper pass failed: %s", exc)
             time.sleep(REAPER_INTERVAL_SECONDS)
