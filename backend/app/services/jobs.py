@@ -25,7 +25,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import and_, func, or_, select, text
 
 from .. import models
 from ..database import SessionLocal
@@ -59,13 +59,63 @@ RESUMABLE_KINDS = {"reprice": "lot_ids",
                    "bid-refresh": "auction_ids"}
 
 
-def _stale_cutoff():
-    """Staleness measured on the DATABASE clock, not this process's.
+# How long a job of each kind may go quiet before it's presumed dead.
+#
+# One threshold for everything meant 15 minutes for all of them, pinned to
+# the slowest: run_reprice heartbeats once per lot, and one lot can sit
+# through several 40s comp lookups across four query variants. Applying that
+# to a bid refresh — which heartbeats once per auction and takes seconds —
+# left a visibly stuck job looking normal for a quarter of an hour.
+STALE_BY_KIND = {
+    "bid-refresh": float(os.environ.get("STALE_BID_REFRESH_SECONDS", "300")),
+    "regrade": float(os.environ.get("STALE_REGRADE_SECONDS", "180")),
+    "reprice": float(os.environ.get("STALE_REPRICE_SECONDS", "900")),
+    "ship-analysis": float(os.environ.get("STALE_SHIP_ANALYSIS_SECONDS", "900")),
+}
 
-    Workers on different hosts have different clocks; the row is shared, so
-    the comparison has to happen where the row lives.
+
+def _interval(seconds: float):
+    """now() - interval, on the DATABASE clock.
+
+    Deliberately not the caller's clock: workers run on other hosts with
+    their own, and the row is shared.
     """
-    return func.now() - text(f"interval '{int(STALE_JOB_SECONDS)} seconds'")
+    return func.now() - text(f"interval '{int(seconds)} seconds'")
+
+
+def _stale_cutoff():
+    """Default cutoff, for tables without a per-kind notion (queued lots)."""
+    return _interval(STALE_JOB_SECONDS)
+
+
+def _kind_clauses(compare):
+    """Build one clause per kind plus a fallback, joined by the caller.
+
+    `compare(column, cutoff)` decides the direction — `<` for stale,
+    `>=` for still-alive — so the two stay in step by construction.
+    """
+    clauses = [
+        and_(models.Job.kind == kind,
+             compare(models.Job.heartbeat_at, _interval(secs)))
+        for kind, secs in STALE_BY_KIND.items()
+    ]
+    clauses.append(and_(models.Job.kind.notin_(list(STALE_BY_KIND)),
+                        compare(models.Job.heartbeat_at,
+                                _interval(STALE_JOB_SECONDS))))
+    return clauses
+
+
+def _is_stale():
+    """Never reported in, or quiet longer than its kind allows."""
+    return or_(models.Job.heartbeat_at.is_(None),
+               *_kind_clauses(lambda col, cutoff: col < cutoff))
+
+
+def _is_alive():
+    """Reported in recently enough for its kind. Not simply NOT stale: a
+    NULL heartbeat is neither, and must not count as alive."""
+    return and_(models.Job.heartbeat_at.isnot(None),
+                or_(*_kind_clauses(lambda col, cutoff: col >= cutoff)))
 
 
 def heartbeat(job_id: str) -> None:
@@ -98,9 +148,7 @@ def claim(job_id: str) -> bool:
     try:
         db = SessionLocal()
         updated = (db.query(models.Job)
-                     .filter(models.Job.id == job_id,
-                             or_(models.Job.heartbeat_at.is_(None),
-                                 models.Job.heartbeat_at < _stale_cutoff()))
+                     .filter(models.Job.id == job_id, _is_stale())
                      .update({"claimed_by": WORKER_ID,
                               "heartbeat_at": func.now(),
                               "state": "running"},
@@ -121,8 +169,7 @@ def stale() -> list[dict]:
     try:
         db = SessionLocal()
         rows = (db.query(models.Job)
-                  .filter(or_(models.Job.heartbeat_at.is_(None),
-                              models.Job.heartbeat_at < _stale_cutoff()))
+                  .filter(_is_stale())
                   .all())
         return [_as_dict(j, with_payload=True) for j in rows]
     except Exception as exc:  # noqa: BLE001
@@ -188,8 +235,7 @@ def claim_pending(kinds: Optional[list[str]] = None,
                       .select_from(models.Job)
                       .where(models.Job.state == "running",
                              models.Job.kind.in_(HEAVY_KINDS),
-                             models.Job.heartbeat_at.isnot(None),
-                             models.Job.heartbeat_at >= _stale_cutoff())
+                             _is_alive())
                       .scalar_subquery())
         q = (db.query(models.Job)
                .filter(models.Job.state == "pending",

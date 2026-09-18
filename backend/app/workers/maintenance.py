@@ -127,6 +127,15 @@ def _start_reaper() -> None:
             try:
                 for row in jobs.stale():
                     kind = row.get("kind")
+                    if row.get("cancelled"):
+                        # Asked to stop, then its worker died before it
+                        # could. Restarting it only to have it read its own
+                        # cancel flag and stop again is a pointless round
+                        # trip — and it briefly re-occupies the one heavy
+                        # slot on the way past.
+                        logger.info("Reaping cancelled %s job %s", kind, row["id"])
+                        jobs.finish(row["id"])
+                        continue
                     payload_key = jobs.RESUMABLE_KINDS.get(kind)
                     ids = (row.get("payload") or {}).get(payload_key or "")
                     if not (payload_key and ids):

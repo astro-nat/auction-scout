@@ -8,6 +8,7 @@ because phase 1 puts several processes in front of the same rows.
 """
 
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -34,6 +35,18 @@ def dead_job(db):
     db.query(models.Job).filter(models.Job.id == jid).update({"heartbeat_at": None})
     db.commit()
     return jid
+
+
+@pytest.fixture
+def clean_jobs():
+    def _wipe():
+        s = SessionLocal()
+        s.query(models.Job).filter(models.Job.label == "queue-test").delete()
+        s.commit()
+        s.close()
+    _wipe()
+    yield
+    _wipe()
 
 
 def _stale_ids():
@@ -89,3 +102,67 @@ def test_non_resumable_kinds_are_not_restartable():
     assert "scan" not in jobs.RESUMABLE_KINDS
     assert "import" not in jobs.RESUMABLE_KINDS
     assert set(jobs.RESUMABLE_KINDS) == {"reprice", "ship-analysis", "bid-refresh"}
+
+
+def _backdate(job_id, seconds, db):
+    """Pretend this job last reported `seconds` ago."""
+    db.query(models.Job).filter(models.Job.id == job_id).update(
+        {"heartbeat_at": datetime.now(timezone.utc) - timedelta(seconds=seconds)})
+    db.commit()
+
+
+def test_a_quiet_bid_refresh_is_declared_dead_sooner_than_a_reprice(clean_jobs):
+    """One threshold for everything meant 15 minutes for all of them, pinned
+    to the slowest. A bid refresh heartbeats per auction and takes seconds."""
+    db = SessionLocal()
+    quick = jobs.enqueue("bid-refresh", "queue-test", payload={"auction_ids": [1]})
+    slow = jobs.enqueue("reprice", "queue-test", payload={"lot_ids": [1]})
+    for jid in (quick, slow):
+        db.query(models.Job).filter(models.Job.id == jid).update({"state": "running"})
+    db.commit()
+    # Six minutes of silence: past the bid-refresh threshold, well inside
+    # the reprice one.
+    _backdate(quick, 360, db)
+    _backdate(slow, 360, db)
+    stale_ids = {r["id"] for r in jobs.stale()}
+    db.close()
+    assert quick in stale_ids, "bid refresh still looked alive after 6 minutes"
+    assert slow not in stale_ids, "reprice reaped while legitimately slow"
+
+
+def test_a_slow_reprice_is_left_alone(clean_jobs):
+    """run_reprice heartbeats once per lot, and one lot can sit through
+    several 40s comp lookups across four query variants."""
+    db = SessionLocal()
+    jid = jobs.enqueue("reprice", "queue-test", payload={"lot_ids": [1]})
+    db.query(models.Job).filter(models.Job.id == jid).update({"state": "running"})
+    db.commit()
+    _backdate(jid, 240, db)          # four minutes mid-lot
+    stale_ids = {r["id"] for r in jobs.stale()}
+    db.close()
+    assert jid not in stale_ids
+
+
+def test_a_dead_heavy_job_stops_blocking_new_ones_at_its_own_threshold(clean_jobs):
+    """The heavy slot is held only while the holder is actually alive."""
+    db = SessionLocal()
+    dead = jobs.enqueue("bid-refresh", "queue-test", payload={"auction_ids": [1]})
+    db.query(models.Job).filter(models.Job.id == dead).update({"state": "running"})
+    db.commit()
+    _backdate(dead, 360, db)
+    db.close()
+    jobs.enqueue("reprice", "queue-test", payload={"lot_ids": [1]})
+    assert jobs.claim_pending() is not None, "dead bid-refresh held the slot shut"
+
+
+def test_a_job_with_no_heartbeat_at_all_is_not_counted_as_alive(clean_jobs):
+    """NULL is neither fresh nor stale-by-age; it must not read as alive."""
+    db = SessionLocal()
+    jid = jobs.enqueue("bid-refresh", "queue-test", payload={"auction_ids": [1]})
+    db.query(models.Job).filter(models.Job.id == jid).update(
+        {"state": "running", "heartbeat_at": None})
+    db.commit()
+    db.close()
+    assert jid in {r["id"] for r in jobs.stale()}
+    jobs.enqueue("reprice", "queue-test", payload={"lot_ids": [1]})
+    assert jobs.claim_pending() is not None
