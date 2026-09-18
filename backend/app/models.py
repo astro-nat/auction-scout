@@ -166,6 +166,13 @@ class Job(Base):
     # Everything a resumable job needs to restart after a deploy/crash
     # (e.g. {"lot_ids": [...]} for reprice). None for request-scoped kinds.
     payload = Column(JSONB)
+    # Who is working this row, and when they last said so. A worker that
+    # dies mid-job leaves its row behind claiming progress forever; the
+    # reaper (workers/maintenance.py) uses a lapsed heartbeat to tell a
+    # dead job from a slow one. Before this, clearing one needed a redeploy.
+    state = Column(String, default="running")   # pending | running
+    claimed_by = Column(String)                 # host:pid of the owner
+    heartbeat_at = Column(DateTime)
     started_at = Column(DateTime, server_default=func.now())
 
 

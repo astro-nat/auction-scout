@@ -19,8 +19,12 @@ while async routes update from the event loop.
 """
 
 import logging
+import os
+import socket
 import uuid
 from typing import Optional
+
+from sqlalchemy import func, or_, text
 
 from .. import models
 from ..database import SessionLocal
@@ -32,6 +36,99 @@ logger = logging.getLogger(__name__)
 # just means three of them crawling while the connection pool starves every
 # request behind them.
 HEAVY_KINDS = ("reprice", "ship-analysis", "bid-refresh", "import", "scan")
+
+
+# --- ownership -----------------------------------------------------------
+# Identifies this process in `claimed_by`. Once the workers move out of the
+# web process (phase 1) several processes will see the same rows, and the
+# only safe way to decide who runs what is to make claiming atomic.
+WORKER_ID = f"{socket.gethostname()}:{os.getpid()}"
+
+# How long a job may go without a heartbeat before it's presumed dead.
+# Generous on purpose: run_reprice heartbeats once per lot, and one lot can
+# legitimately sit through several 40s comp lookups. Too low and the reaper
+# starts fighting live jobs.
+STALE_JOB_SECONDS = int(os.environ.get("STALE_JOB_SECONDS", "900"))
+
+# Kinds that can be picked up again from their checkpoint. Everything else
+# (scan, import) runs inside a request handler; a dead one is just litter.
+RESUMABLE_KINDS = {"reprice": "lot_ids",
+                   "ship-analysis": "auction_ids",
+                   "bid-refresh": "auction_ids"}
+
+
+def _stale_cutoff():
+    """Staleness measured on the DATABASE clock, not this process's.
+
+    Workers on different hosts have different clocks; the row is shared, so
+    the comparison has to happen where the row lives.
+    """
+    return func.now() - text(f"interval '{int(STALE_JOB_SECONDS)} seconds'")
+
+
+def heartbeat(job_id: str) -> None:
+    """Say the owner is still alive. Folded into update() so every worker
+    that reports progress heartbeats for free."""
+    db = None
+    try:
+        db = SessionLocal()
+        (db.query(models.Job)
+           .filter(models.Job.id == job_id)
+           .update({"heartbeat_at": func.now()}, synchronize_session=False))
+        db.commit()
+    except Exception as exc:  # noqa: BLE001 — same rule as update()
+        logger.warning("Heartbeat for %s skipped: %s", job_id, exc)
+    finally:
+        if db is not None:
+            db.close()
+
+
+def claim(job_id: str) -> bool:
+    """Take ownership of an abandoned job. True only if WE got it.
+
+    One conditional UPDATE, so two processes racing for the same row can't
+    both win — the second matches zero rows because the first already moved
+    the heartbeat forward. (Phase 1's "claim the next pending job" query is
+    the one that needs SELECT … FOR UPDATE SKIP LOCKED; targeting a known id
+    doesn't.)
+    """
+    db = None
+    try:
+        db = SessionLocal()
+        updated = (db.query(models.Job)
+                     .filter(models.Job.id == job_id,
+                             or_(models.Job.heartbeat_at.is_(None),
+                                 models.Job.heartbeat_at < _stale_cutoff()))
+                     .update({"claimed_by": WORKER_ID,
+                              "heartbeat_at": func.now(),
+                              "state": "running"},
+                             synchronize_session=False))
+        db.commit()
+        return bool(updated)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Claim of %s failed: %s", job_id, exc)
+        return False
+    finally:
+        if db is not None:
+            db.close()
+
+
+def stale() -> list[dict]:
+    """Jobs whose owner has stopped saying anything."""
+    db = None
+    try:
+        db = SessionLocal()
+        rows = (db.query(models.Job)
+                  .filter(or_(models.Job.heartbeat_at.is_(None),
+                              models.Job.heartbeat_at < _stale_cutoff()))
+                  .all())
+        return [_as_dict(j, with_payload=True) for j in rows]
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Stale-job scan failed: %s", exc)
+        return []
+    finally:
+        if db is not None:
+            db.close()
 
 
 def heavy_running(ignore: Optional[str] = None) -> Optional[str]:
@@ -55,7 +152,9 @@ def start(kind: str, label: str, total: Optional[int] = None,
     db = SessionLocal()
     try:
         db.add(models.Job(id=job_id, kind=kind, label=label,
-                          total=total, payload=payload))
+                          total=total, payload=payload,
+                          state="running", claimed_by=WORKER_ID,
+                          heartbeat_at=func.now()))
         db.commit()
     finally:
         db.close()
@@ -74,8 +173,9 @@ def update(job_id: str, current: Optional[int] = None,
         values["detail"] = detail
     if label is not None:
         values["label"] = label
-    if not values:
-        return
+    # No early return on empty values: update(job_id) with nothing to report
+    # is still a caller saying "I'm alive", and the heartbeat below is the
+    # whole point of letting it through.
     # Progress is cosmetic plus a resume checkpoint — never worth killing the
     # job over. This call sits outside the per-item try/except in run_reprice,
     # so a pool timeout here used to unwind the whole loop and strand a row
@@ -83,6 +183,9 @@ def update(job_id: str, current: Optional[int] = None,
     db = None
     try:
         db = SessionLocal()
+        # Progress IS the heartbeat: anything still reporting is alive, and
+        # this costs nothing extra — same row, same statement.
+        values["heartbeat_at"] = func.now()
         (db.query(models.Job)
            .filter(models.Job.id == job_id)
            .update(values, synchronize_session=False))

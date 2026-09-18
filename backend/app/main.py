@@ -35,6 +35,9 @@ _MIGRATIONS = [
     "ALTER TABLE enrichment ADD COLUMN IF NOT EXISTS all_in_cost NUMERIC",
     "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS auctioneer_id INTEGER",
     "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS hidden BOOLEAN DEFAULT FALSE",
+    "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS state VARCHAR DEFAULT 'running'",
+    "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS claimed_by VARCHAR",
+    "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS heartbeat_at TIMESTAMP",
     "CREATE INDEX IF NOT EXISTS ix_auctions_auctioneer_id ON auctions (auctioneer_id)",
 ]
 

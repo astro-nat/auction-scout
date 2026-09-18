@@ -131,9 +131,17 @@ frontend/src/
 - **Alembic migrations** — tables are auto-created; add Alembic before the
   data matters. Schema changes currently need a manual `ALTER` or a dev-DB
   reset (`docker compose down -v`).
-- **A real job queue** — enrichment runs via FastAPI `BackgroundTasks`:
-  fine for one worker, but no retry-on-crash or concurrency control, and a
-  backend restart drops the in-flight queue (orphans are auto-reset to
-  `pending` on startup). Swap for Arq/Celery when it matters.
+- **A real job queue** — enrichment runs via FastAPI `BackgroundTasks`, in
+  the same process as the API. That shared connection pool is what wedged
+  the backend twice (see `services/jobs.py`), so the move is underway:
+  - *Phase 0 (done)* — jobs carry `state`/`claimed_by`/`heartbeat_at`, and a
+    reaper restarts work whose owner stopped reporting. A frozen job used to
+    need a redeploy; it now recovers on its own within `STALE_JOB_SECONDS`.
+  - *Phase 1* — move the consumers into their own process (`app/worker.py`,
+    a second Railway service off the same image) so a deploy or a starved
+    pool can't take the API down with them. Postgres stays the queue; this
+    needs no Redis.
+  - *Phase 2* — retire the hand-rolled guards (`heavy_running`, `resume.py`)
+    once claiming does that job properly.
 - **Sell-through data** — DTS (days-to-sell) is stubbed to 0 in the ROI
   check; wire up sold/active counts to make illiquid items fail viability.
