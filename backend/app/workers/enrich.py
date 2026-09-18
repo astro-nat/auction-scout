@@ -23,6 +23,7 @@ at startup.
 
 import asyncio
 import json
+import os
 import re
 import base64
 import logging
@@ -73,6 +74,14 @@ LOGISTICS_COST = {"EASY": 3.50, "NEUTRAL": 6.50, "HARD": 21.00}
 INBOUND_TIER_MULT = {"EASY": 1.0, "NEUTRAL": 1.5, "HARD": 4.0}
 # Used when an auction ships but its terms haven't been read yet.
 DEFAULT_INBOUND_SHIP = 15.0
+# A HARD lot doesn't go in a box. Scaling the house's small-parcel quote
+# can't reach what a pallet costs — 4x a $12 quote is $48, against $150-400
+# of real LTL freight — and the gap manufactured gold mines: the Pearland
+# industrial audit had 52 of its 62 golds on HARD lots costed at $21,
+# including a ceiling-mounted air purification station.
+#
+# Only bites when the lot actually ships; local pickup still costs nothing.
+FREIGHT_FLOOR = {"HARD": float(os.environ.get("HARD_FREIGHT_FLOOR", "150"))}
 
 
 def _inbound_shipping(lot: models.Lot) -> float:
@@ -86,15 +95,16 @@ def _inbound_shipping(lot: models.Lot) -> float:
     source = (lot.source or (auction.source if auction else None) or "").lower()
     if "pickup" in source:
         return 0.0          # local pickup — you collect it, nothing to pay
+    tier = lot.logistics_ease or "NEUTRAL"
     quoted = getattr(auction, "ship_cost_estimate", None) if auction else None
     base = float(quoted) if quoted else DEFAULT_INBOUND_SHIP
-    return round(base * INBOUND_TIER_MULT.get(lot.logistics_ease or "NEUTRAL", 1.5), 2)
+    scaled = base * INBOUND_TIER_MULT.get(tier, 1.5)
+    return round(max(scaled, FREIGHT_FLOOR.get(tier, 0.0)), 2)
 
 # When itemized inspection finds no comps for an item, the model's own
 # sold-price estimate (from the same vision call) fills the gap — discounted,
 # because model guesses skew optimistic vs. real sold data. env-tunable like
 # ACTIVE_REALIZATION in services/pricing.py.
-import os
 AI_ESTIMATE_REALIZATION = float(os.environ.get("AI_ESTIMATE_REALIZATION", "0.8"))
 
 

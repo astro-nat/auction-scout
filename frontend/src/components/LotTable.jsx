@@ -73,6 +73,25 @@ function isOverbid(lot, e) {
 // Why a $15 lot showing $60 resale returns 12% and not 300%: the ROI
 // denominator is the ALL-IN cost (hammer + premium + tax + shipping +
 // packing), and the resale side is net of eBay's cut.
+// What kind of evidence a resale figure rests on. A gold mine built from
+// asking prices is a much weaker claim than one built from completed sales:
+// the Pearland industrial audit found all 62 of its golds priced off active
+// listings, which sit unsold for months at aspirational prices.
+function evidence(e) {
+  const src = e.price_source || ''
+  if (!e.est_resale) return null
+  if (src.startsWith('retail $')) return 'retail'
+  if (/\bsold\b/i.test(src) && !/\bactive\b/i.test(src)) return 'sold'
+  if (/\bactive\b/i.test(src)) return 'asking'
+  return null
+}
+
+const EVIDENCE_NOTE = {
+  asking: 'Asking prices only — no confirmed sales. Sellers list high and wait.',
+  sold: 'Backed by completed sales.',
+  retail: 'From the retail price printed in the lot title.',
+}
+
 function roiTooltip(lot, e) {
   if (e.est_roi == null) return undefined
   const lines = [`Return on the all-in cost, not the hammer price.`]
@@ -577,12 +596,18 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
         {sorted.slice(0, renderLimit).map((lot) => {
           const e = lot.enrichment || {}
           const gold = e.roi_status === 'GOLD MINE'
+          const asking = gold && evidence(e) === 'asking'
           const overbid = isOverbid(lot, e)
           const edited = new Set(e.user_overrides || [])
           return (
             <tr key={lot.lot_id}
-                title={overbid ? 'Bid has passed your max-bid ceiling' : undefined}
-                style={gold ? { background: 'var(--gold-bg)' }
+                title={overbid ? 'Bid has passed your max-bid ceiling'
+                  : asking ? EVIDENCE_NOTE.asking : undefined}
+                style={gold
+                  ? { background: 'var(--gold-bg)',
+                      // Asking-price gold gets a paler wash: still worth a
+                      // look, but not the same claim as one backed by sales.
+                      opacity: asking ? 0.82 : 1 }
                   : overbid ? { background: 'rgba(255, 140, 0, 0.14)' } : undefined}>
               <td style={cell}>
                 <button
@@ -662,6 +687,10 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
                 />
                 {e.comp_count > 0 && (
                   <span style={{ color: 'var(--muted)', fontSize: 12 }}> ({e.comp_count})</span>
+                )}
+                {evidence(e) === 'asking' && (
+                  <span title={EVIDENCE_NOTE.asking}
+                        style={{ color: 'var(--muted)', fontSize: 12, cursor: 'help' }}> ~</span>
                 )}
               </td>
               <td style={cell}>{money(e.max_bid)}</td>
