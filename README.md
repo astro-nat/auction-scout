@@ -119,13 +119,27 @@ and either side restarts without the other noticing.
 ### Deploying the worker on Railway
 
 The worker is a **second service off the same repo directory** as the
-backend — same Dockerfile, same variables, different start command:
+backend: same Dockerfile and variables, with the start command overridden to
+`python -m app.worker`, and no public domain (it serves no HTTP).
 
-1. New service → same repo, root directory `backend`
-2. Settings → Deploy → **Start Command**: `python -m app.worker`
-3. Variables: reference the same `DATABASE_URL` and `ANTHROPIC_API_KEY` /
-   `SOLDCOMPS_API_KEY` as the backend service
-4. Leave it with **no public domain** — it serves no HTTP
+Railway's config lives in `.railway/railway.ts` (Infrastructure-as-Code).
+Do not hand-write that file for an existing project — import it, because a
+single-file project DELETES any resource the file omits:
+
+```bash
+railway config pull     # writes .railway/railway.ts from the live project
+# add the worker service to the file
+railway config plan     # dry run: prints exactly what would change
+railway config apply    # applies after you confirm the plan
+```
+
+The worker service needs `ANTHROPIC_API_KEY`, `SOLDCOMPS_API_KEY` and
+`NTFY_TOPIC` as well as the database — the closing-soon notifier moved here,
+so without `NTFY_TOPIC` phone alerts stop silently.
+
+The older `railway.json` / `railway.toml` config-as-code files (still in
+`backend/` and `frontend/`) are deprecated and **stop being read on
+2026-12-01**; `railway config pull` folds them into the IaC file.
 
 Only the API runs the schema migrations, so deploy the backend first on a
 release that changes tables. The worker is safe to restart at any time:
