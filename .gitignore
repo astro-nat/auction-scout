@@ -17,3 +17,6 @@ pgdata/
 # editor
 .vscode/*
 !.vscode/settings.json
+
+# Local tool binaries (Railway CLI etc) — not part of the app
+.tools/
