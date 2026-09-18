@@ -209,20 +209,19 @@ async def analyze_shipping(dry_run: bool = False,
 
 
 @router.post("/refresh-bids", status_code=202)
-def refresh_bids(db: Session = Depends(get_db)):
-    """Re-pull current bids from HiBid for every imported, still-open
-    auction and recompute ROI at the new bids. Free — no AI calls."""
-    imported = (db.query(models.Lot.auction_id)
-                  .filter(models.Lot.auction_id.isnot(None)).distinct())
-    targets = (db.query(models.Auction.id)
-                 .filter(models.Auction.id.in_(imported),
-                         models.Auction.hibid_id.isnot(None))
-                 .filter((models.Auction.closing_date.is_(None))
-                         | (models.Auction.closing_date >= datetime.now()))
-                 .all())
-    ids = [t[0] for t in targets]
+def refresh_bids(window_hours: float | None = None,
+                 db: Session = Depends(get_db)):
+    """Re-pull current bids from HiBid and recompute ROI at the new bids.
+    Free — no AI calls.
+
+    Limited to auctions closing inside BID_REFRESH_WINDOW_HOURS, same as the
+    hourly loop. Pass window_hours=0 to refresh everything still open.
+    """
+    from ..workers.refresh import auctions_due_for_bid_refresh
+    ids = auctions_due_for_bid_refresh(db, window_hours)
     if not ids:
-        return {"auctions": 0, "queued": False}
+        return {"auctions": 0, "queued": False,
+                "reason": "nothing closing inside the refresh window"}
     if jobs.has_pending("bid-refresh"):
         return {"auctions": 0, "queued": False, "already_running": True}
     jobs.enqueue("bid-refresh", "Refreshing current bids",

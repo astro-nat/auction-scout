@@ -13,15 +13,27 @@ workers/resume.py restarts it after a deploy.
 
 import asyncio
 import logging
+from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 from ..database import SessionLocal
-from .. import models
+from .. import config, models
 from ..services import hibid, jobs
 from .enrich import _apply_roi
 
 logger = logging.getLogger(__name__)
+
+
+def _utcnow() -> datetime:
+    """Naive UTC, matching how closing_date and closes_at are stored.
+
+    Explicit because the mismatch has bitten before: these columns hold UTC
+    with no tzinfo, and a bare datetime.now() is local time — the two only
+    agree because the containers run UTC.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def run_bid_refresh(auction_ids: list[int], resume_job_id: str | None = None) -> None:
@@ -89,3 +101,51 @@ def run_bid_refresh(auction_ids: list[int], resume_job_id: str | None = None) ->
         jobs.finish(job)
         db.close()
     print(f"Bid refresh complete: {updated_total} lots updated")
+
+
+def auctions_due_for_bid_refresh(db: Session,
+                                 window_hours: float | None = None) -> list[int]:
+    """Imported auctions with lots closing inside the window.
+
+    Shared by the hourly loop and the manual endpoint, which had drifted into
+    two copies of the same query.
+
+    A lot's own `closes_at` decides when it is known — HiBid staggers
+    closings, so an auction stays open for days while its lots finish in
+    waves, and the auction-level date says nothing about the lot you care
+    about. Where it is unknown (webcast sales carry no per-lot countdown —
+    600 of the 1,304 lots on file right now) the auction's closing date
+    stands in, and where neither is known the auction is included: we cannot
+    rule it out, and silently never refreshing is the worse failure.
+    """
+    window = (config.BID_REFRESH_WINDOW_HOURS if window_hours is None
+              else window_hours)
+    imported = (db.query(models.Lot.auction_id)
+                  .filter(models.Lot.auction_id.isnot(None)).distinct())
+    q = (db.query(models.Auction.id)
+           .filter(models.Auction.id.in_(imported),
+                   models.Auction.hibid_id.isnot(None))
+           .filter(or_(models.Auction.closing_date.is_(None),
+                       models.Auction.closing_date >= _utcnow())))
+    if window and window > 0:
+        cutoff = _utcnow() + timedelta(hours=window)
+        closing_soon = (
+            db.query(models.Lot.auction_id)
+              .filter(models.Lot.auction_id.isnot(None),
+                      models.Lot.closes_at.isnot(None),
+                      models.Lot.closes_at <= cutoff,
+                      models.Lot.closes_at >= _utcnow())
+              .distinct())
+        # No per-lot times at all for this auction? Fall back to its own date.
+        has_lot_times = (
+            db.query(models.Lot.auction_id)
+              .filter(models.Lot.auction_id.isnot(None),
+                      models.Lot.closes_at.isnot(None))
+              .distinct())
+        q = q.filter(or_(
+            models.Auction.id.in_(closing_soon),
+            and_(models.Auction.id.notin_(has_lot_times),
+                 or_(models.Auction.closing_date.is_(None),
+                     models.Auction.closing_date <= cutoff)),
+        ))
+    return [row[0] for row in q.all()]

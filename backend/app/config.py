@@ -40,6 +40,15 @@ FLUSH_CLOSED_HOURS = float(os.environ.get("FLUSH_CLOSED_HOURS", "12"))
 # Auto-refresh current bids (and per-lot closed status) from HiBid this
 # often (hours). Free — no AI calls. 0 disables; the manual button stays.
 BID_REFRESH_HOURS = float(os.environ.get("BID_REFRESH_HOURS", "1"))
+# Only refresh bids for auctions closing inside this window. Bids barely
+# move while a sale is days out, and every refresh is a full HiBid re-fetch
+# of every lot — so pulling a 500-lot auction hourly for a week costs a lot
+# to learn nothing. 0 disables the window and refreshes everything open.
+#
+# The trade is real: outside the window the Bid column holds its last known
+# value, so ROI on a lot closing in three days is computed against a bid
+# that may be hours old.
+BID_REFRESH_WINDOW_HOURS = float(os.environ.get("BID_REFRESH_WINDOW_HOURS", "1"))
 
 # How many lots enrich/inspect in parallel. The work is HTTP-bound (Claude,
 # eBay, image downloads), so a few threads give a ~Nx queue speedup; keep

@@ -62,7 +62,7 @@ def _start_bid_refresh_loop() -> None:
 
     def loop():
         from ..services import jobs
-        from .refresh import run_bid_refresh
+        from .refresh import auctions_due_for_bid_refresh, run_bid_refresh
         # Offset from the flush loop's wakeup so they don't pile onto the
         # DB at the same instant after a deploy.
         time.sleep(STARTUP_DELAY_SECONDS * 2)
@@ -78,18 +78,13 @@ def _start_bid_refresh_loop() -> None:
                 else:
                     db = SessionLocal()
                     try:
-                        imported = (db.query(models.Lot.auction_id)
-                                      .filter(models.Lot.auction_id.isnot(None))
-                                      .distinct())
-                        ids = [r[0] for r in
-                               db.query(models.Auction.id)
-                                 .filter(models.Auction.id.in_(imported),
-                                         models.Auction.hibid_id.isnot(None))
-                                 .filter((models.Auction.closing_date.is_(None))
-                                         | (models.Auction.closing_date >= datetime.now()))
-                                 .all()]
+                        ids = auctions_due_for_bid_refresh(db)
                     finally:
                         db.close()
+                    if not ids:
+                        logger.info(
+                            "Auto bid refresh: nothing closing within %.1fh",
+                            config.BID_REFRESH_WINDOW_HOURS)
                     if ids:
                         # Queue it like any other caller would. Running it
                         # inline here blocked this loop for the duration and
