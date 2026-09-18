@@ -10,13 +10,11 @@ from datetime import datetime, timezone  # noqa: F401 — datetime used in filte
 from typing import List
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from .. import models, schemas
 from ..database import get_db
 from ..services import favorites, hibid, jobs
-from ..workers.enrich import run_enrichment, run_ship_analysis, process_queued_lots
-from ..workers.refresh import run_bid_refresh
 from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/auctions", tags=["auctions"])
@@ -178,8 +176,7 @@ def purge_stale(db: Session = Depends(get_db)):
 
 
 @router.post("/analyze-shipping", status_code=202)
-async def analyze_shipping(background_tasks: BackgroundTasks,
-                           dry_run: bool = False,
+async def analyze_shipping(dry_run: bool = False,
                            force: bool = False,
                            db: Session = Depends(get_db)):
     """AI-read each open auction's shipping info + terms and store a rough
@@ -207,12 +204,14 @@ async def analyze_shipping(background_tasks: BackgroundTasks,
     if busy:
         return {"auctions": 0, "queued": False,
                 "already_running": True, "blocked_by": busy}
-    background_tasks.add_task(run_ship_analysis, [a.id for a in targets])
+    jobs.enqueue("ship-analysis", "Reading shipping policies",
+                 total=len(targets),
+                 payload={"auction_ids": [a.id for a in targets]})
     return {"auctions": len(targets), "queued": True}
 
 
 @router.post("/refresh-bids", status_code=202)
-def refresh_bids(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def refresh_bids(db: Session = Depends(get_db)):
     """Re-pull current bids from HiBid for every imported, still-open
     auction and recompute ROI at the new bids. Free — no AI calls."""
     imported = (db.query(models.Lot.auction_id)
@@ -230,7 +229,8 @@ def refresh_bids(background_tasks: BackgroundTasks, db: Session = Depends(get_db
     if busy:
         return {"auctions": 0, "queued": False,
                 "already_running": True, "blocked_by": busy}
-    background_tasks.add_task(run_bid_refresh, ids)
+    jobs.enqueue("bid-refresh", "Refreshing current bids",
+                 total=len(ids), payload={"auction_ids": ids})
     return {"auctions": len(ids), "queued": True}
 
 
@@ -242,7 +242,6 @@ async def list_categories():
 
 @router.post("/scan", response_model=List[schemas.AuctionOut])
 async def scan_auctions(payload: schemas.ScanRequest,
-                        background_tasks: BackgroundTasks,
                         db: Session = Depends(get_db)):
     """Discover open auctions near the configured zip and store them."""
     # Keep the table from growing without bound — every scan appends.
@@ -305,7 +304,8 @@ async def scan_auctions(payload: schemas.ScanRequest,
     to_analyze = [r.id for r in stored
                   if r.source == "Ship" and r.ship_analyzed_at is None]
     if to_analyze:
-        background_tasks.add_task(run_ship_analysis, to_analyze)
+        jobs.enqueue("ship-analysis", "Reading shipping policies",
+                     total=len(to_analyze), payload={"auction_ids": to_analyze})
 
     # Attach the same stats GET /auctions serves — without this, previously
     # imported auctions come back with zeroed counts and the UI shows them
@@ -397,8 +397,7 @@ def set_auction_hidden(auction_id: int, hidden: bool = True,
 
 
 @router.post("/{auction_id}/enrich-all", status_code=202)
-def enrich_all(auction_id: int, background_tasks: BackgroundTasks,
-               skip_hard: bool = False, db: Session = Depends(get_db)):
+def enrich_all(auction_id: int, skip_hard: bool = False, db: Session = Depends(get_db)):
     """Queue enrichment for every pending/failed lot in an auction. Safe to
     re-run — already-successful lots are skipped. skip_hard leaves out
     HARD-to-ship lots, which rarely clear the ROI bar and cost the same to
@@ -413,8 +412,9 @@ def enrich_all(auction_id: int, background_tasks: BackgroundTasks,
         return {"auction_id": auction_id, "queued": 0}
     db.query(models.Enrichment).filter(
         models.Enrichment.lot_id.in_(lot_ids)
-    ).update({"status": "queued", "queued_task": "enrich"},
+    ).update({"status": "queued", "queued_task": "enrich",
+              "queued_at": datetime.now(timezone.utc),
+              "queue_rank": 0, "claimed_at": None},
              synchronize_session=False)
     db.commit()
-    background_tasks.add_task(process_queued_lots, [(lid, "enrich") for lid in lot_ids])
     return {"auction_id": auction_id, "queued": len(lot_ids)}

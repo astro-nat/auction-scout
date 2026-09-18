@@ -1,35 +1,36 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from datetime import datetime, timezone
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
 from ..database import get_db
 from ..services import jobs
-from ..workers.enrich import (run_enrichment, run_inspection, run_reprice,
-                              process_queued_lots, _apply_roi)
+from ..workers.enrich import _apply_roi
 
 router = APIRouter(prefix="/lots", tags=["enrichment"])
 
 
 @router.post("/{lot_id}/enrich", status_code=202)
-def enrich_lot(lot_id: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def enrich_lot(lot_id: str, db: Session = Depends(get_db)):
     lot = db.query(models.Lot).filter(models.Lot.lot_id == lot_id).first()
     if not lot:
         raise HTTPException(status_code=404, detail="Lot not found")
 
     lot.enrichment.status = "queued"
     lot.enrichment.queued_task = "enrich"
+    lot.enrichment.queued_at = datetime.now(timezone.utc)
+    lot.enrichment.queue_rank = 0
+    lot.enrichment.claimed_at = None
     db.commit()
 
-    # Returns immediately — the actual AI call happens after the response is sent.
-    # This is the fix for the Streamlit failure mode: nothing here blocks on the API call.
-    background_tasks.add_task(run_enrichment, lot.id)
-
+    # Returns immediately: the worker process picks this up within a poll.
+    # Nothing here blocks on the AI call — that was the Streamlit failure mode,
+    # and running it in the API process was the one after that.
     return {"lot_id": lot_id, "status": "queued"}
 
 
 @router.post("/enrich-batch", status_code=202)
-def enrich_batch(payload: schemas.EnrichBatchRequest,
-                 background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def enrich_batch(payload: schemas.EnrichBatchRequest, db: Session = Depends(get_db)):
     """Queue enrichment for an explicit, ordered list of lots — the frontend
     sends what's visible on screen, top row first, so the user's current view
     gets processed before anything else. Already-successful lots are skipped."""
@@ -41,17 +42,21 @@ def enrich_batch(payload: schemas.EnrichBatchRequest,
     )
     by_id = {l.lot_id: l for l in rows}
     ordered = [by_id[i] for i in payload.lot_ids if i in by_id]
-    for lot in ordered:
+    queued_at = datetime.now(timezone.utc)
+    for rank, lot in enumerate(ordered):
         lot.enrichment.status = "queued"
         lot.enrichment.queued_task = "enrich"
+        # The caller sent these in the order they appear on screen; keep it,
+        # because the picking now happens in another process.
+        lot.enrichment.queued_at = queued_at
+        lot.enrichment.queue_rank = rank
+        lot.enrichment.claimed_at = None
     db.commit()
-    background_tasks.add_task(process_queued_lots,
-                              [(lot.id, "enrich") for lot in ordered])
     return {"queued": len(ordered)}
 
 
 @router.post("/reprice", status_code=202)
-def reprice(background_tasks: BackgroundTasks, auction_id: int | None = None,
+def reprice(auction_id: int | None = None,
             db: Session = Depends(get_db)):
     """Recompute comps + ROI for enriched lots using current pricing rules.
 
@@ -74,13 +79,13 @@ def reprice(background_tasks: BackgroundTasks, auction_id: int | None = None,
         # pool and each holds a transaction open across its HTTP calls, so
         # stacking them starves every request behind them.
         return {"repricing": 0, "already_running": True, "blocked_by": busy}
-    background_tasks.add_task(run_reprice, lot_ids)
+    jobs.enqueue("reprice", "Re-pricing lots with current comp rules",
+                 total=len(lot_ids), payload={"lot_ids": lot_ids})
     return {"repricing": len(lot_ids)}
 
 
 @router.post("/reinspect-no-comps", status_code=202)
-def reinspect_no_comps(background_tasks: BackgroundTasks,
-                       dry_run: bool = False,
+def reinspect_no_comps(dry_run: bool = False,
                        db: Session = Depends(get_db)):
     """Re-run itemized inspection on every enriched lot that still has no
     usable price (est_resale is NULL) — the inspect strategy now falls back
@@ -101,17 +106,19 @@ def reinspect_no_comps(background_tasks: BackgroundTasks,
     )
     if dry_run:
         return {"lots": len(rows), "dry_run": True}
-    for lot in rows:
+    queued_at = datetime.now(timezone.utc)
+    for rank, lot in enumerate(rows):
         lot.enrichment.status = "queued"
         lot.enrichment.queued_task = "inspect"
+        lot.enrichment.queued_at = queued_at
+        lot.enrichment.queue_rank = rank
+        lot.enrichment.claimed_at = None
     db.commit()
-    background_tasks.add_task(process_queued_lots,
-                              [(lot.id, "inspect") for lot in rows])
     return {"queued": len(rows)}
 
 
 @router.post("/{lot_id}/inspect", status_code=202)
-def inspect_lot(lot_id: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def inspect_lot(lot_id: str, db: Session = Depends(get_db)):
     """Itemized vision pass for mixed lots — identify and price each item in
     the photo individually. Costlier than /enrich (one comp lookup per item)."""
     lot = db.query(models.Lot).filter(models.Lot.lot_id == lot_id).first()
@@ -122,8 +129,11 @@ def inspect_lot(lot_id: str, background_tasks: BackgroundTasks, db: Session = De
 
     lot.enrichment.status = "queued"
     lot.enrichment.queued_task = "inspect"
+    # rank 0: a lot the user just clicked jumps the batch queued behind it.
+    lot.enrichment.queued_at = datetime.now(timezone.utc)
+    lot.enrichment.queue_rank = 0
+    lot.enrichment.claimed_at = None
     db.commit()
-    background_tasks.add_task(run_inspection, lot.id)
     return {"lot_id": lot_id, "status": "queued"}
 
 

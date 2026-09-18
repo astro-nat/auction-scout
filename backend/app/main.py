@@ -38,6 +38,11 @@ _MIGRATIONS = [
     "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS state VARCHAR DEFAULT 'running'",
     "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS claimed_by VARCHAR",
     "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS heartbeat_at TIMESTAMP",
+    "ALTER TABLE enrichment ADD COLUMN IF NOT EXISTS queued_at TIMESTAMP",
+    "ALTER TABLE enrichment ADD COLUMN IF NOT EXISTS queue_rank INTEGER",
+    "ALTER TABLE enrichment ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMP",
+    "CREATE INDEX IF NOT EXISTS ix_enrichment_queue "
+    "ON enrichment (status, queued_at, queue_rank)",
     "CREATE INDEX IF NOT EXISTS ix_auctions_auctioneer_id ON auctions (auctioneer_id)",
 ]
 
@@ -127,18 +132,16 @@ app.include_router(status.router)
 
 
 @app.on_event("startup")
-def recover_orphaned_jobs():
-    """BackgroundTasks don't survive a restart/deploy, but the work they were
-    doing left its plan in the DB — jobs-table rows with payloads, lots still
-    marked 'queued'. Pick it all back up instead of stranding it (this once
-    lost 1,000+ auctions of a shipping-analysis run to a frontend deploy).
-    Imported here, not top-level: workers.enrich instantiates the Anthropic
-    client at import time, and module import order shouldn't depend on it."""
-    from .workers.resume import resume_interrupted_work
-    resume_interrupted_work()
-    # Phone alerts for watched lots closing soon (no-op without NTFY_TOPIC).
-    from .workers.notify import start_notifier
-    start_notifier()
+def startup():
+    """The API owns the schema and nothing else.
+
+    Background work lives in the worker process (`python -m app.worker`):
+    enrichment, repricing, shipping analysis, bid refreshes, the maintenance
+    loops and the closing-soon notifier. Running them here meant they shared
+    this process's connection pool, and three long jobs could starve every
+    request behind them — the backend wedged twice in one day before the
+    split.
+    """
     # One-time repair: closing dates ingested before the timezone fix were
     # stored as naive US-Central but compared against UTC, making auctions
     # look closed 5 hours early (the auto-flush once deleted a still-open
@@ -156,9 +159,12 @@ def recover_orphaned_jobs():
     except Exception as exc:  # noqa: BLE001
         print(f"tz fix skipped: {exc}")
 
-    # 12-hourly closed-item flush (FLUSH_CLOSED_HOURS=0 disables).
-    from .workers.maintenance import start_maintenance
-    start_maintenance()
+    # scan/import run inside a request handler, so any row of those kinds is
+    # from a process that no longer exists. The reaper would get there
+    # eventually, but only after the stale threshold — and these are known
+    # dead the moment this process starts.
+    from .workers.resume import clear_request_scoped_jobs
+    clear_request_scoped_jobs()
 
 
 @app.get("/health")

@@ -1,6 +1,6 @@
 """GET /status — everything happening server-side right now, for the top bar."""
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from .. import models
@@ -63,12 +63,10 @@ def get_settings():
 
 @router.patch("/settings")
 def patch_settings(payload: dict,
-                   background_tasks: BackgroundTasks,
                    db: Session = Depends(get_db)):
     """Save a new ROI target and immediately reprice every enriched lot under
     it (free — reuses stored AI results). 1-10000 sanity range."""
     from ..services import settings as settings_store
-    from ..workers.enrich import run_regrade
     pct = payload.get("target_roi_pct")
     if not isinstance(pct, (int, float)) or not (1 <= pct <= 10000):
         raise HTTPException(status_code=422,
@@ -79,7 +77,8 @@ def patch_settings(payload: dict,
     n = (db.query(models.Enrichment)
            .filter(models.Enrichment.est_resale.isnot(None)).count())
     if n:
-        background_tasks.add_task(run_regrade)
+        jobs.enqueue("regrade", "Re-grading items at the new ROI target",
+                     total=n)
     return {"target_roi_pct": pct, "regrading": n}
 
 

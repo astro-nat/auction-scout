@@ -131,8 +131,20 @@ class Enrichment(Base):
     roi_status = Column(String)        # GOLD MINE | PASS
 
     # Which worker a 'queued' lot is waiting for ('enrich' | 'inspect') — how
-    # startup recovery knows what to run for lots orphaned by a deploy.
+    # the worker process knows what to run.
     queued_task = Column(String)
+    # Queue position. The batch endpoint sends the rows the user can SEE,
+    # top first, and that priority has to survive the trip through the
+    # database now that a separate process does the picking: order by
+    # (queued_at, queue_rank) and both the batch order and plain FIFO
+    # across batches fall out.
+    queued_at = Column(DateTime)
+    queue_rank = Column(Integer)
+    # Set when a worker takes the lot. Deliberately NOT a new status value —
+    # /status and the UI both count status == 'queued', and a lot being
+    # worked is still queued from the user's point of view. A claim old
+    # enough to be stale is up for grabs again.
+    claimed_at = Column(DateTime)
     # Live play-by-play while the worker runs ("searching eBay comps…");
     # cleared when the lot finishes. The UI polls and shows it on the spinner.
     progress = Column(String)

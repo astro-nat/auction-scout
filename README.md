@@ -95,6 +95,42 @@ The repo is deploy-ready: per-service `railway.json`, Dockerfiles that bind
 
 Pushes to `main` auto-deploy both services.
 
+## Running the worker
+
+Everything long-running — enrichment, repricing, shipping analysis, bid
+refreshes, the maintenance loops, the closing-soon notifier — runs in a
+**separate process** from the API:
+
+```bash
+python -m app.worker          # same image as the API, different command
+```
+
+`docker compose up` starts it alongside the backend. Postgres is the queue:
+the API writes a `pending` row (`jobs` table) or marks lots `queued`
+(`enrichment` table), and the worker claims them with `SELECT … FOR UPDATE
+SKIP LOCKED`. No Redis, no broker, and several workers can run at once.
+
+They were the same process until the backend wedged twice in one day: three
+long jobs each hold a transaction open across their HTTP calls, and once the
+connection pool was exhausted every API request queued behind them. Splitting
+the processes means a starved or stuck worker can no longer take the API down,
+and either side restarts without the other noticing.
+
+### Deploying the worker on Railway
+
+The worker is a **second service off the same repo directory** as the
+backend — same Dockerfile, same variables, different start command:
+
+1. New service → same repo, root directory `backend`
+2. Settings → Deploy → **Start Command**: `python -m app.worker`
+3. Variables: reference the same `DATABASE_URL` and `ANTHROPIC_API_KEY` /
+   `SOLDCOMPS_API_KEY` as the backend service
+4. Leave it with **no public domain** — it serves no HTTP
+
+Only the API runs the schema migrations, so deploy the backend first on a
+release that changes tables. The worker is safe to restart at any time:
+in-flight jobs keep their checkpoint and the reaper picks them back up.
+
 ## Repo layout
 
 ```
@@ -131,17 +167,9 @@ frontend/src/
 - **Alembic migrations** — tables are auto-created; add Alembic before the
   data matters. Schema changes currently need a manual `ALTER` or a dev-DB
   reset (`docker compose down -v`).
-- **A real job queue** — enrichment runs via FastAPI `BackgroundTasks`, in
-  the same process as the API. That shared connection pool is what wedged
-  the backend twice (see `services/jobs.py`), so the move is underway:
-  - *Phase 0 (done)* — jobs carry `state`/`claimed_by`/`heartbeat_at`, and a
-    reaper restarts work whose owner stopped reporting. A frozen job used to
-    need a redeploy; it now recovers on its own within `STALE_JOB_SECONDS`.
-  - *Phase 1* — move the consumers into their own process (`app/worker.py`,
-    a second Railway service off the same image) so a deploy or a starved
-    pool can't take the API down with them. Postgres stays the queue; this
-    needs no Redis.
-  - *Phase 2* — retire the hand-rolled guards (`heavy_running`, `resume.py`)
-    once claiming does that job properly.
+- **Phase 2 of the queue split** — retire the hand-rolled guards
+  (`heavy_running`) now that claiming does the job properly, and give the
+  worker a heartbeat `/status` can surface, so a dead worker is visible
+  rather than just quiet.
 - **Sell-through data** — DTS (days-to-sell) is stubbed to 0 in the ROI
   check; wire up sold/active counts to make illiquid items fail viability.

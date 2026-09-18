@@ -716,7 +716,7 @@ def _download_image(url: str | None) -> bytes | None:
     return None
 
 
-def run_regrade() -> None:
+def run_regrade(resume_job_id: str | None = None) -> None:
     """Recompute ROI verdicts ONLY — no comp lookups, no AI, no network.
 
     Changing the target ROI doesn't change what an item is worth, just
@@ -727,7 +727,10 @@ def run_regrade() -> None:
     estimates themselves need rebuilding.)
     """
     db: Session = SessionLocal()
-    job = jobs.start("regrade", "Re-grading items at the new ROI target")
+    # resume_job_id: the API enqueued a row and the worker claimed it, so
+    # adopt that one instead of registering a second.
+    job = resume_job_id or jobs.start(
+        "regrade", "Re-grading items at the new ROI target")
     changed = 0
     try:
         rows = (db.query(models.Lot)

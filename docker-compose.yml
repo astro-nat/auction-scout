@@ -34,7 +34,25 @@ services:
       postgres:
         condition: service_healthy
 
+  # The background worker: same image, different command. Everything long
+  # running lives here rather than in the API — see app/worker.py.
+  worker:
+    build: ./backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg2://htown:devpassword@postgres:5432/auction_scout
+    command: python -m app.worker
+    volumes:
+      - ./backend/app:/app/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      backend:
+        condition: service_started   # the API owns the schema migrations
+
   frontend:
+
     build:
       context: ./frontend
       target: dev   # Vite dev server; the Dockerfile's final stage is the prod nginx build

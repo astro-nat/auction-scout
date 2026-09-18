@@ -22,6 +22,7 @@ import logging
 import os
 import socket
 import uuid
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import func, or_, text
@@ -125,6 +126,101 @@ def stale() -> list[dict]:
         return [_as_dict(j, with_payload=True) for j in rows]
     except Exception as exc:  # noqa: BLE001
         logger.warning("Stale-job scan failed: %s", exc)
+        return []
+    finally:
+        if db is not None:
+            db.close()
+
+
+def enqueue(kind: str, label: str, total: Optional[int] = None,
+            payload: Optional[dict] = None) -> str:
+    """Register work for the worker process to pick up.
+
+    The difference from start(): this row is NOT claimed. start() is what a
+    runner calls when it is already executing; enqueue() is what an API
+    handler calls to ask for execution somewhere else.
+    """
+    job_id = uuid.uuid4().hex[:12]
+    db = SessionLocal()
+    try:
+        db.add(models.Job(id=job_id, kind=kind, label=label,
+                          total=total, payload=payload, state="pending"))
+        db.commit()
+    finally:
+        db.close()
+    return job_id
+
+
+def claim_pending(kinds: Optional[list[str]] = None) -> Optional[dict]:
+    """Take the oldest pending job, or None.
+
+    FOR UPDATE SKIP LOCKED is what makes this safe with several workers:
+    each transaction locks the row it takes and the others step over it
+    instead of blocking or, worse, picking the same one. Unlike claim(),
+    which targets a known id, this SELECTS — so it genuinely needs it.
+    """
+    db = None
+    try:
+        db = SessionLocal()
+        q = (db.query(models.Job)
+               .filter(models.Job.state == "pending",
+                       models.Job.cancelled.is_(False))
+               .order_by(models.Job.started_at)
+               .with_for_update(skip_locked=True)
+               .limit(1))
+        if kinds:
+            q = q.filter(models.Job.kind.in_(kinds))
+        job = q.first()
+        if job is None:
+            db.rollback()
+            return None
+        job.state = "running"
+        job.claimed_by = WORKER_ID
+        job.heartbeat_at = func.now()
+        out = _as_dict(job, with_payload=True)
+        db.commit()
+        return out
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Claiming a pending job failed: %s", exc)
+        return None
+    finally:
+        if db is not None:
+            db.close()
+
+
+def claim_lots(limit: int) -> list[tuple]:
+    """Take up to `limit` queued lots, oldest batch first.
+
+    Returns [(lot_db_id, task)] — the shape process_queued_lots wants.
+
+    Ordered by (queued_at, queue_rank) so the rows the user could see when
+    they pressed the button are still worked first. A claim older than
+    STALE_JOB_SECONDS is treated as abandoned and can be taken again, which
+    is how a lot survives its worker being killed mid-flight.
+    """
+    db = None
+    try:
+        db = SessionLocal()
+        rows = (db.query(models.Enrichment)
+                  .filter(models.Enrichment.status == "queued",
+                          or_(models.Enrichment.claimed_at.is_(None),
+                              models.Enrichment.claimed_at < _stale_cutoff()))
+                  .order_by(models.Enrichment.queued_at.nullsfirst(),
+                            models.Enrichment.queue_rank.nullsfirst(),
+                            models.Enrichment.lot_id)
+                  .with_for_update(skip_locked=True)
+                  .limit(limit)
+                  .all())
+        if not rows:
+            db.rollback()
+            return []
+        claimed = [(r.lot_id, r.queued_task or "enrich") for r in rows]
+        for r in rows:
+            r.claimed_at = datetime.now(timezone.utc)
+        db.commit()
+        return claimed
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Claiming queued lots failed: %s", exc)
         return []
     finally:
         if db is not None:
