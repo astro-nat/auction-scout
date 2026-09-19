@@ -124,6 +124,13 @@ class EnrichBatchRequest(BaseModel):
     lot_ids: list[str]
 
 
+class ImportAllRequest(BaseModel):
+    """Bulk import: which auctions, in display order, and (optionally) which
+    HiBid category to limit every one of them to (-1 = all lots)."""
+    auction_ids: list[int]
+    category_id: int = -1
+
+
 class ScanRequest(BaseModel):
     """Mirrors hibid.com's own search filters."""
     zip: Optional[str] = None

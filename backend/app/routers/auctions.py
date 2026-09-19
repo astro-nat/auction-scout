@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from .. import models, schemas
 from ..database import get_db
 from ..services import favorites, hibid, jobs
+from ..workers.import_all import save_lots
 from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/auctions", tags=["auctions"])
@@ -342,34 +343,39 @@ async def import_lots(auction_id: int, category_id: int = -1,
         jobs.update(job, current=0, total=len(lots),
                     label=f"Saving lots from {auction.name}")
 
-        created = updated = 0
-        cancelled = False
-        for i, data in enumerate(lots, 1):
-            if i % 10 == 0 or i == len(lots):
-                if jobs.is_cancelled(job):
-                    cancelled = True
-                    break            # keep what's saved so far
-                jobs.update(job, current=i, detail=(data.get("title") or "")[:45])
-            row = db.query(models.Lot).filter(models.Lot.lot_id == data["lot_id"]).first()
-            if row:
-                # bids/status/time-left always come fresh; analysis fields stay
-                for k in ("current_bid", "next_bid", "bid_count", "est_cost",
-                          "status", "time_left", "closes_at", "thumbnail_url",
-                          "hd_thumbnail_url", "fullsize_url"):
-                    setattr(row, k, data[k])
-                updated += 1
-            else:
-                row = models.Lot(auction_id=auction.id, **data)
-                db.add(row)
-                db.flush()
-                db.add(models.Enrichment(lot_id=row.id, status="pending"))
-                created += 1
-        auction.imported_at = datetime.now(timezone.utc)
-        db.commit()
+        # Shared with the bulk import-all worker — one upsert, two callers.
+        created, updated, cancelled = save_lots(
+            db, auction, lots,
+            on_progress=lambda i, title: jobs.update(job, current=i, detail=title),
+            should_cancel=lambda: jobs.is_cancelled(job))
     finally:
         jobs.finish(job)
     return {"auction_id": auction_id, "fetched": len(lots),
             "created": created, "updated": updated, "cancelled": cancelled}
+
+
+@router.post("/import-all", status_code=202)
+def import_all(payload: schemas.ImportAllRequest, db: Session = Depends(get_db)):
+    """Import lots from MANY auctions as one background job — the "scan found
+    20 auctions with a few antiques each" case. category_id limits every
+    import to that HiBid category. The caller sends the auctions in display
+    order and leaves out ones it knows have no matching lots."""
+    known = {a.id for a in
+             db.query(models.Auction.id)
+               .filter(models.Auction.id.in_(payload.auction_ids),
+                       models.Auction.hibid_id.isnot(None))
+               .all()}
+    ids = [aid for aid in payload.auction_ids if aid in known]
+    if not ids:
+        return {"auctions": 0, "queued": False}
+    # Two clicks must not import everything twice — same dedupe as reprice.
+    if jobs.has_pending("import-all"):
+        return {"auctions": 0, "already_running": True}
+    jobs.enqueue("import-all", f"Importing lots from {len(ids)} auctions",
+                 total=len(ids),
+                 payload={"auction_ids": ids,
+                          "category_id": payload.category_id})
+    return {"auctions": len(ids), "queued": True}
 
 
 @router.post("/{auction_id}/hide", response_model=schemas.AuctionOut)

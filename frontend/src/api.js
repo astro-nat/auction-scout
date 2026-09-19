@@ -154,6 +154,14 @@ export function importLots(auctionId, categoryId = -1) {
   return request(`/auctions/${auctionId}/import${q}`, { method: 'POST' })
 }
 
+// One background job that imports every listed auction, in the order sent.
+export function importAllAuctions(auctionIds, categoryId = -1) {
+  return request('/auctions/import-all', {
+    method: 'POST',
+    body: JSON.stringify({ auction_ids: auctionIds, category_id: categoryId }),
+  })
+}
+
 export function enrichAll(auctionId, skipHard = false) {
   const q = skipHard ? '?skip_hard=true' : ''
   return request(`/auctions/${auctionId}/enrich-all${q}`, { method: 'POST' })

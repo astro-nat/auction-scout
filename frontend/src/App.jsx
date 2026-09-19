@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, importLots, enrichAll, enrichCategory, flushClosed, refreshBids, reinspectNoComps, fetchSettings, saveTargetRoi, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, alertOnce, parseUtc } from './api'
+import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, importLots, importAllAuctions, enrichAll, enrichCategory, flushClosed, refreshBids, reinspectNoComps, fetchSettings, saveTargetRoi, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, alertOnce, parseUtc } from './api'
 import LotTable from './components/LotTable'
 import StatusBar from './components/StatusBar'
 import useMediaQuery from './useMediaQuery'
@@ -422,6 +422,34 @@ Skipping ${hard} HARD-to-ship lots.`
     ? auctions.filter((a) => !isUnshippable(a))
     : auctions
 
+  // "Import all" targets: every auction on screen that's still open and —
+  // when the scan had a category — isn't already known to have zero
+  // matching lots (importing those would just burn time on empty fetches).
+  const importAllCandidates = visibleAuctions.filter((a) =>
+    !(a.closing_date && parseUtc(a.closing_date) < new Date())
+    && !(hasCategoryCount(a) && a.category_lot_count === 0))
+
+  async function handleImportAll() {
+    const ids = importAllCandidates.map((a) => a.id)
+    if (!ids.length) return
+    const what = scanCategoryId !== -1 && scanCategoryName
+      ? `only their "${scanCategoryName}" lots`
+      : 'all their open lots'
+    const msg = `Import from all ${ids.length} listed auctions (${what})?\n\n`
+      + `Free — no AI calls. Runs in the background: progress shows in the `
+      + `bar at the top, and imported lots appear under "My items" as each `
+      + `auction finishes.`
+    if (!window.confirm(msg)) return
+    try {
+      const r = await importAllAuctions(ids, scanCategoryId)
+      if (r.already_running) {
+        alert('A bulk import is already running — check the bar at the top.')
+        return
+      }
+      alert(`Queued ${r.auctions} auctions for import.`)
+    } catch (e) { alertOnce(e.message) }
+  }
+
   // Watch / unwatch an auction house. Optimistic: the star flips at once and
   // reverts if the call fails, because the only visible effect otherwise is a
   // re-sort that looks like nothing happened.
@@ -608,6 +636,17 @@ Skipping ${hard} HARD-to-ship lots.`
                                   : { padding: '8px 18px' }}>
             Scan auctions
           </button>
+          {importAllCandidates.length > 1 && (
+            <button type="button" onClick={handleImportAll} disabled={!!busy}
+                    title={scanCategoryId !== -1 && scanCategoryName
+                      ? `Import the matching "${scanCategoryName}" lots from every open auction listed below — one background job`
+                      : 'Import all open lots from every auction listed below — one background job'}
+                    style={isMobile ? { flex: '1 1 100%', padding: 10, fontSize: 15 }
+                                    : { padding: '8px 18px' }}>
+              Import all ({importAllCandidates.length}
+              {scanCategoryId !== -1 && scanCategoryName ? ` · ${scanCategoryName}` : ''})
+            </button>
+          )}
           {busy && <span>{busy}</span>}
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, whiteSpace: 'nowrap' }}
                  title="Shipping analysis found these don't ship, and they're outside your pickup radius — nothing you could actually buy">

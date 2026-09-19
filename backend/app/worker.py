@@ -53,12 +53,14 @@ def _runner_for(kind: str):
     """Imported lazily — workers.enrich builds the Anthropic client at import
     time, and that shouldn't happen just because someone imported this."""
     from .workers.enrich import run_regrade, run_reprice, run_ship_analysis
+    from .workers.import_all import run_import_all
     from .workers.refresh import run_bid_refresh
     return {
         "reprice": run_reprice,
         "ship-analysis": run_ship_analysis,
         "bid-refresh": run_bid_refresh,
         "regrade": run_regrade,
+        "import-all": run_import_all,
     }.get(kind)
 
 

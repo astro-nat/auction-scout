@@ -37,7 +37,8 @@ logger = logging.getLogger(__name__)
 # together just means three of them crawling while the pool starves
 # everything behind them. That limit lives inside the claim query rather
 # than in a check beside it, so two workers can't both decide they're clear.
-HEAVY_KINDS = ("reprice", "ship-analysis", "bid-refresh", "import", "scan")
+HEAVY_KINDS = ("reprice", "ship-analysis", "bid-refresh", "import", "scan",
+               "import-all")
 
 
 # --- ownership -----------------------------------------------------------
@@ -56,7 +57,8 @@ STALE_JOB_SECONDS = int(os.environ.get("STALE_JOB_SECONDS", "900"))
 # (scan, import) runs inside a request handler; a dead one is just litter.
 RESUMABLE_KINDS = {"reprice": "lot_ids",
                    "ship-analysis": "auction_ids",
-                   "bid-refresh": "auction_ids"}
+                   "bid-refresh": "auction_ids",
+                   "import-all": "auction_ids"}
 
 
 # How long a job of each kind may go quiet before it's presumed dead.
