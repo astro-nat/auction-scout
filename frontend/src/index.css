@@ -1,49 +1,317 @@
-/* Theme tokens — light by default, dark via the system preference.
-   Components reference these vars in their inline styles. */
+/* ======================================================================
+   Design tokens — light by default, dark via the system preference.
+   Components reference these vars in their inline styles; everything
+   generic (buttons, inputs, tables, badges) is styled here once so the
+   whole app stays consistent without per-element styling.
+   ====================================================================== */
 :root {
   color-scheme: light dark;
-  --bg: #ffffff;
-  --text: #1a1a1a;
-  --muted: #666666;
+  --bg: #f5f6f8;              /* page ground — slightly off-white so cards read */
+  --text: #1b1e24;
+  --muted: #6b7280;
   --card-bg: #ffffff;
-  --border: #d9d9d9;
-  --badge-bg: #ececec;
-  --gold-bg: #e6ffe6;
-  --bolo-bg: #ffe9b3;
-  --bolo-text: #1a1a1a;
-  --highlight: #e8ecff;
-  --error: #aa0000;
-  --link: #1a56c4;
+  --surface: #ffffff;         /* inputs and controls */
+  --border: #dcdfe5;
+  --border-strong: #b9bec8;
+  --badge-bg: #eceef2;
+  --gold-bg: #e9f7ec;         /* subtle wash; the accent edge carries the signal */
+  --gold-accent: #2e9e4f;
+  --overbid-bg: rgba(255, 145, 20, 0.12);
+  --overbid-accent: #d9822b;
+  --bolo-bg: #fff1cc;
+  --bolo-text: #6a4b00;
+  --highlight: #eef1fb;
+  --success: #1e8e46;
+  --error: #c43a3a;
+  --danger: #c43a3a;
+  --warn: #b97f14;
+  --link: #2f5fd0;
+  --accent: #2f5fd0;
+  --accent-hover: #2551b8;
+  --on-accent: #ffffff;
+  --accent-soft: rgba(47, 95, 208, 0.12);
+  --shadow: 0 1px 3px rgba(15, 20, 30, 0.08);
+  --shadow-pop: 0 6px 24px rgba(15, 20, 30, 0.16);
+  --radius: 6px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #16181d;
-    --text: #e8e8e8;
-    --muted: #a0a0a0;
-    --card-bg: #22252c;
-    --border: #3a3e47;
-    --badge-bg: #34383f;
-    --gold-bg: #1d3a24;
-    --bolo-bg: #4a3a12;
+    --bg: #121419;
+    --text: #e7e9ee;
+    --muted: #9aa1ad;
+    --card-bg: #1c1f26;
+    --surface: #242830;
+    --border: #333845;
+    --border-strong: #4a5163;
+    --badge-bg: #2c313b;
+    --gold-bg: rgba(63, 191, 104, 0.13);
+    --gold-accent: #3fbf68;
+    --overbid-bg: rgba(255, 155, 40, 0.13);
+    --overbid-accent: #e09040;
+    --bolo-bg: #453611;
     --bolo-text: #ffd97a;
-    --highlight: #2a3050;
+    --highlight: #262e45;
+    --success: #4ec97b;
     --error: #ff7a7a;
-    --link: #82aaff;
+    --danger: #ff7a7a;
+    --warn: #e0a030;
+    --link: #8fb0ff;
+    --accent: #5f86e8;
+    --accent-hover: #7398f0;
+    --on-accent: #ffffff;
+    --accent-soft: rgba(125, 162, 255, 0.16);
+    --shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+    --shadow-pop: 0 8px 28px rgba(0, 0, 0, 0.5);
   }
 }
+
+/* ============================== base ================================ */
 
 body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
+  font-family: -apple-system, "Segoe UI", system-ui, Roboto, "Helvetica Neue", sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
 }
 
 a {
   color: var(--link);
+  text-decoration: none;
+}
+a:hover { text-decoration: underline; }
+
+h1 { letter-spacing: -0.02em; }
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
-/* Small inline spinner for lots being enriched/inspected in the background */
+/* ============================ controls ============================== */
+
+button {
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+button:active:not(:disabled) { transform: translateY(1px); }
+button:disabled { opacity: 0.45; cursor: default; }
+
+/* The one action each screen is really for. */
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+button.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+/* Destructive — quiet until hovered, then unmistakable. */
+button.danger { color: var(--danger); }
+button.danger:hover:not(:disabled) {
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  color: var(--danger);
+}
+
+/* Icon-only buttons (star, hide, ✕) opt out of the chrome. */
+button.bare {
+  background: none;
+  border: none;
+  padding: 0;
+  border-radius: 4px;
+}
+button.bare:hover:not(:disabled) { background: none; transform: none; }
+
+input, select, textarea {
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  padding: 6px 9px;
+  box-sizing: border-box;
+}
+input::placeholder { color: var(--muted); }
+input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 15px;
+  height: 15px;
+  padding: 0;
+}
+input[type="number"] { padding: 4px 6px; }
+
+label { user-select: none; }
+
+/* ============================== tabs ================================ */
+
+.tab {
+  border: none;
+  background: none;
+  border-radius: 0;
+  color: var(--muted);
+  font-size: 14px;
+  padding: 9px 14px;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.tab:hover:not(:disabled) { background: none; border-color: var(--border-strong); color: var(--text); }
+.tab.active {
+  color: var(--text);
+  font-weight: 700;
+  border-bottom-color: var(--accent);
+}
+
+/* ============================== tables ============================== */
+
+.table-scroll { overflow-x: auto; }
+
+.data-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13.5px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+.data-table th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.data-table th, .data-table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.data-table tbody tr:last-child td { border-bottom: none; }
+.data-table tbody tr:not(.row-gold):not(.row-overbid):hover td {
+  background: var(--highlight);
+}
+
+/* Numbers: right-aligned, digits that line up. */
+.num {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Row states: a light wash plus a colored edge, so the signal survives
+   both themes without drowning the text. */
+tr.row-gold td { background: var(--gold-bg); }
+tr.row-gold td:first-child { box-shadow: inset 3px 0 0 var(--gold-accent); }
+tr.row-overbid td { background: var(--overbid-bg); }
+tr.row-overbid td:first-child { box-shadow: inset 3px 0 0 var(--overbid-accent); }
+
+/* Second header row holds the column filters — visually quieter. */
+.data-table .filter-row th { padding: 4px 8px 8px; }
+.data-table .filter-row input,
+.data-table .filter-row select {
+  font-size: 12px;
+  padding: 3px 6px;
+}
+
+/* ============================== cards =============================== */
+
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  box-shadow: var(--shadow);
+}
+.card.row-gold {
+  background: var(--gold-bg);
+  border-left: 3px solid var(--gold-accent);
+}
+.card.row-overbid {
+  background: var(--overbid-bg);
+  border-left: 3px solid var(--overbid-accent);
+}
+
+/* ============================== badges ============================== */
+
+.badge {
+  display: inline-block;
+  background: var(--badge-bg);
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.badge.bolo { background: var(--bolo-bg); color: var(--bolo-text); font-weight: 600; }
+
+/* ========================= dropdown picker ========================== */
+
+.picker summary {
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+  padding: 6px 12px;
+  font-size: 13px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  white-space: nowrap;
+}
+.picker summary::-webkit-details-marker { display: none; }
+.picker summary:hover { border-color: var(--accent); background: var(--accent-soft); }
+.picker[open] summary { border-color: var(--accent); }
+.picker .panel {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 500;
+  margin-top: 4px;
+  min-width: 280px;
+  max-width: min(440px, 92vw);
+  max-height: 50vh;
+  overflow-y: auto;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-pop);
+  padding: 8px;
+}
+.picker .panel label:hover { background: var(--highlight); border-radius: 4px; }
+
+/* =========================== empty states =========================== */
+
+.empty-state {
+  text-align: center;
+  padding: 48px 16px;
+  color: var(--muted);
+  background: var(--card-bg);
+  border: 1px dashed var(--border-strong);
+  border-radius: 10px;
+}
+.empty-state .big { font-size: 30px; margin-bottom: 8px; }
+.empty-state strong { color: var(--text); }
+
+/* ============================= spinner ============================== */
+
 .spinner {
   display: inline-block;
   width: 12px;

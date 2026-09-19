@@ -114,7 +114,7 @@ export default function StatusBar({ onQuiet }) {
     <div ref={barRef} style={{
       position: 'sticky', top: 0, zIndex: 1000,
       background: 'var(--card-bg)', borderBottom: '1px solid var(--border)',
-      padding: '6px 10px', fontSize: 13, boxShadow: '0 1px 4px rgba(0,0,0,0.25)',
+      padding: '6px 10px', fontSize: 13, boxShadow: 'var(--shadow)',
     }}>
       {lines.map((l) => {
         const pct = l.total > 0
@@ -127,7 +127,7 @@ export default function StatusBar({ onQuiet }) {
               {l.warn ? <span aria-hidden="true">⚠</span> : <span className="spinner" />}
               <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis',
                              whiteSpace: 'nowrap',
-                             color: l.warn ? '#e0a030' : undefined,
+                             color: l.warn ? 'var(--warn)' : undefined,
                              fontWeight: l.warn ? 600 : undefined }}>
                 {l.text}
               </span>
@@ -149,7 +149,7 @@ export default function StatusBar({ onQuiet }) {
                 overflow: 'hidden', marginTop: 4,
               }}>
                 <div style={{
-                  height: '100%', width: `${pct}%`, background: 'var(--link)',
+                  height: '100%', width: `${pct}%`, background: 'var(--accent)',
                   transition: 'width 0.4s ease',
                 }} />
               </div>

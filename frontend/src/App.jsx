@@ -548,8 +548,18 @@ Skipping ${hard} HARD-to-ship lots.`
   return (
     <div style={{ fontFamily: 'system-ui' }}>
       <StatusBar onQuiet={refreshAll} />
-      <div style={{ padding: isMobile ? '0.75rem' : '2rem' }}>
-      <h1 style={{ fontSize: isMobile ? 24 : undefined, marginBottom: 8 }}>AuctionScout</h1>
+      <div style={{ padding: isMobile ? '0.75rem' : '1.5rem 2rem',
+                    maxWidth: 1500, margin: '0 auto' }}>
+      <h1 style={{ fontSize: isMobile ? 22 : 26, margin: '0 0 2px',
+                   display: 'flex', alignItems: 'baseline', gap: 10 }}>
+        🔨 AuctionScout
+        {!isMobile && (
+          <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--muted)',
+                         letterSpacing: 0 }}>
+            find it cheap, flip it well
+          </span>
+        )}
+      </h1>
 
       <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--border)',
                     marginBottom: '1rem' }}>
@@ -559,15 +569,9 @@ Skipping ${hard} HARD-to-ship lots.`
         ].map((t) => (
           <button
             key={t.key}
+            className={`tab${view === t.key ? ' active' : ''}`}
             onClick={() => setView(t.key)}
-            style={{
-              padding: isMobile ? '10px 12px' : '8px 16px',
-              fontSize: isMobile ? 15 : 14,
-              border: 'none', background: 'none', cursor: 'pointer',
-              color: view === t.key ? 'var(--text)' : 'var(--muted)',
-              fontWeight: view === t.key ? 700 : 400,
-              borderBottom: view === t.key ? '2px solid var(--link)' : '2px solid transparent',
-            }}
+            style={isMobile ? { fontSize: 15, padding: '10px 12px' } : undefined}
           >
             {t.label}
           </button>
@@ -631,7 +635,7 @@ Skipping ${hard} HARD-to-ship lots.`
         </div>
         {/* Row 3: go + the results-shaping toggle */}
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
-          <button type="submit" disabled={!!busy}
+          <button type="submit" disabled={!!busy} className="primary"
                   style={isMobile ? { flex: '1 1 100%', padding: 10, fontSize: 15 }
                                   : { padding: '8px 18px' }}>
             Scan auctions
@@ -663,6 +667,16 @@ Skipping ${hard} HARD-to-ship lots.`
           </label>
         </div>
         </form>
+        {(importedAuctions.length + discoveredAuctions.length) === 0 && !busy && (
+          <div className="empty-state" style={{ marginTop: '0.75rem' }}>
+            <div className="big">🔎</div>
+            <div><strong>No auctions on screen yet.</strong></div>
+            <div style={{ marginTop: 4 }}>
+              Pick a category or radius above and press <strong>Scan auctions</strong> to
+              see what's closing near you.
+            </div>
+          </div>
+        )}
         {(importedAuctions.length + discoveredAuctions.length) > 0 && (isMobile ? (
           <details style={{ marginTop: '0.75rem' }} open={!selectedAuctions.length}>
             <summary style={{ fontWeight: 600, padding: '4px 0' }}>
@@ -673,14 +687,14 @@ Skipping ${hard} HARD-to-ship lots.`
                 {a.header}
               </div>
             ) : (
-              <div key={a.id} style={{
-                border: isHotAuction(a) ? '2px solid #2e9e4f' : '1px solid var(--border)',
-                borderRadius: 8, padding: 10, marginTop: 8,
-                background: isHotAuction(a) ? 'var(--gold-bg)'
-                  : selectedAuctions.includes(a.id) ? 'var(--highlight)' : 'var(--card-bg)',
-              }}>
+              <div key={a.id}
+                   className={`card${isHotAuction(a) ? ' row-gold' : ''}`}
+                   style={{ marginTop: 8,
+                            background: !isHotAuction(a) && selectedAuctions.includes(a.id)
+                              ? 'var(--highlight)' : undefined }}>
                 <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <button
+                    className="bare"
                     onClick={() => toggleFavorite(a)}
                     disabled={!a.auctioneer_id}
                     title={!a.auctioneer_id
@@ -689,7 +703,6 @@ Skipping ${hard} HARD-to-ship lots.`
                         ? `Unwatch ${a.auctioneer || 'this house'}`
                         : `Watch ${a.auctioneer || 'this house'} — its sales sort to the top`}
                     style={{
-                      border: 'none', background: 'none', padding: 0,
                       fontSize: 15, lineHeight: 1,
                       cursor: a.auctioneer_id ? 'pointer' : 'default',
                       opacity: a.auctioneer_id ? 1 : 0.3,
@@ -699,12 +712,12 @@ Skipping ${hard} HARD-to-ship lots.`
                   </button>
                   <a href={a.source_url} target="_blank" rel="noreferrer">{a.name}</a>
                   <button
+                    className="bare"
                     onClick={() => hideAuction(a)}
                     title="Not interested — hide this auction"
                     style={{
-                      marginLeft: 'auto', border: 'none', background: 'none',
-                      padding: '0 2px', fontSize: 14, lineHeight: 1,
-                      color: 'var(--muted)', cursor: 'pointer',
+                      marginLeft: 'auto', padding: '0 2px', fontSize: 14,
+                      lineHeight: 1, color: 'var(--muted)',
                     }}>
                     ✕
                   </button>
@@ -755,29 +768,34 @@ Skipping ${hard} HARD-to-ship lots.`
             )}
           </details>
         ) : (
-          <table style={{ marginTop: '0.75rem', borderCollapse: 'collapse' }}>
+          <div className="table-scroll" style={{ marginTop: '0.75rem' }}>
+          <table className="data-table">
             <thead style={{
               position: 'sticky', top: 'var(--statusbar-h, 0px)', zIndex: 10,
-              background: 'var(--bg)', boxShadow: '0 1px 0 var(--border)',
+              background: 'var(--card-bg)',
             }}>
               <tr>
-                <th style={{ textAlign: 'left', paddingRight: 12 }}>Auction</th>
-                <th style={{ textAlign: 'left', paddingRight: 12 }}>Where</th>
-                <th>Lots</th><th>Closes</th><th>Premium</th><th></th><th></th>
+                <th>Auction</th>
+                <th>Where</th>
+                <th className="num">Lots</th><th>Closes</th>
+                <th className="num">Premium</th><th></th><th></th>
               </tr>
             </thead>
             <tbody>
               {auctionRowsForDisplay.slice(0, auctionLimit).map((a) => a.header ? (
                 <tr key={`hdr-${a.header}`}>
-                  <td colSpan={7} style={{ paddingTop: 10, fontWeight: 700, fontSize: 15 }}>
+                  <td colSpan={7} style={{ paddingTop: 12, fontWeight: 700, fontSize: 14,
+                                           background: 'var(--bg)' }}>
                     {a.header}
                   </td>
                 </tr>
               ) : (
-                <tr key={a.id} style={{
-                  background: isHotAuction(a) ? 'var(--gold-bg)'
-                    : selectedAuctions.includes(a.id) ? 'var(--highlight)' : undefined,
-                }}>
+                <tr key={a.id}
+                    className={isHotAuction(a) ? 'row-gold' : undefined}
+                    style={{
+                      background: !isHotAuction(a) && selectedAuctions.includes(a.id)
+                        ? 'var(--highlight)' : undefined,
+                    }}>
                   <td style={{ paddingRight: 12 }}>
                     <a href={a.source_url} target="_blank" rel="noreferrer">{a.name}</a>
                     {goldBadge(a) && (
@@ -787,24 +805,26 @@ Skipping ${hard} HARD-to-ship lots.`
                   </td>
                   <td style={{ paddingRight: 12 }}>
                     {isClosed(a) && <strong>⏹ CLOSED<br /></strong>}
-                    {a.city}, {a.state} ({fulfillment(a)})
+                    {a.city}, {a.state}{fulfillment(a) ? ` (${fulfillment(a)})` : ''}
                     {shipBadge(a) && (
                       <div style={{ fontSize: 11, color: 'var(--muted)' }}
                            title={shipBadge(a).tip}>{shipBadge(a).text}</div>
                     )}
                   </td>
-                  <td style={{ textAlign: 'center' }}>
+                  <td className="num">
                     {a.lot_count ?? '—'}
                     {hasCategoryCount(a) && (
                       <div style={{ fontSize: 11, color: 'var(--muted)' }}>{a.category_lot_count} match</div>
                     )}
                   </td>
-                  <td>{a.closing_date ? parseUtc(a.closing_date).toLocaleDateString() : '—'}</td>
-                  <td style={{ textAlign: 'center' }}>
+                  <td style={{ whiteSpace: 'nowrap' }}>
+                    {a.closing_date ? parseUtc(a.closing_date).toLocaleDateString() : '—'}
+                  </td>
+                  <td className="num">
                     {a.buyer_premium_mult ? `${Math.round((a.buyer_premium_mult - 1) * 100)}%` : '—'}
                   </td>
                   <td><button onClick={() => handleImport(a.id)} disabled={!!busy}>{importLabel(a)}</button></td>
-                  <td>
+                  <td style={{ whiteSpace: 'nowrap' }}>
                     {a.imported_at && (
                       <>
                         <button onClick={() => openAuctionItems(a.id)}>View</button>{' '}
@@ -817,6 +837,7 @@ Skipping ${hard} HARD-to-ship lots.`
               ))}
             </tbody>
           </table>
+          </div>
         ))}
         {!isMobile && auctionRowsForDisplay.length > auctionLimit && (
           <button style={{ marginTop: 8 }} onClick={() => setAuctionLimit((n) => n + 50)}>
@@ -831,23 +852,13 @@ Skipping ${hard} HARD-to-ship lots.`
                         flexDirection: 'column', gap: 8 }}>
         {/* Row 1: which auctions (multi-select) + which category */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-start' }}>
-          <details style={{ position: 'relative', maxWidth: isMobile ? '100%' : 440 }}>
-            <summary
-              title="Tick one or more imported auctions to see just their items"
-              style={{ padding: 8, fontSize: 14, cursor: 'pointer', userSelect: 'none',
-                       border: '1px solid var(--border)', borderRadius: 4,
-                       background: 'var(--card-bg)', whiteSpace: 'nowrap' }}>
+          <details className="picker" style={{ position: 'relative', maxWidth: isMobile ? '100%' : 440 }}>
+            <summary title="Tick one or more imported auctions to see just their items">
               {selectedAuctions.length
                 ? `${selectedAuctions.length} auction${selectedAuctions.length === 1 ? '' : 's'} selected ▾`
                 : `All auctions (${Object.keys(importedRows).length} imported) ▾`}
             </summary>
-            <div style={{
-              position: 'absolute', top: '100%', left: 0, zIndex: 500, marginTop: 4,
-              minWidth: 280, maxWidth: 'min(440px, 92vw)', maxHeight: '50vh',
-              overflowY: 'auto', background: 'var(--card-bg)',
-              border: '1px solid var(--border)', borderRadius: 6,
-              boxShadow: '0 4px 12px rgba(0,0,0,0.25)', padding: 8,
-            }}>
+            <div className="panel">
               <button onClick={() => setSelectedAuctions([])}
                       disabled={!selectedAuctions.length}
                       style={{ width: '100%', padding: 6, fontSize: 13, marginBottom: 4 }}>
@@ -858,15 +869,19 @@ Skipping ${hard} HARD-to-ship lots.`
                 .map((a) => (
                   <label key={a.id}
                          style={{ display: 'flex', gap: 6, alignItems: 'flex-start',
-                                  padding: '6px 2px', fontSize: 13, cursor: 'pointer' }}>
+                                  padding: '6px 4px', fontSize: 13, cursor: 'pointer' }}>
                     <input
                       type="checkbox"
                       checked={selectedAuctions.includes(a.id)}
                       onChange={() => toggleAuctionSelected(a.id)}
                       style={{ marginTop: 2 }}
                     />
-                    <span>
-                      {a.gold_count ?? 0} gold | [ {[a.city, a.state].filter(Boolean).join(', ') || '—'} ] | {a.name}
+                    <span style={{ lineHeight: 1.3 }}>
+                      {a.name}
+                      <div style={{ color: 'var(--muted)', fontSize: 12 }}>
+                        {[a.city, a.state].filter(Boolean).join(', ') || '—'}
+                        {a.gold_count ? ` · 🟢 ${a.gold_count} gold` : ''}
+                      </div>
                     </span>
                   </label>
                 ))}
@@ -916,17 +931,17 @@ Skipping ${hard} HARD-to-ship lots.`
               onChange={(ev) => setFilters((f) => ({ ...f, roiStatus: ev.target.checked ? 'GOLD MINE' : '' }))}
             /> Gold mines only
           </label>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap',
+                         color: 'var(--muted)' }}
                 title="An item is a GOLD MINE when its current bid still clears this return after all fees. Saving re-grades every item for free.">
-            (at
+            at
             <input
               type="number"
               value={targetRoi}
               onChange={(ev) => setTargetRoi(ev.target.value)}
-              style={{ width: 56 }}
+              style={{ width: 58 }}
             />% ROI
-            <button style={{ fontSize: 12, padding: '2px 8px' }} onClick={handleSaveRoi}>Apply</button>
-            )
+            <button style={{ fontSize: 12, padding: '3px 9px' }} onClick={handleSaveRoi}>Apply</button>
           </span>
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
                  title="Hide items priced under the cutoff when the value is trustworthy — 3+ comps agree, or the AI identified the item with strong confidence">
@@ -983,7 +998,8 @@ Skipping ${hard} HARD-to-ship lots.`
                   title="Bulk-inspect every enriched item that still has no resale value — AI reads the photo and prices it (asks first, shows cost)">
             Inspect no-value items
           </button>
-          <button style={isMobile ? { flex: '1 1 45%', padding: 8 } : undefined}
+          <button className="danger"
+                  style={isMobile ? { flex: '1 1 45%', padding: 8 } : undefined}
                   onClick={handleFlushClosed}
                   title="Permanently delete all items whose auction has closed (asks first)">
             Flush closed items
@@ -1027,16 +1043,27 @@ Skipping ${hard} HARD-to-ship lots.`
         lotsLoadState === 'loading' ? (
           <p style={{ color: 'var(--muted)' }}><span className="spinner" /> Loading your items…</p>
         ) : lotsLoadState === 'error' || lotTotal > 0 ? (
-          <p style={{ color: 'var(--muted)' }}>
-            Couldn't load your {lotTotal ? lotTotal.toLocaleString() : ''} items —
-            the server is probably busy with a big job right now.{' '}
-            <button onClick={loadLots}>Try again</button>
-          </p>
+          <div className="empty-state">
+            <div className="big">📡</div>
+            <div>
+              Couldn't load your {lotTotal ? lotTotal.toLocaleString() : ''} items —
+              the server is probably busy with a big job right now.
+            </div>
+            <button onClick={loadLots} style={{ marginTop: 10 }}>Try again</button>
+          </div>
         ) : (
-          <p style={{ color: 'var(--muted)' }}>
-            Nothing imported yet. Go to <strong>Auctions</strong>, find an auction,
-            and press <strong>Import</strong> — its lots land here.
-          </p>
+          <div className="empty-state">
+            <div className="big">📦</div>
+            <div><strong>Nothing imported yet.</strong></div>
+            <div style={{ marginTop: 4 }}>
+              Go to <strong>Auctions</strong>, find an auction, and press{' '}
+              <strong>Import</strong> — its lots land here.
+            </div>
+            <button className="primary" style={{ marginTop: 12 }}
+                    onClick={() => setView('auctions')}>
+              Find auctions
+            </button>
+          </div>
         )
       ) : (
         <LotTable lots={visibleLots} onLotUpdated={handleLotUpdated} onRefresh={loadLots}

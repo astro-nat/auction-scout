@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { enrichLot, inspectLot, fetchLot, patchEnrichment, enrichBatch, setWatch, setHidden, alertOnce, parseUtc } from '../api'
 import useMediaQuery from '../useMediaQuery'
 
-const cell = { padding: '4px 10px', borderBottom: '1px solid var(--border)' }
+// Cell chrome (padding, borders) lives in index.css under .data-table;
+// this only carries per-cell overrides now.
+const cell = {}
 
 const VERDICTS = [
   'broken, damaged, or for parts',
@@ -38,12 +40,12 @@ const COLUMNS = [
   { key: 'auction', label: 'Auction', get: (l) => l.auction_name, filter: 'values' },
   { key: 'category', label: 'Category', get: (l) => l.category, filter: 'values' },
   { key: 'closes', label: 'Closes', get: (l) => l.closes_at ? parseUtc(l.closes_at).getTime() : Number.MAX_SAFE_INTEGER, filter: null },
-  { key: 'bid', label: 'Bid', get: (l) => num(l.current_bid), filter: 'range' },
-  { key: 'est_cost', label: 'Est Cost', get: (l) => num(l.est_cost), filter: 'range' },
+  { key: 'bid', label: 'Bid', get: (l) => num(l.current_bid), filter: 'range', num: true },
+  { key: 'est_cost', label: 'Est Cost', get: (l) => num(l.est_cost), filter: 'range', num: true },
   { key: 'ship', label: 'Ship', get: (l) => l.logistics_ease, filter: 'values' },
-  { key: 'est_resale', label: 'Est Resale', get: (l) => num(l.enrichment?.est_resale), filter: 'range' },
-  { key: 'max_bid', label: 'Max Bid', get: (l) => num(l.enrichment?.max_bid), filter: 'range' },
-  { key: 'roi', label: 'ROI %', get: (l) => num(l.enrichment?.est_roi), filter: 'range' },
+  { key: 'est_resale', label: 'Est Resale', get: (l) => num(l.enrichment?.est_resale), filter: 'range', num: true },
+  { key: 'max_bid', label: 'Max Bid', get: (l) => num(l.enrichment?.max_bid), filter: 'range', num: true },
+  { key: 'roi', label: 'ROI %', get: (l) => num(l.enrichment?.est_roi), filter: 'range', num: true },
   { key: 'verdict', label: 'Verdict', get: (l) => l.enrichment?.verdict, filter: 'values' },
   { key: 'status', label: 'Status', get: (l) => l.enrichment?.status, filter: 'values' },
 ]
@@ -419,7 +421,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
           >
             {MOBILE_SORTS.map((s, i) => <option key={s.label} value={i}>{s.label}</option>)}
           </select>
-          <button onClick={handleEnrichVisible} disabled={!enrichableCount}
+          <button className="primary" onClick={handleEnrichVisible} disabled={!enrichableCount}
                   title="Enrich the lots currently shown on screen. Asks for confirmation first — progress shows in the bar at the top."
                   style={{ flex: '1 1 100%', padding: 10, fontSize: 15 }}>
             Enrich the {enrichableCount} shown
@@ -432,27 +434,25 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
           const gold = e.roi_status === 'GOLD MINE'
           const overbid = isOverbid(lot, e)
           return (
-            <div key={lot.lot_id} style={{
-              border: '1px solid var(--border)', borderRadius: 8, padding: 10, marginBottom: 10,
-              background: gold ? 'var(--gold-bg)'
-                : overbid ? 'rgba(255, 140, 0, 0.14)' : 'var(--card-bg)',
-            }}
+            <div key={lot.lot_id}
+                 className={`card${gold ? ' row-gold' : overbid ? ' row-overbid' : ''}`}
+                 style={{ marginBottom: 10 }}
                  title={overbid ? 'Bid has passed your max-bid ceiling' : undefined}>
               <div style={{ fontWeight: 600 }}>
                 <button
+                  className="bare"
                   onClick={() => handleWatch(lot.lot_id, !lot.watched)}
                   title={lot.watched ? 'Watching — phone alert when closing (tap to stop)'
                                      : 'Watch: phone alert when this closes within 2 hours'}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer',
-                           fontSize: 16, padding: '0 4px 0 0',
+                  style={{ fontSize: 16, padding: '0 4px 0 0',
                            opacity: lot.watched ? 1 : 0.45 }}>
                   {lot.watched ? '★' : '☆'}
                 </button>
                 <button
+                  className="bare"
                   onClick={() => handleHide(lot.lot_id, !lot.hidden)}
                   title={lot.hidden ? 'Hidden — tap to bring it back' : 'Hide this lot'}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer',
-                           fontSize: 14, padding: '0 4px 0 0',
+                  style={{ fontSize: 14, padding: '0 4px 0 0',
                            opacity: lot.hidden ? 1 : 0.4 }}>
                   {lot.hidden ? '👁' : '🚫'}
                 </button>
@@ -467,7 +467,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
               )}
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', fontSize: 14, margin: '6px 0' }}>
                 <span style={closesIn(lot.closes_at, now).urgent
-                             ? { color: '#e05555', fontWeight: 700 } : undefined}>
+                             ? { color: 'var(--danger)', fontWeight: 700 } : undefined}>
                   ⏱ {closesIn(lot.closes_at, now).text}
                 </span>
                 <span>Bid {money(lot.current_bid)} / {money(lot.next_bid)}</span>
@@ -475,31 +475,30 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
                 <span>Resale {money(e.est_resale)}{e.comp_count > 0 ? ` (${e.comp_count})` : ''}</span>
                 <span>Max bid {money(e.max_bid)}</span>
                 {e.est_roi != null && (
-                  <span style={{ color: Number(e.est_roi) < 0 ? '#e05555'
-                                   : e.roi_status === 'GOLD MINE' ? '#2e9e4f' : undefined }}>
+                  <span style={{ fontWeight: 600,
+                                 color: Number(e.est_roi) < 0 ? 'var(--danger)'
+                                   : e.roi_status === 'GOLD MINE' ? 'var(--success)' : undefined }}>
                     ROI {Math.round(Number(e.est_roi) * 100)}%
                   </span>
                 )}
               </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, fontSize: 12, marginBottom: 6 }}>
-                <span style={{ background: 'var(--badge-bg)', borderRadius: 4, padding: '2px 6px' }}>{lot.logistics_ease}</span>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
+                <span className="badge">{lot.logistics_ease}</span>
                 {e.bolo_brand && (
-                  <span style={{ background: 'var(--bolo-bg)', borderRadius: 4, padding: '2px 6px' }}>
-                    BOLO: {e.bolo_brand} T{e.bolo_tier ?? '?'}
-                  </span>
+                  <span className="badge bolo">BOLO: {e.bolo_brand} T{e.bolo_tier ?? '?'}</span>
                 )}
                 {e.auth_required && (
-                  <span style={{ background: 'var(--bolo-bg)', color: 'var(--bolo-text)', borderRadius: 4, padding: '2px 6px', fontWeight: 600 }}
+                  <span className="badge bolo"
                         title="Luxury-brand match — resale value depends on authentication; don't trust the comps until verified">
                     ⚠️ authenticate first
                   </span>
                 )}
                 {e.verdict && (
-                  <span style={{ background: 'var(--badge-bg)', borderRadius: 4, padding: '2px 6px' }}>
+                  <span className="badge">
                     {gold ? '🟢' : e.roi_status === 'PASS' ? '🔴' : ''} {e.verdict}
                   </span>
                 )}
-                <span style={{ background: 'var(--badge-bg)', borderRadius: 4, padding: '2px 6px' }}>
+                <span className="badge">
                   {isWorking(lot) ? <><span className="spinner" />{e.progress || (e.status === 'queued' ? 'waiting in queue…' : 'working…')}</> : statusLabel(e)}
                 </span>
               </div>
@@ -533,25 +532,28 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
   return (
     <>
     <div style={{ marginBottom: '0.5rem' }}>
-      <button onClick={handleEnrichVisible} disabled={!enrichableCount}
+      <button className="primary" onClick={handleEnrichVisible} disabled={!enrichableCount}
               title="Enrich the lots currently shown on screen. Asks for confirmation first — progress shows in the bar at the top.">
         Enrich the {enrichableCount} shown
       </button>
       {anyQueued && <span style={{ marginLeft: '0.75rem' }}><span className="spinner" />{lots.filter((l) => l.enrichment?.status === 'queued').length} lots in the queue… auto-refreshing</span>}
       <span style={{ marginLeft: '0.75rem' }}>{countLine}</span>
     </div>
-    <table style={{ borderCollapse: 'collapse', fontSize: 14 }}>
+    <div className="table-scroll">
+    <table className="data-table lot-table">
       {/* Sticks below the status bar when one is showing (see StatusBar's
           --statusbar-h). Solid background or the rows scroll through it. */}
       <thead style={{
         position: 'sticky', top: 'var(--statusbar-h, 0px)', zIndex: 10,
-        background: 'var(--bg)', boxShadow: '0 1px 0 var(--border)',
+        background: 'var(--card-bg)',
       }}>
         <tr>
           {COLUMNS.map((c) => (
             <th
               key={c.key}
-              style={{ ...cell, cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+              className={c.num ? 'num' : undefined}
+              style={{ cursor: 'pointer', userSelect: 'none',
+                       ...(c.key === 'title' ? { width: '28%', minWidth: 220 } : {}) }}
               onClick={() => handleSort(c.key)}
               title="Click to sort"
             >
@@ -559,23 +561,24 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
               {sort.key === c.key ? (sort.dir === 1 ? ' ▲' : ' ▼') : ''}
             </th>
           ))}
-          <th style={cell}></th>
+          <th></th>
         </tr>
-        <tr>
+        <tr className="filter-row">
           {COLUMNS.map((c) => (
-            <th key={c.key} style={{ ...cell, fontWeight: 'normal' }}>
+            <th key={c.key} style={{ fontWeight: 'normal',
+                                     textAlign: c.num ? 'right' : undefined }}>
               {!c.filter ? null : c.filter === 'text' ? (
                 <input
                   value={colFilters[c.key] ?? ''}
                   onChange={(ev) => setFilter(c.key, ev.target.value)}
                   placeholder="search"
-                  style={{ width: '90%', minWidth: 60, fontSize: 12 }}
+                  style={{ width: '90%', minWidth: 60 }}
                 />
               ) : (
                 <select
                   value={colFilters[c.key] ?? ''}
                   onChange={(ev) => setFilter(c.key, ev.target.value)}
-                  style={{ maxWidth: 110, fontSize: 12 }}
+                  style={{ maxWidth: 110 }}
                 >
                   <option value="">all</option>
                   {(c.filter === 'range' ? MONEY_RANGES : distinctValues[c.key] ?? []).map((v) => (
@@ -585,9 +588,9 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
               )}
             </th>
           ))}
-          <th style={cell}>
+          <th>
             {Object.values(colFilters).some((v) => v?.trim()) && (
-              <button style={{ fontSize: 12 }} onClick={() => setColFilters({})}>clear</button>
+              <button style={{ fontSize: 12, padding: '3px 8px' }} onClick={() => setColFilters({})}>clear</button>
             )}
           </th>
         </tr>
@@ -601,32 +604,30 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
           const edited = new Set(e.user_overrides || [])
           return (
             <tr key={lot.lot_id}
+                className={gold ? 'row-gold' : overbid ? 'row-overbid' : undefined}
                 title={overbid ? 'Bid has passed your max-bid ceiling'
                   : asking ? EVIDENCE_NOTE.asking : undefined}
-                style={gold
-                  ? { background: 'var(--gold-bg)',
-                      // Asking-price gold gets a paler wash: still worth a
-                      // look, but not the same claim as one backed by sales.
-                      opacity: asking ? 0.82 : 1 }
-                  : overbid ? { background: 'rgba(255, 140, 0, 0.14)' } : undefined}>
+                // Asking-price gold gets a paler wash: still worth a look,
+                // but not the same claim as one backed by sales.
+                style={asking ? { opacity: 0.82 } : undefined}>
               <td style={cell}>
                 <button
+                  className="bare"
                   onClick={() => handleWatch(lot.lot_id, !lot.watched)}
                   title={lot.watched
                     ? 'Watching — you get a phone alert when this closes within 2 hours (click to stop)'
                     : 'Watch: get a phone alert when this lot closes within 2 hours'}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer',
-                           fontSize: 15, padding: '0 4px 0 0',
+                  style={{ fontSize: 15, padding: '0 4px 0 0',
                            opacity: lot.watched ? 1 : 0.45 }}>
                   {lot.watched ? '★' : '☆'}
                 </button>
                 <button
+                  className="bare"
                   onClick={() => handleHide(lot.lot_id, !lot.hidden)}
                   title={lot.hidden
                     ? 'Hidden — click to bring it back'
                     : 'Hide this lot — it disappears from your items until you unhide it (Show hidden checkbox)'}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer',
-                           fontSize: 13, padding: '0 4px 0 0',
+                  style={{ fontSize: 13, padding: '0 4px 0 0',
                            opacity: lot.hidden ? 1 : 0.4 }}>
                   {lot.hidden ? '👁' : '🚫'}
                 </button>
@@ -660,14 +661,14 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
                 {(lot.item_closed ?? lot.auction_closed) && <div><strong>⏹ closed</strong></div>}
                 {lot.auction_name}
               </td>
-              <td style={cell}>{lot.category}</td>
+              <td style={{ ...cell, whiteSpace: 'nowrap' }}>{lot.category}</td>
               <td style={{ ...cell, whiteSpace: 'nowrap',
                            ...(closesIn(lot.closes_at, now).urgent
-                               ? { color: '#e05555', fontWeight: 700 } : {}) }}>
+                               ? { color: 'var(--danger)', fontWeight: 700 } : {}) }}>
                 {closesIn(lot.closes_at, now).text}
               </td>
-              <td style={cell}>{money(lot.current_bid)} / {money(lot.next_bid)}</td>
-              <td style={cell}>{money(lot.est_cost)}</td>
+              <td className="num" style={cell}>{money(lot.current_bid)} / {money(lot.next_bid)}</td>
+              <td className="num" style={cell}>{money(lot.est_cost)}</td>
               <td style={cell}>
                 <EditableCell
                   display={lot.logistics_ease ?? '—'}
@@ -677,7 +678,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
                   onSave={(v) => handleCorrect(lot.lot_id, 'logistics_ease', v)}
                 />
               </td>
-              <td style={cell}>
+              <td className="num" style={cell}>
                 <EditableCell
                   display={money(e.est_resale)}
                   rawValue={e.est_resale}
@@ -693,13 +694,13 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
                         style={{ color: 'var(--muted)', fontSize: 12, cursor: 'help' }}> ~</span>
                 )}
               </td>
-              <td style={cell}>{money(e.max_bid)}</td>
-              <td title={roiTooltip(lot, e)}
-                  style={{ ...cell, whiteSpace: 'nowrap',
+              <td className="num" style={cell}>{money(e.max_bid)}</td>
+              <td className="num" title={roiTooltip(lot, e)}
+                  style={{ ...cell,
                            cursor: e.est_roi != null ? 'help' : undefined,
                            color: e.est_roi == null ? undefined
-                             : Number(e.est_roi) < 0 ? '#e05555'
-                             : e.roi_status === 'GOLD MINE' ? '#2e9e4f' : undefined,
+                             : Number(e.est_roi) < 0 ? 'var(--danger)'
+                             : e.roi_status === 'GOLD MINE' ? 'var(--success)' : undefined,
                            fontWeight: e.roi_status === 'GOLD MINE' ? 600 : undefined }}>
                 {e.est_roi == null ? '—' : `${Math.round(Number(e.est_roi) * 100)}%`}
                 {e.all_in_cost != null && (
@@ -737,8 +738,9 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
         })}
       </tbody>
     </table>
+    </div>
     {sorted.length > renderLimit && (
-      <button style={{ marginTop: 6, padding: '6px 14px' }}
+      <button style={{ marginTop: 8, padding: '6px 14px' }}
               onClick={() => setRenderLimit((n) => n + 150)}>
         Show more ({sorted.length - renderLimit} hidden)
       </button>
