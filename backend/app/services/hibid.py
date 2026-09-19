@@ -13,6 +13,9 @@ Load-bearing API facts (learned the hard way in the prototype):
 - `category` on a lot may be a list of dicts, a single dict, or None.
 - Effective bid = max(highBid, minBid): zero-bid lots carry cost in minBid.
 - HiBid's CDN requires `Referer: https://hibid.com/` on image downloads.
+- LotSearch with a NONEXISTENT auctionId does not error — it silently returns
+  a global/unfiltered lot feed (paged up to the 10k cap). fetch_lots guards
+  against this by confirming the event exists via auctionMap first.
 """
 
 import asyncio
@@ -91,6 +94,14 @@ query AuctionMeta($eventIds: [Int!]) {
 }
 """
 
+EVENT_EXISTS_QUERY = """
+query EventExists($eventIds: [Int!]) {
+  auctionMap(input: {zip: "", miles: 0, searchText: "", category: -1, filter: ALL, status: ALL, eventIds: $eventIds}) {
+    mapMarkers { auction { id } }
+  }
+}
+"""
+
 LOT_SEARCH_QUERY = """
 query LotSearch($auctionId: Int!, $pageNumber: Int!, $searchText: String!, $category: CategoryId) {
   lotSearch(input: {auctionId: $auctionId, searchText: $searchText, category: $category}, pageNumber: $pageNumber) {
@@ -116,6 +127,12 @@ _COND_SHIP_RE = re.compile(
     r"not available on all lots|contact .{0,30}prior to bidding|do not assume all items",
     re.IGNORECASE,
 )
+
+
+class HibidEventNotFound(RuntimeError):
+    """The requested HiBid event id doesn't exist. Raised instead of fetching,
+    because LotSearch on a bad id returns the GLOBAL lot feed, not an error —
+    importing that would attach thousands of unrelated lots to the auction."""
 
 
 async def _graphql(client: httpx.AsyncClient, operation: str, query: str,
@@ -399,17 +416,38 @@ def _process_lot(raw: dict, auction_ctx: dict) -> dict:
     }
 
 
+async def _assert_event_exists(client: httpx.AsyncClient, hibid_auction_id: int) -> None:
+    """Raise HibidEventNotFound unless auctionMap knows the event id. A
+    transient failure raises RuntimeError instead (via _graphql's retries) —
+    aborting the fetch is always safer than risking the global-feed junk.
+    fetch_auction_meta can't serve as this gate: it degrades to {} on
+    transient failures, which is indistinguishable from "no such event"."""
+    data = await _graphql(client, "EventExists", EVENT_EXISTS_QUERY,
+                          {"eventIds": [hibid_auction_id]})
+    markers = (data.get("auctionMap") or {}).get("mapMarkers") or []
+    ids = {(m.get("auction") or {}).get("id") for m in markers}
+    if hibid_auction_id not in ids:
+        raise HibidEventNotFound(
+            f"HiBid has no auction with event id {hibid_auction_id} — "
+            f"nothing was imported. The auction may have ended and been "
+            f"removed from HiBid; re-scan to refresh the auction list.")
+
+
 async def fetch_lots(hibid_auction_id: int, auction_ctx: dict | None = None,
                      search_text: str = "", category_id: int = -1,
                      on_progress=None, should_cancel=None) -> list[dict]:
     """All open lots for one auction, optionally filtered to one HiBid
     category server-side. Paginates at the server-fixed 100/page.
 
+    Raises HibidEventNotFound if the event id doesn't exist on HiBid — see
+    _assert_event_exists for why fetching anyway would be destructive.
+
     on_progress(fetched, total) is called after each page so callers can
     report live counts to the UI."""
     ctx = auction_ctx or {}
     lots: list[dict] = []
     async with httpx.AsyncClient() as client:
+        await _assert_event_exists(client, hibid_auction_id)
         page = 1
         total = None
         while page <= MAX_LOT_PAGES:

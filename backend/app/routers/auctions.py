@@ -348,6 +348,10 @@ async def import_lots(auction_id: int, category_id: int = -1,
             db, auction, lots,
             on_progress=lambda i, title: jobs.update(job, current=i, detail=title),
             should_cancel=lambda: jobs.is_cancelled(job))
+    except hibid.HibidEventNotFound as exc:
+        # Stale/wrong hibid_id — fetching anyway would import HiBid's global
+        # lot feed as this auction's lots (see hibid.fetch_lots).
+        raise HTTPException(status_code=502, detail=str(exc))
     finally:
         jobs.finish(job)
     return {"auction_id": auction_id, "fetched": len(lots),
