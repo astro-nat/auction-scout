@@ -119,6 +119,13 @@ PARTOUT_REALIZATION = float(os.environ.get("PARTOUT_REALIZATION", "0.6"))
 # under a few dollars.
 MIN_ASSUMED_BID = float(os.environ.get("MIN_ASSUMED_BID", "5"))
 
+# Every fresh GOLD MINE gets a second-opinion AI audit before it's allowed
+# to stand — a GOLD MINE is the app telling you to spend money, and the
+# audits kept finding golds built on the wrong comps entirely (costume
+# jewelry priced as fine, one item carrying a pile's total). Roughly half a
+# cent per gold with the photo. "0"/"false" disables.
+GOLD_CHECK = os.environ.get("GOLD_CHECK", "1").lower() not in ("0", "false", "off")
+
 
 # Titles that describe a PILE, not a product. These route to the itemized
 # vision pass instead of the single-item enrich: comping "Lot of Assorted
@@ -277,6 +284,11 @@ def run_enrichment(lot_db_id: int) -> None:
             e.error_message = str(exc)
         e.progress = None
         db.commit()
+        if e.status == "success":
+            try:
+                _verify_gold(db, lot, e)
+            except Exception as exc:  # noqa: BLE001 — the audit must not fail the lot
+                logger.warning("Gold check failed for lot %s: %s", lot_db_id, exc)
     finally:
         db.close()
 
@@ -446,6 +458,72 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
         e.roi_status = "PASS" if (red_flag or lot.unreachable_pickup) else None
 
 
+GOLD_CHECK_PROMPT = """You are auditing a resale-auction buying decision. Be skeptical.
+
+Lot title: {title}
+Description: {description}
+Identified as: {enriched_title}
+Condition verdict: {verdict}
+Claimed resale value: ${est_resale} — source: {price_source} ({comp_count} comps)
+Current bid ${bid}; the app would bid up to ${max_bid}.
+
+Is ${est_resale} a realistic eBay SOLD price for this EXACT item in this
+condition{photo_note}? Frequent mistakes to catch: comps that matched a
+different or premium product; costume jewelry priced as fine jewelry, or
+plate priced as sterling; broken/for-parts items priced as working; one
+item carrying a whole-pile total; hype or asking prices nowhere near what
+actually sells.
+
+Return ONLY valid JSON: {{"plausible": true or false, "reason": string}}
+reason = one short sentence a reseller can act on."""
+
+
+def _verify_gold(db: Session, lot: models.Lot, e: models.Enrichment) -> None:
+    """Second-opinion audit on a fresh GOLD MINE.
+
+    Confirmed golds keep the badge (plus a ✓ in the UI); an implausible
+    value demotes the verdict to PASS with the reason stored. Fail-open:
+    if the call fails the gold stands but stays unchecked, so the next
+    reprice retries it. Hand-set prices are never second-guessed."""
+    if not GOLD_CHECK or e.roi_status != "GOLD MINE" or e.gold_check:
+        return
+    if "est_resale" in set(e.user_overrides or []):
+        return
+    # House rule: never hold a transaction across the network.
+    db.commit()
+    image_bytes = _download_image(lot.thumbnail_url or lot.hd_thumbnail_url)
+    prompt = GOLD_CHECK_PROMPT.format(
+        title=lot.title or "",
+        description=(lot.description or "")[:800] or "(none)",
+        enriched_title=e.enriched_title or "(none)",
+        verdict=e.verdict or "(none)",
+        est_resale=e.est_resale,
+        price_source=e.price_source or "?",
+        comp_count=e.comp_count or 0,
+        bid=lot.current_bid or 0,
+        max_bid=e.max_bid or 0,
+        photo_note=", shown in the photo" if image_bytes else "")
+    content = [{"type": "text", "text": prompt}]
+    if image_bytes:
+        content.insert(0, {"type": "image",
+                           "source": {"type": "base64", "media_type": "image/jpeg",
+                                      "data": base64.b64encode(image_bytes).decode()}})
+    result = _call_with_retry(lambda: client.messages.create(
+        model=MODEL, max_tokens=250,
+        messages=[{"role": "user", "content": content}]))
+    if result is None or not isinstance(result.get("plausible"), bool):
+        return
+    reason = str(result.get("reason") or "")[:300]
+    if result["plausible"]:
+        e.gold_check = "confirmed"
+        e.gold_check_note = reason or None
+    else:
+        e.gold_check = "demoted"
+        e.gold_check_note = reason or "resale value judged implausible"
+        e.roi_status = "PASS"
+    db.commit()
+
+
 INSPECT_PROMPT = """This is a photo of a multi-item auction lot titled: {title}
 
 The listing description (may be empty or boilerplate — trust the photo over
@@ -522,6 +600,11 @@ def run_inspection(lot_db_id: int) -> None:
             e.error_message = str(exc)
         e.progress = None
         db.commit()
+        if e.status == "success":
+            try:
+                _verify_gold(db, lot, e)
+            except Exception as exc:  # noqa: BLE001 — the audit must not fail the lot
+                logger.warning("Gold check failed for lot %s: %s", lot_db_id, exc)
     finally:
         db.close()
 
@@ -847,6 +930,7 @@ def run_reprice(lot_db_ids: list[int], resume_job_id: str | None = None) -> None
                         # lot or resume replays this one forever.
                         comps = None
                     if comps is not None:
+                        prior_resale = e.est_resale
                         mult = CONDITION_MULTIPLIER.get(e.verdict, 1.0)
                         e.est_resale = (round(float(comps["est_resale"]) * mult, 2)
                                         if comps["est_resale"] else None)
@@ -858,9 +942,21 @@ def run_reprice(lot_db_ids: list[int], resume_job_id: str | None = None) -> None
                         e.price_source = comps["price_source"]
                         if mult != 1.0 and comps["price_source"]:
                             e.price_source += f" ×{mult:g} condition"
+                        # A changed value voids its old audit — the check
+                        # certified a number that no longer exists.
+                        if str(prior_resale) != str(e.est_resale):
+                            e.gold_check = None
+                            e.gold_check_note = None
                         _apply_roi(lot, e)
                         db.commit()
                         repriced += 1
+                        try:
+                            # The one model spend in reprice: fresh golds get
+                            # their second opinion (~half a cent each).
+                            _verify_gold(db, lot, e)
+                        except Exception as exc:  # noqa: BLE001
+                            logger.warning("Gold check failed for lot %s: %s",
+                                           lot_db_id, exc)
                 except Exception as exc:  # noqa: BLE001 — one bad lot must not stop the run
                     logger.warning("Reprice failed for lot %s: %s", lot_db_id, exc)
             # `current` must advance on every lot — skipped ones included —

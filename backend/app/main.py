@@ -48,6 +48,8 @@ _MIGRATIONS = [
     "id VARCHAR PRIMARY KEY, last_seen TIMESTAMP NOT NULL, "
     "started_at TIMESTAMP DEFAULT now())",
     "CREATE INDEX IF NOT EXISTS ix_auctions_auctioneer_id ON auctions (auctioneer_id)",
+    "ALTER TABLE enrichment ADD COLUMN IF NOT EXISTS gold_check VARCHAR",
+    "ALTER TABLE enrichment ADD COLUMN IF NOT EXISTS gold_check_note VARCHAR",
 ]
 
 def _run_migrations() -> list[str]:

@@ -66,8 +66,10 @@ def reprice(auction_id: int | None = None,
             db: Session = Depends(get_db)):
     """Recompute comps + ROI for enriched lots using current pricing rules.
 
-    Costs nothing at the model — it reuses the AI title and verdict already
-    stored — so it's the right way to apply a pricing change to old data.
+    Reuses the AI title and verdict already stored, so it's the right way to
+    apply a pricing change to old data. Near-free: the only model spend is
+    the second-opinion audit on lots that come out GOLD MINE (~half a cent
+    each, see workers/enrich._verify_gold).
     """
     q = (db.query(models.Lot.id)
            .join(models.Enrichment)
@@ -200,6 +202,11 @@ def patch_enrichment(lot_id: str, payload: schemas.EnrichmentPatch,
             setattr(e, field, value)
         overrides.add(field)
     e.user_overrides = sorted(overrides)
+    if "est_resale" in changes:
+        # The gold audit certified the OLD number; a hand-set price stands on
+        # the user's authority and is never re-audited.
+        e.gold_check = None
+        e.gold_check_note = None
 
     if changes.keys() & {"est_resale", "verdict", "logistics_ease"}:
         _apply_roi(lot, e)

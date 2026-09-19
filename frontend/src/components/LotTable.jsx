@@ -513,8 +513,10 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
                   </span>
                 )}
                 {e.verdict && (
-                  <span className="badge">
-                    {gold ? '🟢' : e.roi_status === 'PASS' ? '🔴' : ''} {e.verdict}
+                  <span className="badge"
+                        title={e.gold_check_note || undefined}>
+                    {gold ? (e.gold_check === 'confirmed' ? '🟢✓' : '🟢')
+                      : e.roi_status === 'PASS' ? '🔴' : ''} {e.verdict}
                   </span>
                 )}
                 <span className="badge">
@@ -736,7 +738,16 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
                 )}
               </td>
               <td style={cell}>
-                {gold ? '🟢' : e.roi_status === 'PASS' ? '🔴' : ''}{' '}
+                <span
+                  title={e.gold_check === 'confirmed'
+                    ? `AI double-checked this gold${e.gold_check_note ? `: ${e.gold_check_note}` : ''}`
+                    : e.gold_check === 'demoted'
+                      ? `AI demoted this gold — ${e.gold_check_note || 'value judged implausible'}`
+                      : undefined}
+                  style={e.gold_check ? { cursor: 'help' } : undefined}>
+                  {gold ? (e.gold_check === 'confirmed' ? '🟢✓' : '🟢')
+                    : e.roi_status === 'PASS' ? '🔴' : ''}
+                </span>{' '}
                 <EditableCell
                   display={e.verdict ?? '—'}
                   rawValue={e.verdict}

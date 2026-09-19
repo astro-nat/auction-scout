@@ -31,6 +31,8 @@ class EnrichmentOut(BaseModel):
     est_roi: Optional[float] = None
     profit: Optional[Decimal] = None
     roi_status: Optional[str] = None
+    gold_check: Optional[str] = None       # confirmed | demoted | null
+    gold_check_note: Optional[str] = None
     progress: Optional[str] = None
     error_message: Optional[str] = None
     user_overrides: list[str] = []

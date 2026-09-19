@@ -129,6 +129,12 @@ class Enrichment(Base):
     est_roi = Column(Float)            # at current bid
     profit = Column(Numeric)
     roi_status = Column(String)        # GOLD MINE | PASS
+    # Second-opinion audit on GOLD MINEs (workers/enrich._verify_gold):
+    # NULL = not yet checked, 'confirmed' = the AI agrees the value is
+    # realistic, 'demoted' = it called the value implausible and the
+    # verdict fell back to PASS. Cleared whenever est_resale changes.
+    gold_check = Column(String)
+    gold_check_note = Column(String)
 
     # Which worker a 'queued' lot is waiting for ('enrich' | 'inspect') — how
     # the worker process knows what to run.
