@@ -127,24 +127,33 @@ ESTIMATE_REALIZATION = float(os.environ.get("ESTIMATE_REALIZATION", "0.8"))
 
 
 def _apply_estimate_cap(lot: models.Lot, e: models.Enrichment) -> None:
-    """Clamp weak-evidence values to ESTIMATE_REALIZATION × the house's low
-    estimate. Runs before _apply_roi wherever est_resale is set."""
+    """Clamp resale values against the house's own estimate range.
+
+    Weak evidence (asking prices, AI estimates, <3 sold comps) may not
+    exceed ESTIMATE_REALIZATION × the LOW end. Strong sold comps may roam
+    the whole range but not past the HIGH end — a specialist house knows
+    its consignment, and comps blowing past its own ceiling means the
+    search matched something better than what's in the case (a $100-200
+    pendant "worth" $300+ came from exactly that). Retail-in-title and
+    hand-set prices are untouchable. Runs before _apply_roi wherever
+    est_resale is set."""
     low = getattr(lot, "estimate_low", None)
     if not low or not e.est_resale:
         return
-    cap = round(float(low) * ESTIMATE_REALIZATION, 2)
-    if float(e.est_resale) <= cap:
-        return
     src = e.price_source or ""
+    if src.startswith("retail $") or "est_resale" in set(e.user_overrides or []):
+        return
     strong = ("sold" in src.lower() and "active" not in src.lower()
               and (e.comp_count or 0) >= 3)
-    if strong or src.startswith("retail $"):
-        return
-    if "est_resale" in set(e.user_overrides or []):
+    high = getattr(lot, "estimate_high", None) or low
+    cap = (float(high) if strong
+           else round(float(low) * ESTIMATE_REALIZATION, 2))
+    if float(e.est_resale) <= cap:
         return
     e.est_resale = cap
-    e.price_source = (src + f" → capped at {ESTIMATE_REALIZATION:g}× "
-                            f"house-low ${float(low):g}")
+    e.price_source = (src + (f" → capped at house-high ${float(high):g}" if strong
+                             else f" → capped at {ESTIMATE_REALIZATION:g}× "
+                                  f"house-low ${float(low):g}"))
 
 
 # Every fresh GOLD MINE gets a second-opinion AI audit before it's allowed

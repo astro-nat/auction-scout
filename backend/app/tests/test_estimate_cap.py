@@ -50,10 +50,19 @@ def test_thin_sold_comps_are_capped_too():
     assert float(e.est_resale) == pytest.approx(80.0)
 
 
-def test_strong_sold_comps_beat_the_house_guess():
-    lot, e = _lot(100, 240, "sold (SoldComps)", 8)
+def test_strong_sold_comps_roam_the_range_but_not_past_the_high_end():
+    """The lot-222 case: house says $100-200, eight 'sold comps' say $300+ —
+    the comps matched something better than what's in the case."""
+    lot, e = _lot(100, 320, "sold (SoldComps)", 8)   # estimate_high = 200
     enrich._apply_estimate_cap(lot, e)
-    assert float(e.est_resale) == 240
+    assert float(e.est_resale) == 200
+    assert "house-high" in e.price_source
+
+
+def test_strong_sold_comps_inside_the_range_stand_untouched():
+    lot, e = _lot(100, 180, "sold (SoldComps)", 8)   # within $100-200
+    enrich._apply_estimate_cap(lot, e)
+    assert float(e.est_resale) == 180
     assert "capped" not in (e.price_source or "")
 
 
