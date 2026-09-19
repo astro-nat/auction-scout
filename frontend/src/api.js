@@ -185,6 +185,10 @@ export function setHidden(lotId, hidden) {
   return request(`/lots/${lotId}/hide?hidden=${hidden}`, { method: 'POST' })
 }
 
+export function setWon(lotId, won) {
+  return request(`/lots/${lotId}/won?won=${won}`, { method: 'POST' })
+}
+
 export function refreshBids() {
   return request('/auctions/refresh-bids', { method: 'POST' })
 }

@@ -123,7 +123,14 @@ def flush_closed_now(db: Session, dry_run: bool = False) -> dict:
     HiBid status says closed/sold, OR its whole auction has closed — then
     drop the now-empty closed auctions. Shared by the manual endpoint below
     and the 12-hourly maintenance loop (workers/maintenance.py). Permanent —
-    enrichment results (the paid AI calls) go with the lots."""
+    enrichment results (the paid AI calls) go with the lots.
+
+    Won and watched lots are never flushed. A won lot is resale inventory:
+    its enrichment (identification, comps, resale value) is what the user
+    needs to list the item, and closing is exactly when they need it — the
+    2026-09-19 auto-flush deleted 10 just-won webcast lots before this
+    guard. Watched is the other signal of real interest the app has, so it
+    gets the same protection."""
     from datetime import datetime
     from sqlalchemy import func, or_
     from .auctions import purge_stale_auctions
@@ -138,6 +145,9 @@ def flush_closed_now(db: Session, dry_run: bool = False) -> dict:
               & (models.Auction.closing_date < datetime.now()),
               func.upper(func.coalesce(models.Lot.status, "")).in_(_CLOSED_STATUSES),
           ))
+          # coalesce: rows created before these columns existed hold NULL.
+          .filter(func.coalesce(models.Lot.won, False).is_(False),
+                  func.coalesce(models.Lot.watched, False).is_(False))
           .all()
     ]
     if dry_run:
@@ -174,6 +184,23 @@ def set_watch(lot_id: str, watched: bool = True, db: Session = Depends(get_db)):
     lot.watched = watched
     if watched:
         lot.closing_alert_sent_at = None
+    db.commit()
+    db.refresh(lot)
+    return lot
+
+
+@router.post("/{lot_id}/won", response_model=schemas.LotOut)
+def set_won(lot_id: str, won: bool = True, db: Session = Depends(get_db)):
+    """Mark a lot as won at auction (or unmark it). A won lot is inventory:
+    the flush never deletes it, and the UI keeps it visible even with
+    'Hide closed' on. The app can't detect wins itself — no HiBid account
+    linkage — so this button is how it finds out."""
+    lot = (db.query(models.Lot)
+             .options(joinedload(models.Lot.enrichment))
+             .filter(models.Lot.lot_id == lot_id).first())
+    if not lot:
+        raise HTTPException(status_code=404, detail="Lot not found")
+    lot.won = won
     db.commit()
     db.refresh(lot)
     return lot

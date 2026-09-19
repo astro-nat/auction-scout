@@ -73,6 +73,7 @@ class LotOut(BaseModel):
     unreachable_pickup: bool = False
     watched: bool = False
     hidden: bool = False
+    won: bool = False
     lot_link: Optional[str] = None
     thumbnail_url: Optional[str] = None
     created_at: datetime

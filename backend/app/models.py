@@ -80,6 +80,12 @@ class Lot(Base):
     # Manually hidden by the user — stays in the DB (and keeps its
     # enrichment) but drops out of the items view until unhidden.
     hidden = Column(Boolean, default=False)
+    # Marked won by the user after the hammer fell. The app has no HiBid
+    # account link, so this is the only way it can know a closed lot is now
+    # resale inventory — the flush (manual and 12-hourly auto) must never
+    # delete a won lot or its enrichment: the paid identification and comps
+    # are exactly what's needed to list the item.
+    won = Column(Boolean, default=False)
     lot_link = Column(String)
     thumbnail_url = Column(String)
     hd_thumbnail_url = Column(String)

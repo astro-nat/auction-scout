@@ -41,6 +41,9 @@ export default function App() {
   })
   const [hideUnshippable, setHideUnshippable] = useState(true)
   const [showHiddenLots, setShowHiddenLots] = useState(false)
+  // Show only lots marked won (🏆) — the resale-inventory view. Won lots
+  // are always exempt from "Hide closed": winning is what closes a lot.
+  const [wonOnly, setWonOnly] = useState(false)
   const [importedRows, setImportedRows] = useState({})
   // Target ROI % for the GOLD MINE verdict — DB-backed, editable inline.
   const [targetRoi, setTargetRoi] = useState('')
@@ -259,7 +262,9 @@ They're listed below — use "Enrich" to price them.`)
       if (!peek.lots) { alert('No items from closed auctions to flush.'); return }
       const msg = `Permanently delete ${peek.lots} items from closed auctions?\n\n`
         + `Their enrichment results (the AI calls you paid for) are deleted `
-        + `with them. This can't be undone.`
+        + `with them. This can't be undone.\n\n`
+        + `Lots marked won (🏆) or watched (★) are kept — mark anything you `
+        + `won before flushing.`
       if (!window.confirm(msg)) return
       setBusy('Flushing closed items…')
       const r = await flushClosed()
@@ -527,7 +532,11 @@ Skipping ${hard} HARD-to-ship lots.`
     const auctionNames = { ...auctionIndex, ...Object.fromEntries(auctions.map((a) => [a.id, a.name])) }
     return lots
       .filter((l) => {
+        if (wonOnly && !l.won) return false
         if (!showHiddenLots && l.hidden) return false
+        // Won lots ignore the hide rules below — they're inventory now, and
+        // the enrichment is what gets them listed on eBay.
+        if (l.won) return true
         // Lots the user just enriched/inspected are exempt from the hide
         // rules for a while — a fresh result that instantly trips a filter
         // vanishes before it can be read. (The manual 🚫 hide still wins.)
@@ -542,7 +551,7 @@ Skipping ${hard} HARD-to-ship lots.`
                      auction_name: l.auction_name ?? auctionNames[l.auction_id] ?? '—',
                      item_closed: isClosedItem(l) }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lots, auctions, auctionIndex, showHiddenLots, hideLowValue, lowValueCutoff, hideHardShip, hideClosed])
+  }, [lots, auctions, auctionIndex, showHiddenLots, wonOnly, hideLowValue, lowValueCutoff, hideHardShip, hideClosed])
   const hiddenCount = lots.length - visibleLots.length
 
   return (
@@ -997,6 +1006,14 @@ Skipping ${hard} HARD-to-ship lots.`
               checked={showHiddenLots}
               onChange={(ev) => setShowHiddenLots(ev.target.checked)}
             /> Show hidden ({lots.filter((l) => l.hidden).length})
+          </label>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
+                 title="Only lots you marked won with the 🏆 button — your resale inventory">
+            <input
+              type="checkbox"
+              checked={wonOnly}
+              onChange={(ev) => setWonOnly(ev.target.checked)}
+            /> 🏆 Won only ({lots.filter((l) => l.won).length})
           </label>
           {(hideLowValue || hideHardShip || hideClosed || !showHiddenLots) && hiddenCount > 0 && (
             <span style={{ color: 'var(--muted)', whiteSpace: 'nowrap' }}>

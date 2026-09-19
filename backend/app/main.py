@@ -53,6 +53,7 @@ _MIGRATIONS = [
     "ALTER TABLE lots ADD COLUMN IF NOT EXISTS lot_number VARCHAR",
     "ALTER TABLE lots ADD COLUMN IF NOT EXISTS estimate_low NUMERIC",
     "ALTER TABLE lots ADD COLUMN IF NOT EXISTS estimate_high NUMERIC",
+    "ALTER TABLE lots ADD COLUMN IF NOT EXISTS won BOOLEAN DEFAULT FALSE",
 ]
 
 def _run_migrations() -> list[str]:
