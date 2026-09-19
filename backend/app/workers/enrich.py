@@ -865,6 +865,49 @@ def _download_image(url: str | None) -> bytes | None:
     return None
 
 
+# How many regraded rows ride in one transaction. One commit for the whole
+# run meant one loser: a regrade's single end-of-run commit lost a race with
+# a reprice committing the same enrichment rows per-lot, and all ~1,200
+# verdicts silently reverted (81 stayed wrong until a manual re-run). Small
+# batches make a conflict cost one batch, not the run.
+REGRADE_BATCH = int(os.environ.get("REGRADE_BATCH", "100"))
+
+
+def _regrade_rows(db: Session, rows: list, job: str | None = None) -> tuple[int, int]:
+    """The regrade loop, committing every REGRADE_BATCH rows.
+
+    A batch whose commit fails is rolled back, LOGGED, and skipped — the
+    rows keep their old verdicts and the run moves on. Returns
+    (verdicts changed and committed, rows lost to failed commits)."""
+    changed = lost = 0
+    batch_changed = 0
+    batch_start = 1
+    for i, lot in enumerate(rows, 1):
+        e = lot.enrichment
+        # Hand-corrected PRICES are protected, but the verdict derived
+        # from them still follows the current ROI target.
+        before = e.roi_status
+        _apply_roi(lot, e)
+        if e.roi_status != before:
+            batch_changed += 1
+        if i % REGRADE_BATCH == 0 or i == len(rows):
+            try:
+                db.commit()
+                changed += batch_changed
+            except Exception as exc:  # noqa: BLE001 — a lost batch must not sink the run, or vanish
+                db.rollback()
+                lost += i - batch_start + 1
+                logger.warning(
+                    "Regrade commit failed for rows %s-%s (%s rows keep "
+                    "their old verdicts): %s",
+                    batch_start, i, i - batch_start + 1, exc)
+            batch_changed = 0
+            batch_start = i + 1
+        if job and i % 200 == 0:
+            jobs.update(job, current=i)
+    return changed, lost
+
+
 def run_regrade(resume_job_id: str | None = None) -> None:
     """Recompute ROI verdicts ONLY — no comp lookups, no AI, no network.
 
@@ -880,7 +923,7 @@ def run_regrade(resume_job_id: str | None = None) -> None:
     # adopt that one instead of registering a second.
     job = resume_job_id or jobs.start(
         "regrade", "Re-grading items at the new ROI target")
-    changed = 0
+    changed = lost = 0
     try:
         rows = (db.query(models.Lot)
                   .join(models.Enrichment)
@@ -888,22 +931,13 @@ def run_regrade(resume_job_id: str | None = None) -> None:
                   .filter(models.Enrichment.est_resale.isnot(None))
                   .all())
         jobs.update(job, total=len(rows))
-        for i, lot in enumerate(rows, 1):
-            e = lot.enrichment
-            # Hand-corrected PRICES are protected, but the verdict derived
-            # from them still follows the current ROI target.
-            before = e.roi_status
-            _apply_roi(lot, e)
-            if e.roi_status != before:
-                changed += 1
-            if i % 200 == 0:
-                jobs.update(job, current=i)
-        db.commit()
+        changed, lost = _regrade_rows(db, rows, job)
         jobs.update(job, current=len(rows))
     finally:
         jobs.finish(job)
         db.close()
-    print(f"Re-grade complete: {changed} verdicts changed")
+    tail = f" — {lost} rows LOST to failed commits, see warnings" if lost else ""
+    print(f"Re-grade complete: {changed} verdicts changed{tail}")
 
 
 def run_reprice(lot_db_ids: list[int], resume_job_id: str | None = None) -> None:

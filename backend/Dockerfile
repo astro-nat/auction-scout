@@ -1,5 +1,9 @@
 FROM python:3.12-slim
 
+# Worker progress goes to stdout via print(); without this the container
+# buffers it and Railway's log view shows nothing until the process exits.
+ENV PYTHONUNBUFFERED=1
+
 WORKDIR /app
 
 COPY requirements.txt .
