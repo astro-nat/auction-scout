@@ -119,6 +119,34 @@ PARTOUT_REALIZATION = float(os.environ.get("PARTOUT_REALIZATION", "0.6"))
 # under a few dollars.
 MIN_ASSUMED_BID = float(os.environ.get("MIN_ASSUMED_BID", "5"))
 
+# A weak-evidence resale value may not exceed this fraction of the house's
+# own LOW estimate. Estimates are marketing, but a house rarely lowballs its
+# own consignment — the low end works as a ceiling. Strong sold comps and
+# retail-in-title stand as-is: real data beats the house's guess.
+ESTIMATE_REALIZATION = float(os.environ.get("ESTIMATE_REALIZATION", "0.8"))
+
+
+def _apply_estimate_cap(lot: models.Lot, e: models.Enrichment) -> None:
+    """Clamp weak-evidence values to ESTIMATE_REALIZATION × the house's low
+    estimate. Runs before _apply_roi wherever est_resale is set."""
+    low = getattr(lot, "estimate_low", None)
+    if not low or not e.est_resale:
+        return
+    cap = round(float(low) * ESTIMATE_REALIZATION, 2)
+    if float(e.est_resale) <= cap:
+        return
+    src = e.price_source or ""
+    strong = ("sold" in src.lower() and "active" not in src.lower()
+              and (e.comp_count or 0) >= 3)
+    if strong or src.startswith("retail $"):
+        return
+    if "est_resale" in set(e.user_overrides or []):
+        return
+    e.est_resale = cap
+    e.price_source = (src + f" → capped at {ESTIMATE_REALIZATION:g}× "
+                            f"house-low ${float(low):g}")
+
+
 # Every fresh GOLD MINE gets a second-opinion AI audit before it's allowed
 # to stand — a GOLD MINE is the app telling you to spend money, and the
 # audits kept finding golds built on the wrong comps entirely (costume
@@ -400,6 +428,7 @@ def _enrich(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
         e.price_source = comps["price_source"]
         if mult != 1.0 and comps["price_source"]:
             e.price_source += f" ×{mult:g} condition"
+        _apply_estimate_cap(lot, e)
 
     # --- 4. ROI ---
     _progress(db, e, "computing max bid and ROI…")
@@ -465,6 +494,7 @@ Description: {description}
 Identified as: {enriched_title}
 Condition verdict: {verdict}
 Claimed resale value: ${est_resale} — source: {price_source} ({comp_count} comps)
+House estimate: {house_estimate}
 Current bid ${bid}; the app would bid up to ${max_bid}.
 
 Is ${est_resale} a realistic eBay SOLD price for this EXACT item in this
@@ -500,6 +530,9 @@ def _verify_gold(db: Session, lot: models.Lot, e: models.Enrichment) -> None:
         est_resale=e.est_resale,
         price_source=e.price_source or "?",
         comp_count=e.comp_count or 0,
+        house_estimate=(f"${float(lot.estimate_low):g}-${float(lot.estimate_high):g} "
+                        f"(the auctioneer's own range — promotional, not market data)"
+                        if getattr(lot, "estimate_low", None) else "(none given)"),
         bid=lot.current_bid or 0,
         max_bid=e.max_bid or 0,
         photo_note=", shown in the photo" if image_bytes else "")
@@ -753,6 +786,7 @@ def _inspect(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
                 sellable = priced + ai_priced
                 e.price_source = (f"itemized vision ({' + '.join(bits) or 'nothing priced'}"
                                   f" — {sellable} of {len(items)} worth listing)")
+            _apply_estimate_cap(lot, e)
             _apply_roi(lot, e)
 
 
@@ -942,6 +976,7 @@ def run_reprice(lot_db_ids: list[int], resume_job_id: str | None = None) -> None
                         e.price_source = comps["price_source"]
                         if mult != 1.0 and comps["price_source"]:
                             e.price_source += f" ×{mult:g} condition"
+                        _apply_estimate_cap(lot, e)
                         # A changed value voids its old audit — the check
                         # certified a number that no longer exists.
                         if str(prior_resale) != str(e.est_resale):

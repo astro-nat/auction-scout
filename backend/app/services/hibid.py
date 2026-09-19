@@ -368,6 +368,24 @@ def _closes_at_from_time_left(s: str | None):
     return datetime.now() + timedelta(seconds=total)
 
 
+_ESTIMATE_NUM_RE = re.compile(r"([\d,]+(?:\.\d+)?)")
+
+
+def parse_estimate(s) -> tuple:
+    """('850.00 - 1,500.00 USD') → (850.0, 1500.0). A single number fills
+    both ends; junk or missing text → (None, None)."""
+    if not s:
+        return (None, None)
+    nums = [float(m.replace(",", "")) for m in _ESTIMATE_NUM_RE.findall(str(s))][:2]
+    if not nums or nums[0] <= 0:
+        return (None, None)
+    low = nums[0]
+    high = nums[1] if len(nums) > 1 else nums[0]
+    if high < low:
+        low, high = high, low
+    return (low, high)
+
+
 def _process_lot(raw: dict, auction_ctx: dict) -> dict:
     state = raw.get("lotState") or {}
     pictures = raw.get("pictures") or []
@@ -391,11 +409,17 @@ def _process_lot(raw: dict, auction_ctx: dict) -> dict:
     else:
         source = auction_ctx.get("source", "Local Pickup")
 
+    est_low, est_high = parse_estimate(raw.get("estimate"))
     return {
         "lot_id": str(raw.get("id")),
         # The auction house's catalog number ("Lot 214") — what you'd punch
         # into HiBid or say to a clerk, unlike lot_id (HiBid's global id).
         "lot_number": str(raw.get("lotNumber") or "").strip() or None,
+        # The house's own estimate range ("850.00 - 1,500.00 USD"). Marketing,
+        # not market data — but a house rarely lowballs its own consignment,
+        # so the LOW end works as a ceiling on weak-evidence resale values.
+        "estimate_low": est_low,
+        "estimate_high": est_high,
         "title": title,
         "category": category or None,
         "description": description or None,

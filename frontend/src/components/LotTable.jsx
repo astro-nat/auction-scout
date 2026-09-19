@@ -36,6 +36,11 @@ function statusLabel(e) {
 // filter widget: 'text' (title search), 'range' (money <N presets), or
 // 'values' (dropdown of the distinct values present in the loaded lots).
 const COLUMNS = [
+  // Natural sort on the house's catalog number: "101" < "102" < "1001",
+  // and suffixed numbers ("214A") sort with their base.
+  { key: 'lot_number', label: '#',
+    get: (l) => { const m = /^\s*(\d+)/.exec(l.lot_number || ''); return m ? Number(m[1]) : null },
+    filter: 'text', num: true },
   { key: 'title', label: 'Title', get: (l) => l.title?.toLowerCase(), filter: 'text' },
   { key: 'auction', label: 'Auction', get: (l) => l.auction_name, filter: 'values' },
   { key: 'category', label: 'Category', get: (l) => l.category, filter: 'values' },
@@ -186,6 +191,7 @@ function EditableCell({ display, rawValue, onSave, options, inputType = 'text', 
 // Mobile sort choices — a dropdown replaces click-to-sort headers on phones.
 const MOBILE_SORTS = [
   { label: 'ROI % (high first)', key: 'roi', dir: -1 },
+  { label: 'Lot # (low first)', key: 'lot_number', dir: 1 },
   { label: 'Sort: unsorted', key: null, dir: 1 },
   { label: 'Est Resale (high first)', key: 'est_resale', dir: -1 },
   { label: 'Max Bid (high first)', key: 'max_bid', dir: -1 },
@@ -643,6 +649,9 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
                 // Weak-evidence gold (asking prices, AI estimates) gets a
                 // paler wash: worth a look, not the same claim as real sales.
                 style={paleGold ? { opacity: 0.82 } : undefined}>
+              <td className="num" style={{ ...cell, color: 'var(--muted)' }}>
+                {lot.lot_number || '—'}
+              </td>
               <td style={cell}>
                 <button
                   className="bare"
@@ -671,13 +680,6 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
                 {e.auth_required && (
                   <span style={{ cursor: 'help', marginRight: 4 }}
                         title="Luxury/precious-metal match — resale depends on authentication; don't trust the comps until verified in hand">⚠️</span>
-                )}
-                {lot.lot_number && (
-                  <span style={{ color: 'var(--muted)', fontSize: 12,
-                                 fontVariantNumeric: 'tabular-nums', marginRight: 4 }}
-                        title="The auction house's lot number">
-                    #{lot.lot_number}
-                  </span>
                 )}
                 <a href={lot.lot_link} target="_blank" rel="noreferrer"
                    style={lot.hidden ? { opacity: 0.5, textDecoration: 'line-through' } : undefined}>{lot.title}</a>

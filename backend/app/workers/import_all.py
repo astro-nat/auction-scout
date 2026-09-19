@@ -42,6 +42,7 @@ def save_lots(db: Session, auction: models.Auction, lots: list[dict], *,
         if row:
             for k in ("current_bid", "next_bid", "bid_count", "est_cost",
                       "status", "time_left", "closes_at", "lot_number",
+                      "estimate_low", "estimate_high",
                       "thumbnail_url", "hd_thumbnail_url", "fullsize_url"):
                 setattr(row, k, data[k])
             updated += 1

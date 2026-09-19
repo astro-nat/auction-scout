@@ -51,6 +51,8 @@ _MIGRATIONS = [
     "ALTER TABLE enrichment ADD COLUMN IF NOT EXISTS gold_check VARCHAR",
     "ALTER TABLE enrichment ADD COLUMN IF NOT EXISTS gold_check_note VARCHAR",
     "ALTER TABLE lots ADD COLUMN IF NOT EXISTS lot_number VARCHAR",
+    "ALTER TABLE lots ADD COLUMN IF NOT EXISTS estimate_low NUMERIC",
+    "ALTER TABLE lots ADD COLUMN IF NOT EXISTS estimate_high NUMERIC",
 ]
 
 def _run_migrations() -> list[str]:

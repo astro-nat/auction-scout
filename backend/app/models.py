@@ -51,6 +51,10 @@ class Lot(Base):
     id = Column(Integer, primary_key=True)
     lot_id = Column(String, unique=True, nullable=False, index=True)  # hibid lot id
     lot_number = Column(String)       # the house's catalog number ("214A")
+    # The house's own estimate range — a ceiling for weak-evidence values,
+    # never a price source (see workers/enrich._apply_estimate_cap).
+    estimate_low = Column(Numeric)
+    estimate_high = Column(Numeric)
     auction_id = Column(Integer, ForeignKey("auctions.id"))
     title = Column(String, nullable=False)
     category = Column(String, index=True)
