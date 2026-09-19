@@ -848,9 +848,11 @@ Skipping ${hard} HARD-to-ship lots.`
       )}
 
       {view === 'items' && (<>
-      <section style={{ marginBottom: '0.75rem', display: 'flex',
-                        flexDirection: 'column', gap: 8 }}>
-        {/* Row 1: which auctions (multi-select) + which category */}
+      <section style={{ marginBottom: 6, display: 'flex',
+                        flexDirection: 'column', gap: 6 }}>
+        {/* Row 1: scope (auctions + category) on the left, bulk actions on
+            the right — one wrapping row so the controls stop eating the
+            viewport before any results show. */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-start' }}>
           <details className="picker" style={{ position: 'relative', maxWidth: isMobile ? '100%' : 440 }}>
             <summary title="Tick one or more imported auctions to see just their items">
@@ -911,12 +913,31 @@ Skipping ${hard} HARD-to-ship lots.`
               </button>
             )
           })()}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8,
+                        marginLeft: isMobile ? 0 : 'auto' }}>
+            <button style={isMobile ? { flex: '1 1 45%', padding: 8 } : undefined}
+                    onClick={handleRefreshBids}
+                    title="Re-pull current bids from HiBid for every imported open auction and recompute ROI. Free — progress shows in the top bar.">
+              Refresh bids
+            </button>
+            <button style={isMobile ? { flex: '1 1 45%', padding: 8 } : undefined}
+                    onClick={handleInspectNoValue}
+                    title="Bulk-inspect every enriched item that still has no resale value — AI reads the photo and prices it (asks first, shows cost)">
+              Inspect no-value items
+            </button>
+            <button className="danger"
+                    style={isMobile ? { flex: '1 1 45%', padding: 8 } : undefined}
+                    onClick={handleFlushClosed}
+                    title="Permanently delete all items whose auction has closed (asks first)">
+              Flush closed items
+            </button>
+          </div>
         </div>
 
         {/* Row 2: filters — inline-flex per label so a checkbox never wraps
             away from its own text, consistent gaps instead of ad-hoc margins */}
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center',
-                      columnGap: 16, rowGap: 6, fontSize: 14 }}>
+                      columnGap: 14, rowGap: 4, fontSize: 13 }}>
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
             <input
               type="checkbox"
@@ -986,58 +1007,38 @@ Skipping ${hard} HARD-to-ship lots.`
           )}
         </div>
 
-        {/* Row 3: actions */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          <button style={isMobile ? { flex: '1 1 45%', padding: 8 } : undefined}
-                  onClick={handleRefreshBids}
-                  title="Re-pull current bids from HiBid for every imported open auction and recompute ROI. Free — progress shows in the top bar.">
-            Refresh bids
-          </button>
-          <button style={isMobile ? { flex: '1 1 45%', padding: 8 } : undefined}
-                  onClick={handleInspectNoValue}
-                  title="Bulk-inspect every enriched item that still has no resale value — AI reads the photo and prices it (asks first, shows cost)">
-            Inspect no-value items
-          </button>
-          <button className="danger"
-                  style={isMobile ? { flex: '1 1 45%', padding: 8 } : undefined}
-                  onClick={handleFlushClosed}
-                  title="Permanently delete all items whose auction has closed (asks first)">
-            Flush closed items
-          </button>
-        </div>
       </section>
 
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
-        background: 'var(--highlight)', border: '1px solid var(--border)',
-        borderRadius: 6, padding: '8px 10px', marginBottom: 10,
-      }}>
+      {/* One quiet line, not a banner: what's in view and how to widen it.
+          "Back to auctions" is gone — the Auctions tab is right there. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+                    fontSize: 13, color: 'var(--muted)', margin: '2px 0 8px' }}>
         {selectedAuctions.length ? (
           <>
             <span>
               {selectedAuctions.length === 1
-                ? <>Catalogue of <strong>{auctionIndex[selectedAuctions[0]] ?? 'this auction'}</strong></>
-                : <>Items from <strong>{selectedAuctions.length} selected auctions</strong></>}
-              {categoryFilter && <> in <strong>{categoryFilter}</strong></>}
-              {' '}— {lotTotal || lots.length} lot{(lotTotal || lots.length) === 1 ? '' : 's'} imported
+                ? <>Catalogue of <strong style={{ color: 'var(--text)' }}>{auctionIndex[selectedAuctions[0]] ?? 'this auction'}</strong></>
+                : <>Items from <strong style={{ color: 'var(--text)' }}>{selectedAuctions.length} selected auctions</strong></>}
+              {categoryFilter && <> in <strong style={{ color: 'var(--text)' }}>{categoryFilter}</strong></>}
+              {' '}— {(lotTotal || lots.length).toLocaleString()} lot{(lotTotal || lots.length) === 1 ? '' : 's'} imported
             </span>
-            <button onClick={() => setSelectedAuctions([])}>Show items from every auction</button>
+            <button style={{ fontSize: 12, padding: '2px 8px' }}
+                    onClick={() => setSelectedAuctions([])}>
+              Show every auction
+            </button>
           </>
         ) : (
           <span>
-            <strong>{lotTotal.toLocaleString()} items</strong> imported across
+            <strong style={{ color: 'var(--text)' }}>{lotTotal.toLocaleString()} items</strong> imported across
             {' '}{new Set(lots.map((l) => l.auction_id)).size} auctions
             {lotTotal > lots.length && (
-              <em style={{ color: 'var(--muted)' }}>
+              <em>
                 {' '}— showing the first {lots.length.toLocaleString()}; open one
                 auction, or filter, to narrow it down
               </em>
             )}
           </span>
         )}
-        <button onClick={() => setView('auctions')} style={{ marginLeft: 'auto' }}>
-          ← Back to auctions
-        </button>
       </div>
       {lots.length === 0 ? (
         lotsLoadState === 'loading' ? (
