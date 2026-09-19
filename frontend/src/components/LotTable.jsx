@@ -560,7 +560,11 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
       {anyQueued && <span style={{ marginLeft: '0.75rem' }}><span className="spinner" />{lots.filter((l) => l.enrichment?.status === 'queued').length} lots in the queue… auto-refreshing</span>}
       <span style={{ marginLeft: '0.75rem' }}>{countLine}</span>
     </div>
-    <div className="table-scroll">
+    {/* No overflow wrapper: an overflow-x container becomes the scrollport
+        position:sticky binds to, and the thead's top offset then displaces
+        it INSIDE the table by the status bar's height — a blank band with
+        the header floating over the first rows whenever a job is running.
+        A too-narrow window falls back to page-level horizontal scrolling. */}
     <table className="data-table lot-table">
       {/* Sticks below the status bar when one is showing (see StatusBar's
           --statusbar-h). Solid background or the rows scroll through it. */}
@@ -760,7 +764,6 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
         })}
       </tbody>
     </table>
-    </div>
     {sorted.length > renderLimit && (
       <button style={{ marginTop: 8, padding: '6px 14px' }}
               onClick={() => setRenderLimit((n) => n + 150)}>

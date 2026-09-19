@@ -768,8 +768,7 @@ Skipping ${hard} HARD-to-ship lots.`
             )}
           </details>
         ) : (
-          <div className="table-scroll" style={{ marginTop: '0.75rem' }}>
-          <table className="data-table">
+          <table className="data-table" style={{ marginTop: '0.75rem' }}>
             <thead style={{
               position: 'sticky', top: 'var(--statusbar-h, 0px)', zIndex: 10,
               background: 'var(--card-bg)',
@@ -837,7 +836,6 @@ Skipping ${hard} HARD-to-ship lots.`
               ))}
             </tbody>
           </table>
-          </div>
         ))}
         {!isMobile && auctionRowsForDisplay.length > auctionLimit && (
           <button style={{ marginTop: 8 }} onClick={() => setAuctionLimit((n) => n + 50)}>

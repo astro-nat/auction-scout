@@ -182,7 +182,10 @@ label { user-select: none; }
 
 /* ============================== tables ============================== */
 
-.table-scroll { overflow-x: auto; }
+/* NOTE: never wrap a .data-table in an overflow-x container — the sticky
+   thead would bind to that scrollport instead of the viewport, and its
+   status-bar offset then shoves it down INSIDE the table (a blank band,
+   header floating over the first rows) whenever a job is running. */
 
 .data-table {
   border-collapse: collapse;
