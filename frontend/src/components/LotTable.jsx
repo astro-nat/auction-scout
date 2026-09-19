@@ -192,11 +192,13 @@ function EditableCell({ display, rawValue, onSave, options, inputType = 'text', 
 const MOBILE_SORTS = [
   { label: 'ROI % (high first)', key: 'roi', dir: -1 },
   { label: 'Lot # (low first)', key: 'lot_number', dir: 1 },
+  { label: 'Closes (soonest first)', key: 'closes', dir: 1 },
   { label: 'Sort: unsorted', key: null, dir: 1 },
   { label: 'Est Resale (high first)', key: 'est_resale', dir: -1 },
   { label: 'Max Bid (high first)', key: 'max_bid', dir: -1 },
   { label: 'Current Bid (low first)', key: 'bid', dir: 1 },
   { label: 'Est Cost (low first)', key: 'est_cost', dir: 1 },
+  { label: 'Title (A→Z)', key: 'title', dir: 1 },
 ]
 
 export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }) {
@@ -444,6 +446,25 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
           >
             {MOBILE_SORTS.map((s, i) => <option key={s.label} value={i}>{s.label}</option>)}
           </select>
+          {/* Same filter engine the desktop column dropdowns use — the
+              card view just has nowhere to hang per-column widgets. */}
+          {[['ship', 'Ship'], ['status', 'Status'], ['verdict', 'Verdict']].map(([key, label]) => (
+            <select
+              key={key}
+              value={colFilters[key] ?? ''}
+              onChange={(ev) => setFilter(key, ev.target.value)}
+              style={{ flex: 1, padding: 6, fontSize: 14, maxWidth: '31%' }}
+            >
+              <option value="">{label}: all</option>
+              {(distinctValues[key] ?? []).map((v) => <option key={v} value={v}>{v}</option>)}
+            </select>
+          ))}
+          {Object.values(colFilters).some((v) => v?.trim()) && (
+            <button style={{ flex: '1 1 100%', padding: 6, fontSize: 13 }}
+                    onClick={() => setColFilters({})}>
+              Clear filters
+            </button>
+          )}
           <button className="primary" onClick={handleEnrichMatching}
                   disabled={!enrichableCount || queuing}
                   title="Enrich every lot matching the current filters — the whole result, not just the rows on screen. Asks for confirmation with the exact cost first."
