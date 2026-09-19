@@ -352,22 +352,22 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
     setTimeout(tick, 3000)
   }
 
-  // "Visible" means the rows actually on screen (the render window), not
-  // every lot behind the filters — queueing 1000+ lots by accident is real
-  // time and real API spend.
+  // Every lot matching the current filters — not just the render window.
+  // The render cap exists to save DOM memory, and capping the BATCH to it
+  // meant "Enrich" on a 1,199-lot result stopped at 150. The confirm dialog
+  // quoting the exact count and dollar cost is what guards the spend.
   const enrichable = sorted
-    .slice(0, renderLimit)
     .filter((l) => !['success', 'queued'].includes(l.enrichment?.status))
 
-  async function handleEnrichVisible() {
+  async function handleEnrichMatching() {
     if (!enrichable.length) return
     const cost = (enrichable.length * 0.005).toFixed(2)
     const ok = window.confirm(
-      `Enrich the ${enrichable.length} lots shown?
+      `Enrich all ${enrichable.length} lots matching your filters?
 
 ` +
       `Each one runs an AI pass and an eBay comp lookup — roughly $${cost} ` +
-      `of API usage, processed top of the list first.
+      `of API usage, processed in the order shown, top first.
 
 ` +
       `Progress appears in the bar at the top of the page.`
@@ -421,10 +421,10 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
           >
             {MOBILE_SORTS.map((s, i) => <option key={s.label} value={i}>{s.label}</option>)}
           </select>
-          <button className="primary" onClick={handleEnrichVisible} disabled={!enrichableCount}
-                  title="Enrich the lots currently shown on screen. Asks for confirmation first — progress shows in the bar at the top."
+          <button className="primary" onClick={handleEnrichMatching} disabled={!enrichableCount}
+                  title="Enrich every lot matching the current filters — the whole result, not just the rows on screen. Asks for confirmation with the exact cost first."
                   style={{ flex: '1 1 100%', padding: 10, fontSize: 15 }}>
-            Enrich the {enrichableCount} shown
+            Enrich all {enrichableCount}
           </button>
           {anyQueued && <span style={{ flexBasis: '100%' }}><span className="spinner" />{lots.filter((l) => l.enrichment?.status === 'queued').length} lots in the queue… auto-refreshing</span>}
           <div style={{ flexBasis: '100%' }}>{countLine}</div>
@@ -532,9 +532,9 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
   return (
     <>
     <div style={{ marginBottom: '0.5rem' }}>
-      <button className="primary" onClick={handleEnrichVisible} disabled={!enrichableCount}
-              title="Enrich the lots currently shown on screen. Asks for confirmation first — progress shows in the bar at the top.">
-        Enrich the {enrichableCount} shown
+      <button className="primary" onClick={handleEnrichMatching} disabled={!enrichableCount}
+              title="Enrich every lot matching the current filters — the whole result, not just the rows on screen. Asks for confirmation with the exact cost first.">
+        Enrich all {enrichableCount}
       </button>
       {anyQueued && <span style={{ marginLeft: '0.75rem' }}><span className="spinner" />{lots.filter((l) => l.enrichment?.status === 'queued').length} lots in the queue… auto-refreshing</span>}
       <span style={{ marginLeft: '0.75rem' }}>{countLine}</span>
