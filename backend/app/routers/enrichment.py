@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
@@ -8,6 +9,12 @@ from ..services import jobs
 from ..workers.enrich import _apply_roi
 
 router = APIRouter(prefix="/lots", tags=["enrichment"])
+
+
+def _not_hidden():
+    """Lots the user 🚫-dismissed never earn another cent or comp lookup —
+    every bulk path filters on this. Unhiding puts a lot back in scope."""
+    return or_(models.Lot.hidden.is_(False), models.Lot.hidden.is_(None))
 
 
 @router.post("/{lot_id}/enrich", status_code=202)
@@ -73,7 +80,8 @@ def reprice(auction_id: int | None = None,
     """
     q = (db.query(models.Lot.id)
            .join(models.Enrichment)
-           .filter(models.Enrichment.enriched_title.isnot(None)))
+           .filter(models.Enrichment.enriched_title.isnot(None))
+           .filter(_not_hidden()))
     if auction_id:
         q = q.filter(models.Lot.auction_id == auction_id)
     lot_ids = [row[0] for row in q.all()]
@@ -102,6 +110,7 @@ def enrich_category(category: str, skip_hard: bool = False, dry_run: bool = Fals
     q = (db.query(models.Lot.id).join(models.Enrichment)
            .join(models.Auction, models.Lot.auction_id == models.Auction.id)
            .filter(models.Lot.category == category,
+                   _not_hidden(),
                    models.Enrichment.status.in_(["pending", "failed"]),
                    (models.Auction.closing_date.is_(None))
                    | (models.Auction.closing_date >= datetime.now())))
@@ -133,9 +142,9 @@ def re_enrich_blind(auction_id: int | None = None, dry_run: bool = False,
     key outage produced 171 of these). Blind = success, no ai_source, no
     enriched title, and no retail-in-title price standing in. Re-queueing
     sends them through the full pipeline again."""
-    from sqlalchemy import or_
     q = (db.query(models.Lot.id).join(models.Enrichment)
            .filter(models.Enrichment.status == "success",
+                   _not_hidden(),
                    or_(models.Enrichment.ai_source.is_(None),
                        models.Enrichment.ai_source == "none"),
                    models.Enrichment.enriched_title.is_(None),
@@ -171,6 +180,7 @@ def reinspect_no_comps(dry_run: bool = False,
         db.query(models.Lot).join(models.Enrichment)
         .join(models.Auction, models.Lot.auction_id == models.Auction.id)
         .filter(models.Enrichment.status == "success",
+                _not_hidden(),
                 models.Enrichment.est_resale.is_(None),
                 (models.Auction.closing_date.is_(None))
                 | (models.Auction.closing_date >= datetime.now()),
