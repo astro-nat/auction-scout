@@ -20,6 +20,15 @@ function money(v) {
   return `$${Number(v).toFixed(2)}`
 }
 
+// The auction house's own estimate range, compact ("$850–1,500").
+function houseEstimate(lot) {
+  if (lot.estimate_low == null) return null
+  const fmt = (v) => Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 })
+  const low = fmt(lot.estimate_low)
+  const high = fmt(lot.estimate_high ?? lot.estimate_low)
+  return low === high ? `$${low}` : `$${low}–${high}`
+}
+
 const num = (v) => (v === null || v === undefined ? null : Number(v))
 
 // What has actually happened to this lot, in words rather than jargon.
@@ -524,6 +533,9 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
                 <span>Bid {money(lot.current_bid)} / {money(lot.next_bid)}</span>
                 <span>Cost {money(lot.est_cost)}</span>
                 <span>Resale {money(e.est_resale)}{e.comp_count > 0 ? ` (${e.comp_count})` : ''}</span>
+                {houseEstimate(lot) && (
+                  <span style={{ color: 'var(--muted)' }}>house {houseEstimate(lot)}</span>
+                )}
                 <span>Max bid {money(e.max_bid)}</span>
                 {e.est_roi != null && (
                   <span style={{ fontWeight: 600,
@@ -755,6 +767,12 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
                 {isPaleEvidence(ev) && (
                   <span title={EVIDENCE_NOTE[ev]}
                         style={{ color: 'var(--muted)', fontSize: 12, cursor: 'help' }}> ~</span>
+                )}
+                {houseEstimate(lot) && (
+                  <div style={{ color: 'var(--muted)', fontSize: 11 }}
+                       title="The auction house's own estimate range — promotional, but weak-evidence values are capped against it">
+                    house {houseEstimate(lot)}
+                  </div>
                 )}
               </td>
               <td className="num" style={cell}>{money(e.max_bid)}</td>
