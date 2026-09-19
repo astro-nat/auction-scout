@@ -53,10 +53,11 @@ BID_REFRESH_WINDOW_HOURS = float(os.environ.get("BID_REFRESH_WINDOW_HOURS", "1")
 # While a webcast auction is LIVE (crier working the catalog in order),
 # refresh it this often so hammered lots leave the screen near-live. The
 # hourly loop is far too slow for a sale moving ~100 lots an hour.
-# 0 disables. A sale counts as live from 30 min before its posted start
-# until LIVE_SALE_HOURS after.
+# 0 disables. A sale counts as live for LIVE_SALE_HOURS leading up to its
+# posted close (closing_date is the END of a webcast, and long sales run
+# most of a day) and one hour past it.
 LIVE_REFRESH_MINUTES = float(os.environ.get("LIVE_REFRESH_MINUTES", "3"))
-LIVE_SALE_HOURS = float(os.environ.get("LIVE_SALE_HOURS", "10"))
+LIVE_SALE_HOURS = float(os.environ.get("LIVE_SALE_HOURS", "14"))
 
 # How many lots enrich/inspect in parallel. The work is HTTP-bound (Claude,
 # eBay, image downloads), so a few threads give a ~Nx queue speedup; keep

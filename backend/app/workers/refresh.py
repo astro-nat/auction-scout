@@ -145,9 +145,10 @@ def live_webcast_auction_ids(db: Session) -> list[int]:
     """Imported webcast auctions inside their live window.
 
     Webcast signature: the auction has imported lots and NONE of them carry
-    a per-lot close time. Live window: from 30 minutes before the posted
-    start (closing_date doubles as the webcast start time) until
-    LIVE_SALE_HOURS after — long sales run most of a day."""
+    a per-lot close time. closing_date is the posted END of the sale (HiBid
+    lists when bidding closes, not when the crier starts), so a webcast is
+    live in the LIVE_SALE_HOURS leading up to it — the first version had
+    this backwards and never considered a running sale live."""
     now = _utcnow()
     has_timed = (db.query(models.Lot.auction_id)
                    .filter(models.Lot.auction_id.isnot(None),
@@ -160,9 +161,9 @@ def live_webcast_auction_ids(db: Session) -> list[int]:
                    models.Auction.id.in_(imported),
                    models.Auction.id.notin_(has_timed),
                    models.Auction.closing_date.isnot(None),
-                   models.Auction.closing_date <= now + timedelta(minutes=30),
+                   models.Auction.closing_date >= now - timedelta(hours=1),
                    models.Auction.closing_date
-                   >= now - timedelta(hours=config.LIVE_SALE_HOURS)))
+                   <= now + timedelta(hours=config.LIVE_SALE_HOURS)))
     return [row[0] for row in q.all()]
 
 
