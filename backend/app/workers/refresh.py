@@ -13,6 +13,7 @@ workers/resume.py restarts it after a deploy.
 
 import asyncio
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import and_, or_
@@ -34,6 +35,32 @@ def _utcnow() -> datetime:
     agree because the containers run UTC.
     """
     return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _lot_num(value) -> int | None:
+    """Numeric prefix of a catalog number ('214A' → 214), else None."""
+    m = re.match(r"\s*(\d+)", str(value or ""))
+    return int(m.group(1)) if m else None
+
+
+_HAMMERED = ("CLOSED", "SOLD", "ENDED", "PASSED", "ARCHIVED")
+
+
+def live_hammered_through(fresh: list[dict]) -> int | None:
+    """How far a LIVE (webcast) sale has progressed, or None.
+
+    Webcast lots carry no per-lot close time — that's the gate: any
+    closes_at in the fetch means a timed sale, where lots close on their
+    own clocks and this inference would be wrong. A webcast crier works
+    the catalog in order, so the HIGHEST hammered catalog number marks the
+    sale's progress: anything numerically below it that still reads OPEN
+    was passed or never updated, and can't be bid on anymore."""
+    if not fresh or any(f.get("closes_at") for f in fresh):
+        return None
+    done = [n for f in fresh
+            if (f.get("status") or "").upper() in _HAMMERED
+            and (n := _lot_num(f.get("lot_number"))) is not None]
+    return max(done) if done else None
 
 
 def run_bid_refresh(auction_ids: list[int], resume_job_id: str | None = None) -> None:
@@ -76,6 +103,7 @@ def run_bid_refresh(auction_ids: list[int], resume_job_id: str | None = None) ->
                 continue
 
             by_lot_id = {str(f["lot_id"]): f for f in fresh}
+            hammered_through = live_hammered_through(fresh)
             rows = (db.query(models.Lot)
                       .filter(models.Lot.auction_id == auction_id).all())
             for lot in rows:
@@ -93,6 +121,15 @@ def run_bid_refresh(auction_ids: list[int], resume_job_id: str | None = None) ->
                           "status", "time_left", "closes_at", "lot_number",
                           "estimate_low", "estimate_high"):
                     setattr(lot, k, data[k])
+                # A live sale works the catalog in order: anything below the
+                # furthest hammered lot is done, even if HiBid still says
+                # open (passed lots keep an OPEN status forever).
+                n = _lot_num(lot.lot_number)
+                if (hammered_through is not None and n is not None
+                        and n < hammered_through
+                        and (lot.status or "").upper() in ("OPEN", "POSTED")):
+                    lot.status = "CLOSED"
+                    lot.time_left = None
                 # New bid moves cost, so the ROI verdict has to move with it.
                 if lot.enrichment and lot.enrichment.est_resale:
                     _apply_roi(lot, lot.enrichment)
@@ -102,6 +139,31 @@ def run_bid_refresh(auction_ids: list[int], resume_job_id: str | None = None) ->
         jobs.finish(job)
         db.close()
     print(f"Bid refresh complete: {updated_total} lots updated")
+
+
+def live_webcast_auction_ids(db: Session) -> list[int]:
+    """Imported webcast auctions inside their live window.
+
+    Webcast signature: the auction has imported lots and NONE of them carry
+    a per-lot close time. Live window: from 30 minutes before the posted
+    start (closing_date doubles as the webcast start time) until
+    LIVE_SALE_HOURS after — long sales run most of a day."""
+    now = _utcnow()
+    has_timed = (db.query(models.Lot.auction_id)
+                   .filter(models.Lot.auction_id.isnot(None),
+                           models.Lot.closes_at.isnot(None))
+                   .distinct())
+    imported = (db.query(models.Lot.auction_id)
+                  .filter(models.Lot.auction_id.isnot(None)).distinct())
+    q = (db.query(models.Auction.id)
+           .filter(models.Auction.hibid_id.isnot(None),
+                   models.Auction.id.in_(imported),
+                   models.Auction.id.notin_(has_timed),
+                   models.Auction.closing_date.isnot(None),
+                   models.Auction.closing_date <= now + timedelta(minutes=30),
+                   models.Auction.closing_date
+                   >= now - timedelta(hours=config.LIVE_SALE_HOURS)))
+    return [row[0] for row in q.all()]
 
 
 def auctions_due_for_bid_refresh(db: Session,

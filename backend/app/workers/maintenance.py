@@ -24,7 +24,41 @@ STARTUP_DELAY_SECONDS = 60
 def start_maintenance() -> None:
     _start_flush_loop()
     _start_bid_refresh_loop()
+    _start_live_tracker()
     _start_reaper()
+
+
+def _start_live_tracker() -> None:
+    """Fast bid refresh while a webcast auction is live, so hammered lots
+    leave the screen near-live (the refresh marks everything below the lot
+    on the block as closed — see refresh.live_current_lot)."""
+    if config.LIVE_REFRESH_MINUTES <= 0:
+        logger.info("Live tracker disabled — LIVE_REFRESH_MINUTES is 0")
+        return
+
+    def loop():
+        from ..services import jobs
+        from .refresh import live_webcast_auction_ids
+        time.sleep(STARTUP_DELAY_SECONDS * 3)
+        while True:
+            try:
+                if not jobs.has_pending("bid-refresh"):
+                    db = SessionLocal()
+                    try:
+                        ids = live_webcast_auction_ids(db)
+                    finally:
+                        db.close()
+                    if ids:
+                        jobs.enqueue("bid-refresh",
+                                     "Live sale — tracking the current lot",
+                                     total=len(ids), payload={"auction_ids": ids})
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Live tracker failed: %s", exc)
+            time.sleep(config.LIVE_REFRESH_MINUTES * 60)
+
+    threading.Thread(target=loop, daemon=True, name="maintenance-live").start()
+    logger.info("Live tracker on: every %.1f min while a webcast sale runs",
+                config.LIVE_REFRESH_MINUTES)
 
 
 def _start_flush_loop() -> None:
