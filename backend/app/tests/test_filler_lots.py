@@ -23,7 +23,7 @@ def inspect_with(monkeypatch):
     monkeypatch rather than plain assignment — these are module globals, and
     overwriting them would leak into every test that runs afterwards.
     """
-    def run(items, comp_prices=None):
+    def run(items, comp_prices=None, title="Box of assorted items"):
         prices = comp_prices or {}
 
         def fake_comps(title):
@@ -39,7 +39,7 @@ def inspect_with(monkeypatch):
             "items": items, "summary": "a mixed lot", "ship": "NEUTRAL"})
         monkeypatch.setattr(pricing, "lookup_comps", fake_comps)
 
-        lot = models.Lot(lot_id="1", title="Box of assorted items",
+        lot = models.Lot(lot_id="1", title=title,
                          logistics_ease="NEUTRAL", source="Local Pickup",
                          current_bid=5, next_bid=6,
                          thumbnail_url="http://example/i.jpg",
@@ -99,3 +99,34 @@ def test_filler_credit_can_be_switched_off(inspect_with, monkeypatch):
     # Nothing sellable and no bundle credit — the lot is left unpriced rather
     # than given a number nobody would act on.
     assert e.est_resale is None
+
+
+def test_single_product_components_are_not_summed(inspect_with):
+    """A charm bracelet the model split into 7 charms is ONE bracelet: the
+    largest component stands for the item. (A real one totalled $295 and
+    became the top gold mine.)"""
+    items = [{"title": f"charm {i}", "est_value": 40} for i in range(7)]
+    prices = {f"charm {i}": 30.0 + i for i in range(7)}   # best charm = $36
+    e = inspect_with(items, prices, title="Mexico Sterling Charm Bracelet")
+    assert float(e.est_resale) == pytest.approx(36.0)
+    assert "not summed" in e.price_source
+    assert "not summed" in e.notes
+
+
+def test_multi_item_keepers_past_the_best_get_the_partout_discount(inspect_with):
+    """Three real items: the best keeps full value, the rest carry the
+    part-out haircut — every extra item is another listing and parcel."""
+    items = [{"title": t, "est_value": 100} for t in ("tv", "amp", "mixer")]
+    prices = {"tv": 100.0, "amp": 50.0, "mixer": 30.0}
+    e = inspect_with(items, prices, title="Lot of Electronics")
+    expected = 100.0 + (50.0 + 30.0) * enrich.PARTOUT_REALIZATION
+    assert float(e.est_resale) == pytest.approx(expected)
+    assert f"part-out ×{enrich.PARTOUT_REALIZATION:g}" in e.price_source
+
+
+def test_one_keeper_gets_no_partout_discount(inspect_with):
+    items, prices = _filler(8, 10)
+    items = [{"title": "Omega watch", "est_value": 400}] + items
+    prices["Omega watch"] = 300.0
+    e = inspect_with(items, prices)
+    assert "part-out" not in e.price_source

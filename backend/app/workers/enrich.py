@@ -107,6 +107,18 @@ def _inbound_shipping(lot: models.Lot) -> float:
 # ACTIVE_REALIZATION in services/pricing.py.
 AI_ESTIMATE_REALIZATION = float(os.environ.get("AI_ESTIMATE_REALIZATION", "0.8"))
 
+# Keeper items past the biggest one sell at a discount when a lot is parted
+# out: every extra item is another photo, another listing, another parcel.
+# Applied to the sum of the smaller keepers; the headline item keeps full
+# value. ("Misc Christmas decor" summed 12 items at full price to $188.)
+PARTOUT_REALIZATION = float(os.environ.get("PARTOUT_REALIZATION", "0.6"))
+
+# Grade lots as if they'll hammer for at least this much. Auctions open at
+# $0-1, and a real resale divided by a $1 bid manufactures 900% ROIs that
+# sort to the top while meaning nothing — nothing worth grading hammers
+# under a few dollars.
+MIN_ASSUMED_BID = float(os.environ.get("MIN_ASSUMED_BID", "5"))
+
 
 # Titles that describe a PILE, not a product. These route to the itemized
 # vision pass instead of the single-item enrich: comping "Lot of Assorted
@@ -221,33 +233,6 @@ def _progress(db: Session, e: models.Enrichment, text: str | None) -> None:
     spinner, so the user sees exactly what the worker is doing right now."""
     e.progress = text
     db.commit()
-
-
-def process_queued_lots(items: list) -> None:
-    """Work a batch of queued lots CONCURRENTLY — the pipeline is HTTP-bound
-    (Claude, eBay, image downloads), so a small thread pool multiplies queue
-    throughput without new infrastructure. ``items`` is [(lot_db_id, task)]
-    where task is 'inspect' or anything-else-means-enrich.
-
-    Cancel-safe under parallelism: each worker re-checks status == 'queued'
-    before spending anything, so the Cancel button (which flips queued →
-    pending) still drains the pool. Ordering loosens — the first
-    ENRICH_CONCURRENCY lots start together — which is fine for a queue.
-    """
-    from concurrent.futures import ThreadPoolExecutor
-
-    def one(item):
-        lot_id, task = item
-        try:
-            if task == "inspect":
-                run_inspection(lot_id)
-            else:
-                run_enrichment(lot_id)
-        except Exception as exc:  # noqa: BLE001 — one lot must not kill the pool
-            logger.warning("Queued lot %s failed in pool: %s", lot_id, exc)
-
-    with ThreadPoolExecutor(max_workers=max(1, config.ENRICH_CONCURRENCY)) as pool:
-        list(pool.map(one, items))
 
 
 def run_enrichment(lot_db_id: int) -> None:
@@ -421,7 +406,8 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
         # auction house, plus packing and fee drag on the way back out.
         penalty = (LOGISTICS_COST.get(lot.logistics_ease or "NEUTRAL", 6.50)
                    + _inbound_shipping(lot))
-        effective_bid = float(max(lot.current_bid or 0, lot.next_bid or 0))
+        effective_bid = float(max(lot.current_bid or 0, lot.next_bid or 0,
+                                  MIN_ASSUMED_BID))
         # Use the auction house's real premium when we know it (18% houses
         # were being graded at the 15% default).
         mult = getattr(lot.auction, "buyer_premium_mult", None) if lot.auction else None
@@ -482,6 +468,10 @@ confirmed. Mass-produced 90s collectibles (Beanie Babies, Precious Moments,
 Boyds) really sell for $5-25 each despite the legends; a light blue Peanut
 is a $10 elephant, only the royal blue one is the famous one.
 Skip anything you can't specifically identify — never guess or pad the list.
+If the photo shows ONE cohesive product (a single bracelet, one appliance,
+one doll), return it as exactly ONE item — never split its components
+(charms on a bracelet, pieces of a chess set, keys on a keyboard) into
+separate entries.
 Max 12 items.
 
 Return ONLY valid JSON:
@@ -566,8 +556,9 @@ def _inspect(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
 
     items = (result.get("items") or [])[:MAX_INSPECT_ITEMS]
     lines = []
-    total = 0.0          # items worth listing on their own
-    filler_total = 0.0   # everything under MIN_ITEM_VALUE, bundled
+    keepers: list[float] = []   # items worth listing on their own
+    filler_total = 0.0          # everything under MIN_ITEM_VALUE, bundled
+    filler_max = 0.0
     priced = 0           # comp-priced KEEPERS — what the lot's value rests on
     ai_priced = 0
     filler = 0
@@ -597,21 +588,41 @@ def _inspect(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
             # Filler. Counted as part of one bundled sale, not as its own
             # listing — otherwise a crate of $12 oddments outranks a real item.
             filler_total += value
+            filler_max = max(filler_max, value)
             filler += 1
             lines.append(f"{item_title} → ${value} ({tag}) · filler")
             continue
-        total += value
+        keepers.append(value)
         if from_comps:
             priced += 1
         else:
             ai_priced += 1
         lines.append(f"{item_title} → ${value} ({tag})")
 
-    bundled = round(filler_total * FILLER_REALIZATION, 2)
-    if filler:
-        lines.append(f"[{filler} items under ${MIN_ITEM_VALUE:g} → "
-                     f"${bundled} bundled, from ${round(filler_total, 2)} summed]")
-    total += bundled
+    # A single cohesive product the model split anyway (7 charms of one
+    # bracelet, $295 "total" for a $60 bracelet) must not be summed: the
+    # biggest component's value stands in for the whole item. Multi-item
+    # titles keep the sum, but keepers past the best one carry the part-out
+    # discount — each extra item is another listing, fee, and parcel.
+    single_product = (not looks_multi_item(lot.title)
+                      and (len(keepers) + filler) > 1)
+    if single_product:
+        best = max(keepers) if keepers else filler_max
+        total = best
+        lines.append(f"[single product — largest component value ${best:g} "
+                     f"stands for the whole item; components are not summed]")
+    else:
+        bundled = round(filler_total * FILLER_REALIZATION, 2)
+        if filler:
+            lines.append(f"[{filler} items under ${MIN_ITEM_VALUE:g} → "
+                         f"${bundled} bundled, from ${round(filler_total, 2)} summed]")
+        keepers.sort(reverse=True)
+        partout = round(sum(keepers[1:]) * PARTOUT_REALIZATION, 2)
+        if len(keepers) > 1:
+            lines.append(f"[{len(keepers) - 1} smaller keeper(s) "
+                         f"×{PARTOUT_REALIZATION:g} part-out → ${partout}, "
+                         f"from ${round(sum(keepers[1:]), 2)} summed]")
+        total = (keepers[0] if keepers else 0.0) + partout + bundled
 
     protected = set(e.user_overrides or [])
     summary = result.get("summary") or ""
@@ -645,14 +656,20 @@ def _inspect(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
             e.price_low = None
             e.price_high = None
             e.comp_count = priced          # real comps only — AI guesses don't count
-            bits = [f"{priced} from comps"] if priced else []
-            if ai_priced:
-                bits.append(f"{ai_priced} AI-estimated ×{AI_ESTIMATE_REALIZATION:g}")
-            if filler:
-                bits.append(f"{filler} filler bundled ×{FILLER_REALIZATION:g}")
-            sellable = priced + ai_priced
-            e.price_source = (f"itemized vision ({' + '.join(bits) or 'nothing priced'}"
-                              f" — {sellable} of {len(items)} worth listing)")
+            if single_product:
+                e.price_source = (f"itemized vision (single product — largest "
+                                  f"of {len(items)} components, not summed)")
+            else:
+                bits = [f"{priced} from comps"] if priced else []
+                if ai_priced:
+                    bits.append(f"{ai_priced} AI-estimated ×{AI_ESTIMATE_REALIZATION:g}")
+                if len(keepers) > 1:
+                    bits.append(f"part-out ×{PARTOUT_REALIZATION:g}")
+                if filler:
+                    bits.append(f"{filler} filler bundled ×{FILLER_REALIZATION:g}")
+                sellable = priced + ai_priced
+                e.price_source = (f"itemized vision ({' + '.join(bits) or 'nothing priced'}"
+                                  f" — {sellable} of {len(items)} worth listing)")
             _apply_roi(lot, e)
 
 

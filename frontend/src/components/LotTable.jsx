@@ -83,6 +83,7 @@ function evidence(e) {
   const src = e.price_source || ''
   if (!e.est_resale) return null
   if (src.startsWith('retail $')) return 'retail'
+  if (/AI-estimated/i.test(src)) return 'estimate'
   if (/\bsold\b/i.test(src) && !/\bactive\b/i.test(src)) return 'sold'
   if (/\bactive\b/i.test(src)) return 'asking'
   return null
@@ -90,9 +91,13 @@ function evidence(e) {
 
 const EVIDENCE_NOTE = {
   asking: 'Asking prices only — no confirmed sales. Sellers list high and wait.',
+  estimate: 'Includes AI-estimated prices with no real comps behind them.',
   sold: 'Backed by completed sales.',
   retail: 'From the retail price printed in the lot title.',
 }
+
+// Gold, but resting on evidence weaker than real sales — rendered paler.
+const isPaleEvidence = (ev) => ev === 'asking' || ev === 'estimate'
 
 function roiTooltip(lot, e) {
   if (e.est_roi == null) return undefined
@@ -214,6 +219,8 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
   // Render cap: building thousands of DOM rows eats real browser memory.
   // All lots stay loaded for filtering/sorting; we just paint them in pages.
   const [renderLimit, setRenderLimit] = useState(150)
+  // True while the enrich-batch request is in flight.
+  const [queuing, setQueuing] = useState(false)
 
   // Whenever ANY lot is queued — no matter which client or button started the
   // batch — refresh the table every 5s until the queue drains, so background
@@ -360,7 +367,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
     .filter((l) => !['success', 'queued'].includes(l.enrichment?.status))
 
   async function handleEnrichMatching() {
-    if (!enrichable.length) return
+    if (!enrichable.length || queuing) return
     const cost = (enrichable.length * 0.005).toFixed(2)
     const ok = window.confirm(
       `Enrich all ${enrichable.length} lots matching your filters?
@@ -373,10 +380,20 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
       `Progress appears in the bar at the top of the page.`
     )
     if (!ok) return
-    const r = await enrichBatch(enrichable.map((l) => l.lot_id))
-    onRefresh?.()
-    if (!r.queued) {
-      alert('Nothing to queue — those lots are already enriched or in progress.')
+    // Busy state until the server answers: queueing a big batch takes a
+    // moment, and total silence after "OK" read as the button being broken.
+    setQueuing(true)
+    try {
+      const r = await enrichBatch(enrichable.map((l) => l.lot_id))
+      onRefresh?.()
+      if (!r.queued) {
+        alert('Nothing to queue — those lots are already enriched or in progress.')
+      }
+    } catch (e) {
+      // This had NO error handling — a failed request showed nothing at all.
+      alertOnce(e.message)
+    } finally {
+      setQueuing(false)
     }
   }
 
@@ -421,10 +438,12 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
           >
             {MOBILE_SORTS.map((s, i) => <option key={s.label} value={i}>{s.label}</option>)}
           </select>
-          <button className="primary" onClick={handleEnrichMatching} disabled={!enrichableCount}
+          <button className="primary" onClick={handleEnrichMatching}
+                  disabled={!enrichableCount || queuing}
                   title="Enrich every lot matching the current filters — the whole result, not just the rows on screen. Asks for confirmation with the exact cost first."
                   style={{ flex: '1 1 100%', padding: 10, fontSize: 15 }}>
-            Enrich all {enrichableCount}
+            {queuing ? <><span className="spinner" />Queuing {enrichableCount} lots…</>
+                     : `Enrich all ${enrichableCount}`}
           </button>
           {anyQueued && <span style={{ flexBasis: '100%' }}><span className="spinner" />{lots.filter((l) => l.enrichment?.status === 'queued').length} lots in the queue… auto-refreshing</span>}
           <div style={{ flexBasis: '100%' }}>{countLine}</div>
@@ -532,9 +551,11 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
   return (
     <>
     <div style={{ marginBottom: '0.5rem' }}>
-      <button className="primary" onClick={handleEnrichMatching} disabled={!enrichableCount}
+      <button className="primary" onClick={handleEnrichMatching}
+              disabled={!enrichableCount || queuing}
               title="Enrich every lot matching the current filters — the whole result, not just the rows on screen. Asks for confirmation with the exact cost first.">
-        Enrich all {enrichableCount}
+        {queuing ? <><span className="spinner" />Queuing {enrichableCount} lots…</>
+                 : `Enrich all ${enrichableCount}`}
       </button>
       {anyQueued && <span style={{ marginLeft: '0.75rem' }}><span className="spinner" />{lots.filter((l) => l.enrichment?.status === 'queued').length} lots in the queue… auto-refreshing</span>}
       <span style={{ marginLeft: '0.75rem' }}>{countLine}</span>
@@ -599,17 +620,18 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
         {sorted.slice(0, renderLimit).map((lot) => {
           const e = lot.enrichment || {}
           const gold = e.roi_status === 'GOLD MINE'
-          const asking = gold && evidence(e) === 'asking'
+          const ev = evidence(e)
+          const paleGold = gold && isPaleEvidence(ev)
           const overbid = isOverbid(lot, e)
           const edited = new Set(e.user_overrides || [])
           return (
             <tr key={lot.lot_id}
                 className={gold ? 'row-gold' : overbid ? 'row-overbid' : undefined}
                 title={overbid ? 'Bid has passed your max-bid ceiling'
-                  : asking ? EVIDENCE_NOTE.asking : undefined}
-                // Asking-price gold gets a paler wash: still worth a look,
-                // but not the same claim as one backed by sales.
-                style={asking ? { opacity: 0.82 } : undefined}>
+                  : paleGold ? EVIDENCE_NOTE[ev] : undefined}
+                // Weak-evidence gold (asking prices, AI estimates) gets a
+                // paler wash: worth a look, not the same claim as real sales.
+                style={paleGold ? { opacity: 0.82 } : undefined}>
               <td style={cell}>
                 <button
                   className="bare"
@@ -689,8 +711,8 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
                 {e.comp_count > 0 && (
                   <span style={{ color: 'var(--muted)', fontSize: 12 }}> ({e.comp_count})</span>
                 )}
-                {evidence(e) === 'asking' && (
-                  <span title={EVIDENCE_NOTE.asking}
+                {isPaleEvidence(ev) && (
+                  <span title={EVIDENCE_NOTE[ev]}
                         style={{ color: 'var(--muted)', fontSize: 12, cursor: 'help' }}> ~</span>
                 )}
               </td>
