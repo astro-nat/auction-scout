@@ -225,6 +225,25 @@ class FavoriteAuctioneer(Base):
     created_at = Column(DateTime, server_default=func.now())
 
 
+class DismissedAuction(Base):
+    """An auction the user has forgotten — never show it again.
+
+    Keyed by HiBid's event id rather than our own row id, because the row is
+    not durable: purge_stale_auctions deletes closed auctions that hold no
+    lots, which took the Auction.hidden flag with it and let a re-scan
+    resurrect a sale the user had already dismissed. This table outlives the
+    auction row, so "forget" means forget.
+
+    Scoped to one sale, not the house — the same auctioneer's next sale is a
+    fresh judgement (favourite/unfavourite is the house-level control).
+    """
+    __tablename__ = "dismissed_auctions"
+
+    hibid_id = Column(Integer, primary_key=True)   # HiBid event id
+    name = Column(String)                          # for the restore list
+    created_at = Column(DateTime, server_default=func.now())
+
+
 class WorkerHeartbeat(Base):
     """Proof that a worker process exists.
 

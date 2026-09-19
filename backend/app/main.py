@@ -59,6 +59,15 @@ _MIGRATIONS = [
     # deploy rather than sitting unflushable forever. Idempotent: matches
     # nothing once every won row has a timestamp.
     "UPDATE lots SET won_at = NOW() WHERE won IS TRUE AND won_at IS NULL",
+    "CREATE TABLE IF NOT EXISTS dismissed_auctions ("
+    "hibid_id INTEGER PRIMARY KEY, name VARCHAR, "
+    "created_at TIMESTAMP DEFAULT now())",
+    # Carry across dismissals made before this table existed, so the ✕ presses
+    # the user already made keep holding.
+    "INSERT INTO dismissed_auctions (hibid_id, name) "
+    "SELECT hibid_id, name FROM auctions "
+    "WHERE hidden IS TRUE AND hibid_id IS NOT NULL "
+    "ON CONFLICT (hibid_id) DO NOTHING",
 ]
 
 def _run_migrations() -> list[str]:

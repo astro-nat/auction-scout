@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from .. import models, schemas
 from ..database import get_db
-from ..services import favorites, hibid, jobs
+from ..services import dismissed, favorites, hibid, jobs
 from ..workers.import_all import save_lots
 from sqlalchemy.orm import Session
 
@@ -47,6 +47,13 @@ def list_auctions(include_closed: bool = False, include_hidden: bool = False,
         q = q.filter(or_(models.Auction.hidden.is_(False),
                          models.Auction.hidden.is_(None),
                          models.Auction.id.in_(imported_ids)))
+        # Forgotten sales are out unconditionally — "never see it again" beats
+        # the imported-lots carve-out above, and the lots themselves keep
+        # their auction name either way (routers/lots.py reads it per lot).
+        forgotten = dismissed.ids(db)
+        if forgotten:
+            q = q.filter(or_(models.Auction.hibid_id.is_(None),
+                             models.Auction.hibid_id.notin_(forgotten)))
     auctions = q.order_by(models.Auction.closing_date).all()
     # Watched auction houses first, each group still soonest-closing first.
     # A house you've starred is one you already trust, so its sales are worth
@@ -266,8 +273,16 @@ async def scan_auctions(payload: schemas.ScanRequest,
         )
     finally:
         jobs.finish(job)
+    # Forgotten sales never make it into the table, so no later purge or
+    # re-scan can resurrect them and nothing downstream has to re-filter.
+    forgotten = dismissed.ids(db)
+    skipped = sum(1 for a in found if a.get("hibid_id") in forgotten)
+    if skipped:
+        print(f"Skipped {skipped} forgotten auctions")
     stored = []
     for a in found:
+        if a.get("hibid_id") in forgotten:
+            continue
         row = db.query(models.Auction).filter(
             models.Auction.hibid_id == a["hibid_id"]).first()
         if row:
@@ -385,11 +400,13 @@ def import_all(payload: schemas.ImportAllRequest, db: Session = Depends(get_db))
 @router.post("/{auction_id}/hide", response_model=schemas.AuctionOut)
 def set_auction_hidden(auction_id: int, hidden: bool = True,
                        db: Session = Depends(get_db)):
-    """Dismiss an auction you're not interested in (or bring it back).
+    """Forget an auction you're not interested in (or bring it back).
 
-    Scans keep re-surfacing the same houses, so a judgement made once should
-    stick. The row and any lots you imported stay — this only takes it off
-    the list.
+    Scans keep re-surfacing the same sales, so a judgement made once should
+    stick — permanently. The dismissal is recorded against the HiBid event id
+    (services/dismissed.py) as well as the row, because the row itself can be
+    purged once the sale closes; without the durable record, a re-scan brought
+    dismissed auctions back. Any lots already imported stay put.
     """
     auction = (db.query(models.Auction)
                  .filter(models.Auction.id == auction_id).first())
@@ -397,8 +414,33 @@ def set_auction_hidden(auction_id: int, hidden: bool = True,
         raise HTTPException(status_code=404, detail="Auction not found")
     auction.hidden = hidden
     db.commit()
+    if auction.hibid_id:
+        if hidden:
+            dismissed.add(db, auction.hibid_id, auction.name)
+        else:
+            dismissed.remove(db, auction.hibid_id)
     db.refresh(auction)
     return _attach_stats(db, [auction])[0]
+
+
+@router.get("/dismissed")
+def list_dismissed(db: Session = Depends(get_db)):
+    """Auctions the user has forgotten, newest first — powers the restore
+    list, which is the only way back once a sale is skipped at scan time."""
+    return [{"hibid_id": r.hibid_id, "name": r.name, "created_at": r.created_at}
+            for r in dismissed.listed(db)]
+
+
+@router.delete("/dismissed/{hibid_id}")
+def undismiss(hibid_id: int, db: Session = Depends(get_db)):
+    """Un-forget one auction. It reappears on the next scan that finds it;
+    any row still on file is un-hidden immediately."""
+    restored = dismissed.remove(db, hibid_id)
+    (db.query(models.Auction)
+       .filter(models.Auction.hibid_id == hibid_id)
+       .update({"hidden": False}, synchronize_session=False))
+    db.commit()
+    return {"restored": restored}
 
 
 @router.post("/{auction_id}/enrich-all", status_code=202)

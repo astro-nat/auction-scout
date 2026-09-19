@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, importLots, importAllAuctions, enrichAll, enrichCategory, flushClosed, refreshBids, reinspectNoComps, fetchSettings, saveTargetRoi, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, alertOnce, parseUtc } from './api'
+import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, importLots, importAllAuctions, enrichAll, enrichCategory, flushClosed, refreshBids, reinspectNoComps, fetchSettings, saveTargetRoi, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
 import LotTable from './components/LotTable'
 import StatusBar from './components/StatusBar'
 import useMediaQuery from './useMediaQuery'
@@ -492,17 +492,56 @@ Skipping ${hard} HARD-to-ship lots.`
     }
   }, [])
 
-  // Dismiss an auction. Removed from the list immediately rather than waiting
-  // for a refetch — the point of the button is that it goes away.
+  // Forget an auction. Removed from the list immediately rather than waiting
+  // for a refetch — the point of the button is that it goes away. The backend
+  // also records the HiBid event id so future scans skip it entirely.
   const hideAuction = useCallback(async (auction) => {
     setAuctions((prev) => prev.filter((a) => a.id !== auction.id))
+    setImportedRows((prev) => {
+      const next = { ...prev }
+      delete next[auction.id]
+      return next
+    })
     try {
       await setAuctionHidden(auction.id, true)
+      setDismissed((prev) => [{ hibid_id: auction.hibid_id, name: auction.name }, ...prev])
     } catch (err) {
       setAuctions((prev) => [...prev, auction])
-      alertOnce(`Could not hide that auction: ${err.message}`)
+      alertOnce(`Could not forget that auction: ${err.message}`)
     }
   }, [])
+
+  // Forgotten auctions, for the restore list. Scans skip them, so without
+  // this panel there'd be no way back from a mis-click.
+  const [dismissedList, setDismissed] = useState([])
+  const loadDismissed = useCallback(() => {
+    fetchDismissed().then(setDismissed).catch(console.error)
+  }, [])
+  useEffect(() => { loadDismissed() }, [loadDismissed])
+
+  // Forgetting is permanent and scan-proof, so it asks first — but only when
+  // there are imported lots at stake, since the card carries your enrichment
+  // work. A plain scan result goes on one click, as before.
+  function confirmForget(auction) {
+    if (auction.lots_imported > 0) {
+      const msg = `Forget "${auction.name}"?\n\n`
+        + `It won't appear in future scans. Your ${auction.lots_imported} `
+        + `imported lots stay in My items — only the auction card goes away.\n\n`
+        + `Undo it any time from "Forgotten" under the scan button.`
+      if (!window.confirm(msg)) return
+    }
+    hideAuction(auction)
+  }
+
+  const restoreAuction = useCallback(async (hibidId) => {
+    setDismissed((prev) => prev.filter((d) => d.hibid_id !== hibidId))
+    try {
+      await undismissAuction(hibidId)
+    } catch (err) {
+      loadDismissed()
+      alertOnce(`Could not restore that auction: ${err.message}`)
+    }
+  }, [loadDismissed])
 
   // Imported auctions stay pinned at the top from their own accumulated
   // store — a scan replacing the visible list can't knock them off screen.
@@ -696,6 +735,33 @@ Skipping ${hard} HARD-to-ship lots.`
               </span>
             )}
           </label>
+          {dismissedList.length > 0 && (
+            <details className="picker" style={{ position: 'relative' }}>
+              <summary style={{ fontSize: 13 }}
+                       title="Auctions you've forgotten. Scans skip these — restore one to see it again.">
+                🚫 Forgotten ({dismissedList.length}) ▾
+              </summary>
+              <div className="panel">
+                {dismissedList.map((d) => (
+                  <div key={d.hibid_id}
+                       style={{ display: 'flex', gap: 6, alignItems: 'center',
+                                padding: '6px 4px', fontSize: 13 }}>
+                    <span style={{ lineHeight: 1.3, flex: 1 }}>
+                      {d.name || `HiBid auction ${d.hibid_id}`}
+                    </span>
+                    {/* type=button: this panel lives inside the scan form,
+                        and a default submit button fires a HiBid scan. */}
+                    <button type="button"
+                            onClick={() => restoreAuction(d.hibid_id)}
+                            title="Show this auction again in future scans"
+                            style={{ padding: '2px 8px', fontSize: 12 }}>
+                      Restore
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
         </div>
         </form>
         {(importedAuctions.length + discoveredAuctions.length) === 0 && !busy && (
@@ -750,8 +816,8 @@ Skipping ${hard} HARD-to-ship lots.`
                   <a href={a.source_url} target="_blank" rel="noreferrer">{a.name}</a>
                   <button
                     className="bare"
-                    onClick={() => hideAuction(a)}
-                    title="Not interested — hide this auction"
+                    onClick={() => confirmForget(a)}
+                    title="Forget this auction — it won't come back in future scans"
                     style={{
                       marginLeft: 'auto', padding: '0 2px', fontSize: 14,
                       lineHeight: 1, color: 'var(--muted)',
@@ -867,7 +933,15 @@ Skipping ${hard} HARD-to-ship lots.`
                   <td className="num">
                     {a.buyer_premium_mult ? `${Math.round((a.buyer_premium_mult - 1) * 100)}%` : '—'}
                   </td>
-                  <td><button onClick={() => handleImport(a.id)} disabled={!!busy}>{importLabel(a)}</button></td>
+                  <td style={{ whiteSpace: 'nowrap' }}>
+                    <button onClick={() => handleImport(a.id)} disabled={!!busy}>{importLabel(a)}</button>{' '}
+                    <button className="bare"
+                            onClick={() => confirmForget(a)}
+                            title="Forget this auction — it won't come back in future scans"
+                            style={{ color: 'var(--muted)', padding: '0 2px' }}>
+                      ✕
+                    </button>
+                  </td>
                   <td style={{ whiteSpace: 'nowrap' }}>
                     {a.imported_at && (
                       <>

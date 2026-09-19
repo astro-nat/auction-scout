@@ -138,6 +138,16 @@ export function setAuctionHidden(auctionId, hidden) {
   return request(`/auctions/${auctionId}/hide?hidden=${hidden}`, { method: 'POST' })
 }
 
+// Forgotten auctions are skipped at scan time, so this list is the only way
+// back — keyed by HiBid event id, which outlives our own auction row.
+export function fetchDismissed() {
+  return request('/auctions/dismissed')
+}
+
+export function undismissAuction(hibidId) {
+  return request(`/auctions/dismissed/${hibidId}`, { method: 'DELETE' })
+}
+
 export function fetchCategories() {
   return request('/auctions/categories')
 }
