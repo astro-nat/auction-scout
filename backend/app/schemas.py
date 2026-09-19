@@ -74,6 +74,7 @@ class LotOut(BaseModel):
     watched: bool = False
     hidden: bool = False
     won: bool = False
+    won_at: Optional[datetime] = None
     lot_link: Optional[str] = None
     thumbnail_url: Optional[str] = None
     created_at: datetime

@@ -37,19 +37,23 @@ def seeded_closed_auction():
                             imported_at=datetime.now())
     db.add_all([ended, open_a])
     db.flush()
+    fresh = datetime.now()
+    stale = datetime.now() - timedelta(days=8)   # past WON_RETENTION_DAYS
     specs = [
-        # (lot_id suffix, auction, status, won, watched)
-        ("plain",       ended,  "SOLD", False, False),   # flushable
-        ("won",         ended,  "SOLD", True,  False),   # kept: won
-        ("watched",     ended,  "OPEN", False, True),    # kept: watched
-        ("won-null",    ended,  None,   True,  False),   # kept: won, NULL status
-        ("won-status",  open_a, "CLOSED", True, False),  # kept: won, own status closed
+        # (lot_id suffix, auction, status, won, watched, won_at)
+        ("plain",       ended,  "SOLD", False, False, None),    # flushable
+        ("won",         ended,  "SOLD", True,  False, fresh),   # kept: won recently
+        ("watched",     ended,  "OPEN", False, True,  None),    # kept: watched
+        ("won-null",    ended,  None,   True,  False, fresh),   # kept: won, NULL status
+        ("won-status",  open_a, "CLOSED", True, False, fresh),  # kept: won, own status closed
+        ("won-old",     ended,  "SOLD", True,  False, stale),   # flushable: retention expired
+        ("won-noat",    ended,  "SOLD", True,  False, None),    # kept: won, no timestamp (pre-migration)
     ]
     ids = {}
-    for suffix, auction, status, won, watched in specs:
+    for suffix, auction, status, won, watched, won_at in specs:
         lot = models.Lot(lot_id=f"pytest-wonflush-{suffix}", auction_id=auction.id,
                          title=f"pytest {suffix}", status=status,
-                         won=won, watched=watched)
+                         won=won, watched=watched, won_at=won_at)
         db.add(lot)
         db.flush()
         db.add(models.Enrichment(lot_id=lot.id, status="success",
@@ -86,8 +90,11 @@ def test_flush_spares_won_and_watched_lots(seeded_closed_auction):
     assert "pytest-wonflush-watched" in left          # auction ended, watched
     assert "pytest-wonflush-won-null" in left         # NULL status, won
     assert "pytest-wonflush-won-status" in left       # own status CLOSED, won
+    assert "pytest-wonflush-won-old" not in left      # won >7 days ago → flushed
+    assert "pytest-wonflush-won-noat" in left         # won, no timestamp → kept
     assert ids["plain"] not in enriched
-    for kept in ("won", "watched", "won-null", "won-status"):
+    assert ids["won-old"] not in enriched
+    for kept in ("won", "watched", "won-null", "won-status", "won-noat"):
         assert ids[kept] in enriched
 
 
@@ -107,6 +114,8 @@ def test_flush_dry_run_count_excludes_protected(seeded_closed_auction):
 def test_won_roundtrip(seeded_closed_auction):
     r = client.post("/lots/pytest-wonflush-plain/won?won=true").json()
     assert r["won"] is True
+    assert r["won_at"] is not None      # retention clock starts on mark
     r = client.post("/lots/pytest-wonflush-plain/won?won=false").json()
     assert r["won"] is False
+    assert r["won_at"] is None          # and clears on unmark
     assert client.post("/lots/no-such-lot/won").status_code == 404

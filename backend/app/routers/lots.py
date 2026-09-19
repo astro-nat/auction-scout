@@ -7,6 +7,11 @@ from ..database import get_db
 
 router = APIRouter(prefix="/lots", tags=["lots"])
 
+# How long a won lot (and its enrichment) survives the closed-items flush
+# after being marked. A week covers photographing and listing the item off
+# the stored identification and comps; after that it ages out normally.
+WON_RETENTION_DAYS = 7
+
 
 @router.get("/count")
 def count_lots(
@@ -125,17 +130,18 @@ def flush_closed_now(db: Session, dry_run: bool = False) -> dict:
     and the 12-hourly maintenance loop (workers/maintenance.py). Permanent —
     enrichment results (the paid AI calls) go with the lots.
 
-    Won and watched lots are never flushed. A won lot is resale inventory:
-    its enrichment (identification, comps, resale value) is what the user
-    needs to list the item, and closing is exactly when they need it — the
-    2026-09-19 auto-flush deleted 10 just-won webcast lots before this
-    guard. Watched is the other signal of real interest the app has, so it
-    gets the same protection."""
-    from datetime import datetime
+    Watched lots are never flushed. Won lots are kept for WON_RETENTION_DAYS
+    after being marked — a won lot is resale inventory and its enrichment
+    (identification, comps, resale value) is what the user needs to list the
+    item (the 2026-09-19 auto-flush deleted 13 just-won webcast lots before
+    this guard) — but a week later it's listed or it isn't, and the row ages
+    out like any other closed lot."""
+    from datetime import datetime, timedelta
     from sqlalchemy import func, or_
     from .auctions import purge_stale_auctions
 
     _CLOSED_STATUSES = ("CLOSED", "SOLD", "ENDED", "PASSED", "ARCHIVED")
+    won_cutoff = datetime.now() - timedelta(days=WON_RETENTION_DAYS)
     lot_ids = [
         row[0] for row in
         db.query(models.Lot.id)
@@ -146,7 +152,10 @@ def flush_closed_now(db: Session, dry_run: bool = False) -> dict:
               func.upper(func.coalesce(models.Lot.status, "")).in_(_CLOSED_STATUSES),
           ))
           # coalesce: rows created before these columns existed hold NULL.
-          .filter(func.coalesce(models.Lot.won, False).is_(False),
+          # A won lot is only flushable once its retention window has passed;
+          # a NULL won_at on a won row (pre-migration edge) never qualifies.
+          .filter(or_(func.coalesce(models.Lot.won, False).is_(False),
+                      models.Lot.won_at < won_cutoff),
                   func.coalesce(models.Lot.watched, False).is_(False))
           .all()
     ]
@@ -192,15 +201,18 @@ def set_watch(lot_id: str, watched: bool = True, db: Session = Depends(get_db)):
 @router.post("/{lot_id}/won", response_model=schemas.LotOut)
 def set_won(lot_id: str, won: bool = True, db: Session = Depends(get_db)):
     """Mark a lot as won at auction (or unmark it). A won lot is inventory:
-    the flush never deletes it, and the UI keeps it visible even with
-    'Hide closed' on. The app can't detect wins itself — no HiBid account
-    linkage — so this button is how it finds out."""
+    the flush spares it for WON_RETENTION_DAYS, and the UI keeps it visible
+    even with 'Hide closed' on. The app can't detect wins itself — no HiBid
+    account linkage — so this button is how it finds out. Re-marking resets
+    the retention clock."""
+    from datetime import datetime
     lot = (db.query(models.Lot)
              .options(joinedload(models.Lot.enrichment))
              .filter(models.Lot.lot_id == lot_id).first())
     if not lot:
         raise HTTPException(status_code=404, detail="Lot not found")
     lot.won = won
+    lot.won_at = datetime.now() if won else None
     db.commit()
     db.refresh(lot)
     return lot

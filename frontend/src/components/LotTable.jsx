@@ -521,8 +521,8 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
                 <button
                   className="bare"
                   onClick={() => handleWon(lot.lot_id, !lot.won)}
-                  title={lot.won ? 'Won — kept as inventory, never flushed (tap to unmark)'
-                                 : 'Mark as won: keeps this lot and its enrichment when closed items are flushed'}
+                  title={lot.won ? 'Won — kept as inventory for 7 days (tap to unmark)'
+                                 : 'Mark as won: keeps this lot and its enrichment for 7 days when closed items are flushed'}
                   style={{ fontSize: 14, padding: '0 4px 0 0',
                            opacity: lot.won ? 1 : 0.4,
                            filter: lot.won ? undefined : 'grayscale(1)' }}>
@@ -727,8 +727,8 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
                   className="bare"
                   onClick={() => handleWon(lot.lot_id, !lot.won)}
                   title={lot.won
-                    ? 'Won at auction — kept as inventory: stays visible and is never flushed (click to unmark)'
-                    : 'Mark as won: this lot and its enrichment survive the closed-items flush and stay visible for listing'}
+                    ? 'Won at auction — kept as inventory for 7 days: stays visible and survives the flush (click to unmark)'
+                    : 'Mark as won: this lot and its enrichment survive the closed-items flush for 7 days — time to list the item'}
                   style={{ fontSize: 13, padding: '0 4px 0 0',
                            opacity: lot.won ? 1 : 0.4,
                            filter: lot.won ? undefined : 'grayscale(1)' }}>

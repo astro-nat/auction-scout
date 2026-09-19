@@ -263,8 +263,9 @@ They're listed below — use "Enrich" to price them.`)
       const msg = `Permanently delete ${peek.lots} items from closed auctions?\n\n`
         + `Their enrichment results (the AI calls you paid for) are deleted `
         + `with them. This can't be undone.\n\n`
-        + `Lots marked won (🏆) or watched (★) are kept — mark anything you `
-        + `won before flushing.`
+        + `Lots marked watched (★) are kept, and lots marked won (🏆) are `
+        + `kept for 7 days after marking — mark anything you won before `
+        + `flushing.`
       if (!window.confirm(msg)) return
       setBusy('Flushing closed items…')
       const r = await flushClosed()
