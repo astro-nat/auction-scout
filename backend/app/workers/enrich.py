@@ -484,7 +484,13 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
         from_title = (e.price_source or "").startswith("retail $")
         thin_evidence = (e.comp_count or 0) < 2 and not from_title
         e.profit = lead.profit
-        e.roi_status = ("PASS" if (red_flag or lot.unreachable_pickup or thin_evidence)
+        # An audit demotion stands until the VALUE changes (which clears
+        # gold_check) — recomputing ROI on a new bid or a reprice must not
+        # resurrect the badge. Without this, every hourly bid refresh
+        # re-minted golds the audit had already rejected.
+        demoted = getattr(e, "gold_check", None) == "demoted"
+        e.roi_status = ("PASS" if (red_flag or lot.unreachable_pickup
+                                   or thin_evidence or demoted)
                         else lead.status)
     else:
         # No usable price means no usable verdict. Leaving the previous run's

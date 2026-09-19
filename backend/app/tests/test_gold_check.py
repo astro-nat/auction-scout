@@ -102,6 +102,18 @@ def test_the_kill_switch_disables_the_audit(verify_with, monkeypatch):
     assert e.roi_status == "GOLD MINE"
 
 
+def test_recomputing_roi_cannot_resurrect_a_demoted_gold(verify_with):
+    """Bid refresh and reprice re-run _apply_roi; a standing demotion must
+    survive that arithmetic. 81 zombie golds came back this way before."""
+    lot, e = _gold_lot()
+    verify_with(lot, e, {"plausible": False, "reason": "wrong comps"})
+    assert e.roi_status == "PASS"
+    lot.current_bid = 12          # a new bid arrives, ROI recomputes
+    enrich._apply_roi(lot, e)
+    assert e.roi_status == "PASS"
+    assert e.gold_check == "demoted"
+
+
 def test_a_garbage_verdict_changes_nothing(verify_with):
     lot, e = _gold_lot()
     verify_with(lot, e, {"plausible": "yes", "reason": 3})
