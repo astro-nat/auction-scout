@@ -206,10 +206,13 @@ export default function App() {
     return 'Import'
   }
 
-  async function handleImport(auctionId) {
+  // categoryId defaults to the last scan's category (the auctions-tab flow);
+  // pass -1 to import the full catalog regardless — the items-tab "import
+  // the rest" button must not silently inherit a stale category filter.
+  async function handleImport(auctionId, categoryId = scanCategoryId) {
     setBusy('Importing lots…')
     try {
-      const r = await importLots(auctionId, scanCategoryId)
+      const r = await importLots(auctionId, categoryId)
       setBusy('')
       setSelectedAuctions([auctionId])
       setView('items')
@@ -381,7 +384,11 @@ Skipping ${hard} HARD-to-ship lots.`
       return { text: 'Not imported yet', pct: null }
     }
     const pct = Math.round((a.lots_enriched / a.lots_imported) * 100)
-    const bits = [`${a.lots_imported} lots imported`]
+    // "X of Y imported" whenever HiBid's catalog size is known — a partial
+    // import reads as complete otherwise, and nobody notices the gap.
+    const bits = [a.lot_count != null
+      ? `${a.lots_imported} of ${a.lot_count} imported`
+      : `${a.lots_imported} lots imported`]
     if (a.lots_enriched) bits.push(`${a.lots_enriched} enriched`)
     if (a.lots_inspected) bits.push(`${a.lots_inspected} inspected`)
     if (a.lots_pending) bits.push(`${a.lots_pending} not yet enriched`)
@@ -822,6 +829,9 @@ Skipping ${hard} HARD-to-ship lots.`
                   </td>
                   <td className="num">
                     {a.lot_count ?? '—'}
+                    {a.lots_imported > 0 && (
+                      <div style={{ fontSize: 11, color: 'var(--muted)' }}>{a.lots_imported} imported</div>
+                    )}
                     {hasCategoryCount(a) && (
                       <div style={{ fontSize: 11, color: 'var(--muted)' }}>{a.category_lot_count} match</div>
                     )}
@@ -890,6 +900,7 @@ Skipping ${hard} HARD-to-ship lots.`
                       {a.name}
                       <div style={{ color: 'var(--muted)', fontSize: 12 }}>
                         {[a.city, a.state].filter(Boolean).join(', ') || '—'}
+                        {a.lot_count != null ? ` · ${a.lots_imported} of ${a.lot_count} imported` : ''}
                         {a.gold_count ? ` · 🟢 ${a.gold_count} gold` : ''}
                       </div>
                     </span>
@@ -897,6 +908,23 @@ Skipping ${hard} HARD-to-ship lots.`
                 ))}
             </div>
           </details>
+          {/* A selected auction with fewer lots in the DB than on HiBid gets
+              a one-click "finish the import" — the usual arrival here is the
+              View button or a lot's auction tag, where the gap is invisible. */}
+          {selectedAuctions
+            .map((id) => importedRows[id])
+            .filter((a) => a && a.lot_count != null && a.lots_imported < a.lot_count
+                           && !(a.closing_date && parseUtc(a.closing_date) < new Date()))
+            .map((a) => (
+              <button key={`partial-${a.id}`}
+                      onClick={() => handleImport(a.id, -1)}
+                      disabled={!!busy}
+                      title={`"${a.name}" has ${a.lot_count} lots on HiBid but only ${a.lots_imported} in the database — import the rest (free, no AI calls)`}
+                      style={{ padding: 8, fontSize: 14 }}>
+                📥 Import {a.lot_count - a.lots_imported} missing
+                {selectedAuctions.length > 1 ? ` · ${a.name.length > 22 ? `${a.name.slice(0, 22)}…` : a.name}` : ''}
+              </button>
+            ))}
           <select
             value={categoryFilter}
             onChange={(ev) => setCategoryFilter(ev.target.value)}
@@ -1084,6 +1112,7 @@ Skipping ${hard} HARD-to-ship lots.`
         )
       ) : (
         <LotTable lots={visibleLots} onLotUpdated={handleLotUpdated} onRefresh={loadLots}
+                  onSelectAuction={(id) => setSelectedAuctions([id])}
                   onLotTouched={markTouched} />
       )}
       </>)}

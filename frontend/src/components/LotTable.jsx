@@ -210,7 +210,7 @@ const MOBILE_SORTS = [
   { label: 'Title (A→Z)', key: 'title', dir: 1 },
 ]
 
-export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }) {
+export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, onSelectAuction }) {
   const isMobile = useMediaQuery('(max-width: 768px)')
   const [pollingIds, setPollingIds] = useState(new Set())
   // Countdown clock — a 30s tick keeps every "closes in" cell live.
@@ -537,7 +537,12 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
                    style={lot.hidden ? { opacity: 0.5, textDecoration: 'line-through' } : undefined}>{lot.title}</a>
               </div>
               <div style={{ color: 'var(--muted)', fontSize: 12 }}>
-                {(lot.item_closed ?? lot.auction_closed) ? '⏹ closed · ' : ''}{lot.auction_name}
+                {(lot.item_closed ?? lot.auction_closed) ? '⏹ closed · ' : ''}
+                <span onClick={() => onSelectAuction?.(lot.auction_id)}
+                      title="Show only this auction's items"
+                      style={{ cursor: 'pointer', textDecoration: 'underline dotted' }}>
+                  {lot.auction_name}
+                </span>
               </div>
               {e.enriched_title && e.enriched_title !== lot.title && (
                 <div style={{ color: 'var(--muted)', fontSize: 13 }}>→ {e.enriched_title}</div>
@@ -762,7 +767,11 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
               </td>
               <td style={{ ...cell, fontSize: 12, maxWidth: 140 }}>
                 {(lot.item_closed ?? lot.auction_closed) && <div><strong>⏹ closed</strong></div>}
-                {lot.auction_name}
+                <span onClick={() => onSelectAuction?.(lot.auction_id)}
+                      title="Show only this auction's items"
+                      style={{ cursor: 'pointer', textDecoration: 'underline dotted' }}>
+                  {lot.auction_name}
+                </span>
               </td>
               <td style={{ ...cell, whiteSpace: 'nowrap' }}>{lot.category}</td>
               <td style={{ ...cell, whiteSpace: 'nowrap',
