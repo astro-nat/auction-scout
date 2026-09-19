@@ -101,14 +101,39 @@ def _start_batch_job() -> bool:
     return True
 
 
-def _work_lots() -> bool:
-    """Claim and process a slice of the per-lot queue."""
-    from .workers.enrich import process_queued_lots
-    items = jobs.claim_lots(max(1, config.ENRICH_CONCURRENCY))
+def _run_one_lot(item) -> None:
+    """One claimed lot, on a pool thread. Imports are lazy for the same
+    reason as _runner_for — the Anthropic client builds at import time."""
+    from .workers.enrich import run_enrichment, run_inspection
+    lot_id, task = item
+    try:
+        if task == "inspect":
+            run_inspection(lot_id)
+        else:
+            run_enrichment(lot_id)
+    except Exception:  # noqa: BLE001 — one lot must not kill the pool
+        logger.exception("Queued lot %s failed in pool", lot_id)
+
+
+def _work_lots(pool, inflight: set) -> bool:
+    """Keep the lot pool continuously fed.
+
+    The old shape claimed ENRICH_CONCURRENCY lots and JOINED the whole batch
+    before claiming more — one 40s comp lookup idled every other slot, so
+    real throughput was well under concurrency × avg. Now each finished slot
+    is refilled on the next poll tick while the slow one keeps running.
+    """
+    inflight -= {f for f in set(inflight) if f.done()}
+    free = max(0, config.ENRICH_CONCURRENCY - len(inflight))
+    if not free:
+        return False
+    items = jobs.claim_lots(free)
     if not items:
         return False
-    logger.info("Working %d queued lots", len(items))
-    process_queued_lots(items)
+    logger.info("Working %d queued lots (%d already in flight)",
+                len(items), len(inflight))
+    for item in items:
+        inflight.add(pool.submit(_run_one_lot, item))
     return True
 
 
@@ -128,11 +153,16 @@ def main() -> None:
     start_maintenance()
     start_notifier()
 
+    from concurrent.futures import ThreadPoolExecutor
+    pool = ThreadPoolExecutor(max_workers=max(1, config.ENRICH_CONCURRENCY),
+                              thread_name_prefix="lot")
+    inflight: set = set()
+
     while not _stop.is_set():
         try:
             jobs.worker_heartbeat()
             did = _start_batch_job()
-            did = _work_lots() or did
+            did = _work_lots(pool, inflight) or did
         except Exception:  # noqa: BLE001 — the loop outlives its own bugs
             logger.exception("Worker pass failed")
             did = False

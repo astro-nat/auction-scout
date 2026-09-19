@@ -270,7 +270,7 @@ def claim_pending(kinds: Optional[list[str]] = None,
 def claim_lots(limit: int) -> list[tuple]:
     """Take up to `limit` queued lots, oldest batch first.
 
-    Returns [(lot_db_id, task)] — the shape process_queued_lots wants.
+    Returns [(lot_db_id, task)] — the shape the worker's lot pool wants.
 
     Ordered by (queued_at, queue_rank) so the rows the user could see when
     they pressed the button are still worked first. A claim older than

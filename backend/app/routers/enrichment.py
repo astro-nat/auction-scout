@@ -33,26 +33,32 @@ def enrich_lot(lot_id: str, db: Session = Depends(get_db)):
 def enrich_batch(payload: schemas.EnrichBatchRequest, db: Session = Depends(get_db)):
     """Queue enrichment for an explicit, ordered list of lots — the frontend
     sends what's visible on screen, top row first, so the user's current view
-    gets processed before anything else. Already-successful lots are skipped."""
+    gets processed before anything else. Already-successful lots are skipped.
+
+    One light SELECT plus batched UPDATEs, not ORM objects: the old per-lot
+    loop lazy-loaded each enrichment (two queries a lot), so queueing an
+    800-lot "Enrich all" took long enough to read as the button doing
+    nothing at all."""
     rows = (
-        db.query(models.Lot).join(models.Enrichment)
+        db.query(models.Lot.lot_id, models.Enrichment.id)
+        .join(models.Enrichment, models.Enrichment.lot_id == models.Lot.id)
         .filter(models.Lot.lot_id.in_(payload.lot_ids),
                 models.Enrichment.status.in_(["pending", "failed"]))
         .all()
     )
-    by_id = {l.lot_id: l for l in rows}
-    ordered = [by_id[i] for i in payload.lot_ids if i in by_id]
+    by_lot = {lot_id: enrichment_id for lot_id, enrichment_id in rows}
     queued_at = datetime.now(timezone.utc)
-    for rank, lot in enumerate(ordered):
-        lot.enrichment.status = "queued"
-        lot.enrichment.queued_task = "enrich"
-        # The caller sent these in the order they appear on screen; keep it,
-        # because the picking now happens in another process.
-        lot.enrichment.queued_at = queued_at
-        lot.enrichment.queue_rank = rank
-        lot.enrichment.claimed_at = None
-    db.commit()
-    return {"queued": len(ordered)}
+    # The caller sent lot_ids in the order they appear on screen; queue_rank
+    # keeps it, because the picking now happens in another process.
+    mappings = [
+        {"id": by_lot[lot_id], "status": "queued", "queued_task": "enrich",
+         "queued_at": queued_at, "queue_rank": rank, "claimed_at": None}
+        for rank, lot_id in enumerate(i for i in payload.lot_ids if i in by_lot)
+    ]
+    if mappings:
+        db.bulk_update_mappings(models.Enrichment, mappings)
+        db.commit()
+    return {"queued": len(mappings)}
 
 
 @router.post("/reprice", status_code=202)
