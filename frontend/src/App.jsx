@@ -35,6 +35,14 @@ export default function App() {
   // without this they'd render as "—" (looking unattached).
   const [auctionIndex, setAuctionIndex] = useState({})
   const [auctionLimit, setAuctionLimit] = useState(50)
+  // Collapsed section headers in the auctions list. Imported starts closed:
+  // that block only grows, and once it's a screen tall the scan results you
+  // came here to read start below the fold. Click the header to open it.
+  const [collapsedSections, setCollapsedSections] = useState(['imported'])
+  const toggleSection = useCallback((key) => {
+    setCollapsedSections((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key])
+  }, [])
   const [scan, setScan] = useState({
     search_text: '', category_id: -1, auction_type: 'ALL',
     status: 'OPEN', zip: '', radius_miles: 25,
@@ -510,14 +518,20 @@ Skipping ${hard} HARD-to-ship lots.`
   const watchedAuctions = notImported.filter((a) => a.favorite)
   const discoveredAuctions = notImported.filter((a) => !a.favorite)
   const auctionSections = [
-    ...(importedAuctions.length ? [{ label: `📥 Imported (${importedAuctions.length})`, rows: importedAuctions }] : []),
-    ...(watchedAuctions.length ? [{ label: `⭐ Watched houses (${watchedAuctions.length})`, rows: watchedAuctions }] : []),
-    ...(discoveredAuctions.length ? [{ label: (importedAuctions.length || watchedAuctions.length) ? `Discovered (${discoveredAuctions.length})` : null, rows: discoveredAuctions }] : []),
+    ...(importedAuctions.length ? [{ key: 'imported', label: `📥 Imported (${importedAuctions.length})`, rows: importedAuctions }] : []),
+    ...(watchedAuctions.length ? [{ key: 'watched', label: `⭐ Watched houses (${watchedAuctions.length})`, rows: watchedAuctions }] : []),
+    ...(discoveredAuctions.length ? [{ key: 'discovered', label: (importedAuctions.length || watchedAuctions.length) ? `Discovered (${discoveredAuctions.length})` : null, rows: discoveredAuctions }] : []),
   ]
-  const auctionRowsForDisplay = auctionSections.flatMap((s) => [
-    ...(s.label ? [{ header: s.label }] : []),
-    ...s.rows,
-  ])
+  // A section only collapses when it has a header to click — the lone
+  // Discovered section renders headerless, and hiding it would strand the
+  // rows with no way to get them back.
+  const auctionRowsForDisplay = auctionSections.flatMap((s) => {
+    const collapsed = !!s.label && collapsedSections.includes(s.key)
+    return [
+      ...(s.label ? [{ header: s.label, sectionKey: s.key, collapsed }] : []),
+      ...(collapsed ? [] : s.rows),
+    ]
+  })
 
   // An auction is "hot" when its gold-mine lots add up to real money.
   const isClosed = (a) => a.closing_date && parseUtc(a.closing_date) < new Date()
@@ -700,8 +714,14 @@ Skipping ${hard} HARD-to-ship lots.`
               Auctions ({importedAuctions.length + discoveredAuctions.length})
             </summary>
             {auctionRowsForDisplay.slice(0, auctionLimit).map((a) => a.header ? (
-              <div key={`hdr-${a.header}`} style={{ fontWeight: 700, fontSize: 15, marginTop: 12 }}>
-                {a.header}
+              <div key={`hdr-${a.header}`} style={{ marginTop: 12 }}>
+                <button className="bare"
+                        onClick={() => toggleSection(a.sectionKey)}
+                        aria-expanded={!a.collapsed}
+                        title={a.collapsed ? 'Show these auctions' : 'Hide these auctions'}
+                        style={{ fontWeight: 700, fontSize: 15, padding: 0 }}>
+                  {a.collapsed ? '▸' : '▾'} {a.header}
+                </button>
               </div>
             ) : (
               <div key={a.id}
@@ -800,9 +820,14 @@ Skipping ${hard} HARD-to-ship lots.`
             <tbody>
               {auctionRowsForDisplay.slice(0, auctionLimit).map((a) => a.header ? (
                 <tr key={`hdr-${a.header}`}>
-                  <td colSpan={7} style={{ paddingTop: 12, fontWeight: 700, fontSize: 14,
-                                           background: 'var(--bg)' }}>
-                    {a.header}
+                  <td colSpan={7} style={{ paddingTop: 12, background: 'var(--bg)' }}>
+                    <button className="bare"
+                            onClick={() => toggleSection(a.sectionKey)}
+                            aria-expanded={!a.collapsed}
+                            title={a.collapsed ? 'Show these auctions' : 'Hide these auctions'}
+                            style={{ fontWeight: 700, fontSize: 14, padding: 0 }}>
+                      {a.collapsed ? '▸' : '▾'} {a.header}
+                    </button>
                   </td>
                 </tr>
               ) : (
