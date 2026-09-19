@@ -55,6 +55,7 @@ class LotOut(BaseModel):
 
     id: int
     lot_id: str
+    lot_number: Optional[str] = None
     auction_id: Optional[int] = None
     title: str
     category: Optional[str] = None

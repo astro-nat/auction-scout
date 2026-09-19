@@ -475,6 +475,11 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
                            opacity: lot.hidden ? 1 : 0.4 }}>
                   {lot.hidden ? '👁' : '🚫'}
                 </button>
+                {lot.lot_number && (
+                  <span style={{ color: 'var(--muted)', fontSize: 13, marginRight: 4 }}>
+                    #{lot.lot_number}
+                  </span>
+                )}
                 <a href={lot.lot_link} target="_blank" rel="noreferrer"
                    style={lot.hidden ? { opacity: 0.5, textDecoration: 'line-through' } : undefined}>{lot.title}</a>
               </div>
@@ -666,6 +671,13 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched }
                 {e.auth_required && (
                   <span style={{ cursor: 'help', marginRight: 4 }}
                         title="Luxury/precious-metal match — resale depends on authentication; don't trust the comps until verified in hand">⚠️</span>
+                )}
+                {lot.lot_number && (
+                  <span style={{ color: 'var(--muted)', fontSize: 12,
+                                 fontVariantNumeric: 'tabular-nums', marginRight: 4 }}
+                        title="The auction house's lot number">
+                    #{lot.lot_number}
+                  </span>
                 )}
                 <a href={lot.lot_link} target="_blank" rel="noreferrer"
                    style={lot.hidden ? { opacity: 0.5, textDecoration: 'line-through' } : undefined}>{lot.title}</a>

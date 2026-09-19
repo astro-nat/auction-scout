@@ -393,6 +393,9 @@ def _process_lot(raw: dict, auction_ctx: dict) -> dict:
 
     return {
         "lot_id": str(raw.get("id")),
+        # The auction house's catalog number ("Lot 214") — what you'd punch
+        # into HiBid or say to a clerk, unlike lot_id (HiBid's global id).
+        "lot_number": str(raw.get("lotNumber") or "").strip() or None,
         "title": title,
         "category": category or None,
         "description": description or None,

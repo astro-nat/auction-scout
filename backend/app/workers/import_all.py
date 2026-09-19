@@ -41,8 +41,8 @@ def save_lots(db: Session, auction: models.Auction, lots: list[dict], *,
         row = db.query(models.Lot).filter(models.Lot.lot_id == data["lot_id"]).first()
         if row:
             for k in ("current_bid", "next_bid", "bid_count", "est_cost",
-                      "status", "time_left", "closes_at", "thumbnail_url",
-                      "hd_thumbnail_url", "fullsize_url"):
+                      "status", "time_left", "closes_at", "lot_number",
+                      "thumbnail_url", "hd_thumbnail_url", "fullsize_url"):
                 setattr(row, k, data[k])
             updated += 1
         else:

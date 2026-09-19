@@ -122,6 +122,42 @@ def enrich_category(category: str, skip_hard: bool = False, dry_run: bool = Fals
     return {"category": category, "queued": len(lot_ids)}
 
 
+@router.post("/re-enrich-blind", status_code=202)
+def re_enrich_blind(auction_id: int | None = None, dry_run: bool = False,
+                    db: Session = Depends(get_db)):
+    """Re-queue lots that were 'enriched' while the AI was unreachable.
+
+    A dead API key doesn't fail a lot — the AI pass just silently returns
+    nothing, comps run against the raw auction title, and the lot lands on
+    'success' with no identification and no condition verdict (the 2026-09-19
+    key outage produced 171 of these). Blind = success, no ai_source, no
+    enriched title, and no retail-in-title price standing in. Re-queueing
+    sends them through the full pipeline again."""
+    from sqlalchemy import or_
+    q = (db.query(models.Lot.id).join(models.Enrichment)
+           .filter(models.Enrichment.status == "success",
+                   or_(models.Enrichment.ai_source.is_(None),
+                       models.Enrichment.ai_source == "none"),
+                   models.Enrichment.enriched_title.is_(None),
+                   or_(models.Enrichment.price_source.is_(None),
+                       ~models.Enrichment.price_source.like("retail $%"))))
+    if auction_id:
+        q = q.filter(models.Lot.auction_id == auction_id)
+    lot_ids = [row[0] for row in q.all()]
+    if dry_run:
+        return {"lots": len(lot_ids), "dry_run": True}
+    if not lot_ids:
+        return {"queued": 0}
+    db.query(models.Enrichment).filter(
+        models.Enrichment.lot_id.in_(lot_ids)
+    ).update({"status": "queued", "queued_task": "enrich",
+              "queued_at": datetime.now(timezone.utc),
+              "queue_rank": 0, "claimed_at": None},
+             synchronize_session=False)
+    db.commit()
+    return {"queued": len(lot_ids)}
+
+
 @router.post("/reinspect-no-comps", status_code=202)
 def reinspect_no_comps(dry_run: bool = False,
                        db: Session = Depends(get_db)):

@@ -50,6 +50,7 @@ class Lot(Base):
 
     id = Column(Integer, primary_key=True)
     lot_id = Column(String, unique=True, nullable=False, index=True)  # hibid lot id
+    lot_number = Column(String)       # the house's catalog number ("214A")
     auction_id = Column(Integer, ForeignKey("auctions.id"))
     title = Column(String, nullable=False)
     category = Column(String, index=True)
