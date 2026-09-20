@@ -39,7 +39,16 @@ MAX_DTS = 90.0            # days-to-sell ceiling for viability
 
 def acquisition_multiplier(buyers_premium: float = BUYERS_PREMIUM,
                            sales_tax: float = SALES_TAX) -> float:
-    return 1 + buyers_premium + sales_tax
+    """Hammer price -> what the invoice actually says.
+
+    Tax compounds on the premium rather than sitting beside it: houses tax the
+    whole invoice, hammer + premium. The flat `1 + premium + tax` this used to
+    return dropped the premium x tax term, understating every lot's cost by
+    ~1.5% of hammer at 22%/7% — always in the direction of bidding more.
+    Checked against two real settlements: Retro Roadshow took 7% on $841.80
+    (a $690 hammer plus $151.80 premium), Bizarre Auctions 8% the same way.
+    """
+    return (1 + buyers_premium) * (1 + sales_tax)
 
 
 def days_to_sell(sold_count: int, active_count: int) -> float:

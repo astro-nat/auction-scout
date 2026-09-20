@@ -1,5 +1,7 @@
 """ROI math — pure functions, explicit targets so the settings store isn't hit."""
 
+import pytest
+
 from app.services import financials
 
 
@@ -51,5 +53,18 @@ def test_buffer_no_longer_double_counts_packing():
     lead = financials.evaluate_lead(resale_value=60.0, current_bid=10.0,
                                     logistics_penalty=3.5, dts=10,
                                     target_roi=1.5, buyers_premium=0.15)
-    # hammer 10 x 1.2325 = 12.325, + 3.50 logistics, nothing else
-    assert lead.total_cost == round(10 * 1.2325 + 3.5, 2)
+    # hammer 10 x 1.15 x 1.0825, + 3.50 logistics, nothing else
+    assert lead.total_cost == round(10 * 1.15 * 1.0825 + 3.5, 2)
+
+
+def test_tax_compounds_on_the_premium():
+    """The invoice taxes hammer + premium, not hammer alone.
+
+    Reconciles to a real settlement: a $690 hammer at 22% premium and 7% tax
+    billed $939.72 including $39 of shipping, i.e. $900.72 of lots.
+    """
+    assert financials.acquisition_multiplier(0.22, 0.07) == pytest.approx(1.3054)
+    lots_cost = 690 * financials.acquisition_multiplier(0.22, 0.07)
+    assert lots_cost + 39 == pytest.approx(939.72, abs=0.02)
+    # The old flat sum understated it — the gap is premium x tax.
+    assert lots_cost - 690 * (1 + 0.22 + 0.07) == pytest.approx(690 * 0.22 * 0.07)
