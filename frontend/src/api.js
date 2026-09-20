@@ -211,6 +211,16 @@ export function saveTargetRoi(pct) {
   return request('/settings', { method: 'PATCH', body: JSON.stringify({ target_roi_pct: pct }) })
 }
 
+// Acquisition pacing (weekly goal + per-auction floor). Saving these never
+// triggers a regrade — they only change what the auctions tab highlights.
+export function savePacing(changes) {
+  return request('/settings', { method: 'PATCH', body: JSON.stringify(changes) })
+}
+
+export function fetchWeekStats() {
+  return request('/stats/week')
+}
+
 export function reinspectNoComps(dryRun = false) {
   const q = dryRun ? '?dry_run=true' : ''
   return request(`/lots/reinspect-no-comps${q}`, { method: 'POST' })

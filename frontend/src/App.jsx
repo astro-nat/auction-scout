@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, importLots, importAllAuctions, enrichAll, enrichCategory, flushClosed, refreshBids, reinspectNoComps, fetchSettings, saveTargetRoi, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
+import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, importLots, importAllAuctions, enrichAll, enrichCategory, flushClosed, refreshBids, reinspectNoComps, fetchSettings, saveTargetRoi, savePacing, fetchWeekStats, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
 import LotTable from './components/LotTable'
 import StatusBar from './components/StatusBar'
 import useMediaQuery from './useMediaQuery'
@@ -58,6 +58,22 @@ export default function App() {
   useEffect(() => {
     fetchSettings().then((s) => setTargetRoi(String(s.target_roi_pct))).catch(console.error)
   }, [])
+  // Acquisition pacing: what the auction channel should contribute per week,
+  // and the least an auction can put on the table before it's worth a
+  // shipping minimum or a pickup trip. weekStats carries won-vs-goal.
+  const [weekStats, setWeekStats] = useState(null)
+  const loadWeekStats = useCallback(() => {
+    fetchWeekStats().then(setWeekStats).catch(console.error)
+  }, [])
+  useEffect(() => { loadWeekStats() }, [loadWeekStats])
+  const auctionFloor = Number(weekStats?.auction_floor_usd ?? 200)
+
+  async function handleSavePacing(changes) {
+    try {
+      await savePacing(changes)
+      loadWeekStats()
+    } catch (e) { alertOnce(e.message) }
+  }
 
   const [lotTotal, setLotTotal] = useState(0)
   const [lotsLoadState, setLotsLoadState] = useState('loading')
@@ -187,7 +203,8 @@ export default function App() {
     syncAuctionStats().catch(console.error)
     loadLotCategories()
     loadLots()
-  }, [loadLots, loadLotCategories, syncAuctionStats])
+    loadWeekStats()
+  }, [loadLots, loadLotCategories, syncAuctionStats, loadWeekStats])
 
   function setScanField(field, value) {
     setScan((prev) => ({ ...prev, [field]: value }))
@@ -572,12 +589,20 @@ Skipping ${hard} HARD-to-ship lots.`
     ]
   })
 
-  // An auction is "hot" when its gold-mine lots add up to real money.
+  // An auction is "hot" when its gold-mine lots clear the per-auction floor:
+  // every auction costs a shipping minimum or a pickup trip, so a couple of
+  // thin wins lose even when each lot individually "wins". gold_profit sums
+  // audit-surviving GOLD MINEs only, so this is the trusted number.
   const isClosed = (a) => a.closing_date && parseUtc(a.closing_date) < new Date()
-  const isHotAuction = (a) => Number(a.gold_profit ?? 0) >= 100
+  const isHotAuction = (a) => Number(a.gold_profit ?? 0) >= auctionFloor
+  // Below the floor with enrichment done = measured and found thin. An
+  // un-enriched auction is unknown, not bad — never dimmed.
+  const isUnderFloor = (a) =>
+    a.lots_enriched > 0 && !isHotAuction(a) && !isClosed(a)
   const goldBadge = (a) =>
     a.gold_count > 0
       ? `🟢 ${a.gold_count} gold · ~$${Number(a.gold_profit).toFixed(0)} potential profit`
+        + (isUnderFloor(a) ? ` · under $${auctionFloor} floor` : '')
       : null
 
   // Stamp each lot with its auction's name so the table can show/filter it.
@@ -650,6 +675,48 @@ Skipping ${hard} HARD-to-ship lots.`
 
       {view === 'auctions' && (
       <section style={{ marginBottom: '1.5rem' }}>
+        {/* Acquisition pacing: is this week on track, and how much trusted
+            profit is still on the board. Wins enter via the 🏆 mark. */}
+        {weekStats && (() => {
+          const goal = Number(weekStats.weekly_goal_usd)
+          const won = Number(weekStats.won_trusted_profit)
+          const avail = Number(weekStats.available_gold_profit)
+          const pct = goal > 0 ? Math.max(0, Math.min(100, (won / goal) * 100)) : 0
+          return (
+            <div className="card" style={{ marginBottom: 10, padding: '8px 12px' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline',
+                            gap: '4px 14px', fontSize: 14 }}>
+                <strong>This week: ${won.toFixed(0)} of $
+                  <input
+                    value={weekStats.weekly_goal_usd}
+                    onChange={(ev) => setWeekStats((s) => ({ ...s, weekly_goal_usd: ev.target.value }))}
+                    onBlur={(ev) => { const v = Number(ev.target.value); if (v >= 0) handleSavePacing({ weekly_goal_usd: v }) }}
+                    title="Weekly guaranteed-profit goal for the auction channel"
+                    style={{ width: 52, fontSize: 14, fontWeight: 700, padding: '0 2px' }}
+                  /> goal</strong>
+                <span style={{ color: 'var(--muted)' }}>
+                  {weekStats.won_count ? `${weekStats.won_count} wins marked 🏆` : 'no wins marked 🏆 yet'}
+                  {' · '}~${avail.toFixed(0)} still on the board
+                </span>
+                <label style={{ marginLeft: 'auto', color: 'var(--muted)', fontSize: 13,
+                                whiteSpace: 'nowrap' }}
+                       title="An auction must put at least this much audit-trusted profit on the table to be worth a shipping minimum or a pickup trip">
+                  floor $
+                  <input
+                    value={weekStats.auction_floor_usd}
+                    onChange={(ev) => setWeekStats((s) => ({ ...s, auction_floor_usd: ev.target.value }))}
+                    onBlur={(ev) => { const v = Number(ev.target.value); if (v >= 0) handleSavePacing({ auction_floor_usd: v }) }}
+                    style={{ width: 44, fontSize: 13, padding: '0 2px' }}
+                  />/auction
+                </label>
+              </div>
+              <div style={{ height: 6, borderRadius: 3, background: 'var(--badge-bg)',
+                            overflow: 'hidden', marginTop: 6 }}>
+                <div style={{ height: '100%', width: `${pct}%`, background: 'var(--link)' }} />
+              </div>
+            </div>
+          )
+        })()}
         {/* Form wrapper: pressing Enter in any filter field runs the scan */}
         <form onSubmit={(ev) => { ev.preventDefault(); handleScan() }}
               style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -793,6 +860,7 @@ Skipping ${hard} HARD-to-ship lots.`
               <div key={a.id}
                    className={`card${isHotAuction(a) ? ' row-gold' : ''}`}
                    style={{ marginTop: 8,
+                            opacity: isUnderFloor(a) ? 0.55 : undefined,
                             background: !isHotAuction(a) && selectedAuctions.includes(a.id)
                               ? 'var(--highlight)' : undefined }}>
                 <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -900,6 +968,7 @@ Skipping ${hard} HARD-to-ship lots.`
                 <tr key={a.id}
                     className={isHotAuction(a) ? 'row-gold' : undefined}
                     style={{
+                      opacity: isUnderFloor(a) ? 0.55 : undefined,
                       background: !isHotAuction(a) && selectedAuctions.includes(a.id)
                         ? 'var(--highlight)' : undefined,
                     }}>

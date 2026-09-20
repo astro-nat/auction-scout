@@ -60,32 +60,112 @@ def get_status(db: Session = Depends(get_db)):
             "workers": {"live": len(workers), "ids": [w["id"] for w in workers]}}
 
 
+# Acquisition pacing defaults (see /stats/week). Every auction carries a
+# fixed cost — a shipping minimum or a pickup trip — so an auction must put
+# at least the floor on the table to be worth touching; the weekly goal is
+# what the auction channel should contribute to the business overall.
+DEFAULT_WEEKLY_GOAL = 500.0
+DEFAULT_AUCTION_FLOOR = 200.0
+
+
+def _money_setting(key: str, default: float) -> float:
+    from ..services import settings as settings_store
+    try:
+        v = settings_store.get(key)
+        return float(v) if v else default
+    except Exception:  # noqa: BLE001 — settings table missing on first boot
+        return default
+
+
 @router.get("/settings")
 def get_settings():
     """The tunables the UI can edit. target_roi_pct is served as a percent."""
     from ..services import financials
-    return {"target_roi_pct": round(financials.current_target_roi() * 100)}
+    return {"target_roi_pct": round(financials.current_target_roi() * 100),
+            "weekly_goal_usd": _money_setting("weekly_goal_usd", DEFAULT_WEEKLY_GOAL),
+            "auction_floor_usd": _money_setting("auction_floor_usd", DEFAULT_AUCTION_FLOOR)}
 
 
 @router.patch("/settings")
 def patch_settings(payload: dict,
                    db: Session = Depends(get_db)):
-    """Save a new ROI target and immediately reprice every enriched lot under
-    it (free — reuses stored AI results). 1-10000 sanity range."""
+    """Save any of the tunables. A new ROI target immediately re-grades every
+    enriched lot (free — reuses stored AI results); the pacing numbers are
+    display-only, so saving them re-grades nothing. Each field optional."""
     from ..services import settings as settings_store
-    pct = payload.get("target_roi_pct")
-    if not isinstance(pct, (int, float)) or not (1 <= pct <= 10000):
-        raise HTTPException(status_code=422,
-                            detail="target_roi_pct must be a number from 1 to 10000")
-    settings_store.set("target_roi_pct", str(float(pct)))
-    # Re-GRADE, not re-price: the ROI target doesn't change what anything is
-    # worth, so this is arithmetic over stored values — no comp lookups.
-    n = (db.query(models.Enrichment)
-           .filter(models.Enrichment.est_resale.isnot(None)).count())
-    if n:
-        jobs.enqueue("regrade", "Re-grading items at the new ROI target",
-                     total=n)
-    return {"target_roi_pct": pct, "regrading": n}
+    saved = {}
+    for key, low, high in (("weekly_goal_usd", 0, 100000),
+                           ("auction_floor_usd", 0, 100000)):
+        if key in payload:
+            v = payload[key]
+            if not isinstance(v, (int, float)) or not (low <= v <= high):
+                raise HTTPException(status_code=422,
+                                    detail=f"{key} must be a number from {low} to {high}")
+            settings_store.set(key, str(float(v)))
+            saved[key] = v
+    n = 0
+    if "target_roi_pct" in payload or not saved:
+        pct = payload.get("target_roi_pct")
+        if not isinstance(pct, (int, float)) or not (1 <= pct <= 10000):
+            raise HTTPException(status_code=422,
+                                detail="target_roi_pct must be a number from 1 to 10000")
+        settings_store.set("target_roi_pct", str(float(pct)))
+        saved["target_roi_pct"] = pct
+        # Re-GRADE, not re-price: the ROI target doesn't change what anything
+        # is worth, so this is arithmetic over stored values — no comp lookups.
+        n = (db.query(models.Enrichment)
+               .filter(models.Enrichment.est_resale.isnot(None)).count())
+        if n:
+            jobs.enqueue("regrade", "Re-grading items at the new ROI target",
+                         total=n)
+    return {**saved, "regrading": n}
+
+
+@router.get("/stats/week")
+def week_stats(db: Session = Depends(get_db)):
+    """Acquisition pacing: trusted profit won so far this week vs the goal.
+
+    "Trusted" mirrors the settlement reconciliations: a won lot counts at its
+    stored profit unless the AI audit demoted its value, and losses count
+    against the week — the same arithmetic that priced the Sterling haul at
+    $223 guaranteed. Wins enter via the 🏆 mark (won_at), so the number is
+    only as complete as the marking; the available figure needs no marking
+    at all, it is the summed profit of live GOLD MINE lots.
+    """
+    from datetime import datetime, timedelta
+    from sqlalchemy import func
+    # Week starts Monday ~midnight Central (05:00 UTC) — the DB keeps naive
+    # UTC, and a plain UTC Monday would reset Sunday evening for the user.
+    now = datetime.now()
+    anchor = now - timedelta(hours=5)
+    week_start = (anchor - timedelta(days=anchor.weekday())).replace(
+        hour=0, minute=0, second=0, microsecond=0) + timedelta(hours=5)
+
+    rows = (db.query(models.Enrichment.profit, models.Enrichment.gold_check)
+              .join(models.Lot, models.Lot.id == models.Enrichment.lot_id)
+              .filter(models.Lot.won.is_(True),
+                      models.Lot.won_at >= week_start,
+                      models.Enrichment.profit.isnot(None))
+              .all())
+    won_profit = float(sum(p for p, check in rows if check != "demoted"))
+
+    # What's on the table right now, across open auctions: profit of lots the
+    # grader still calls GOLD MINE (post-audit, so evidence-gated).
+    available = float(
+        db.query(func.coalesce(func.sum(models.Enrichment.profit), 0))
+          .join(models.Lot, models.Lot.id == models.Enrichment.lot_id)
+          .join(models.Auction, models.Lot.auction_id == models.Auction.id)
+          .filter(models.Enrichment.roi_status == "GOLD MINE",
+                  models.Auction.closing_date.isnot(None),
+                  models.Auction.closing_date >= now)
+          .scalar())
+
+    return {"week_start": week_start.isoformat(),
+            "won_trusted_profit": round(won_profit, 2),
+            "won_count": len(rows),
+            "available_gold_profit": round(available, 2),
+            "weekly_goal_usd": _money_setting("weekly_goal_usd", DEFAULT_WEEKLY_GOAL),
+            "auction_floor_usd": _money_setting("auction_floor_usd", DEFAULT_AUCTION_FLOOR)}
 
 
 @router.post("/jobs/{job_id}/cancel")
