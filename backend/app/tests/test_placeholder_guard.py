@@ -32,6 +32,10 @@ from app.workers import enrich
     "Removal Times",
     "Welcome to our September sale!",
     "Thank you for bidding",
+    "2026 PICK UP POLICY UPDATE - PLEASE READ!!!",
+    "2026 Overview of Payment Options & Policy Changes",
+    "Updated Shipping Policy",
+    "Bidding options and schedule",
 ])
 def test_boilerplate_is_recognized(title):
     assert pricing.is_placeholder_title(title)
@@ -47,6 +51,8 @@ def test_boilerplate_is_recognized(title):
     "Sample Case Vintage Salesman Leather",
     "Terms Of Endearment DVD",
     "$120 Widget Pro 3000 Cordless Drill",
+    "1943 Payment Options Ledger Book Antique Bank",   # trailing words = item
+    "Auction Catalog 1962 Christie's Bound Volume",
     "",
     None,
 ])

@@ -160,6 +160,16 @@ _PLACEHOLDER_RE = re.compile(
     r"|(?:test|sample) +lot"
     r"|do +not +bid.*"
     r"|read +(?:before +bidding|description|terms).*"
+    # Policy announcements, optionally led by a year: "2026 PICK UP POLICY
+    # UPDATE - PLEASE READ!!!" was priced at $150 off 28 comps while the
+    # model itself noted 'no item to resell'. The tail is bounded to
+    # announcement vocabulary — "1943 Payment Options Ledger Book" is an
+    # antique, and a greedy tail would have silenced it.
+    r"|(?:\d{4} +)?(?:overview +of +)?(?:updated? +)?"
+    r"(?:pick[ -]?up|shipping|payment|bidding|auction) +"
+    r"(?:polic(?:y|ies)|options?|schedules?|updates?|changes?)"
+    r"(?: *(?:[&+]|and)? *(?:polic(?:y|ies)|options?|schedules?|updates?|changes?))*"
+    r"(?: *[-–—:]* *please +read!*)?"
     r")[\s.!*_\-]*$",
     re.IGNORECASE)
 

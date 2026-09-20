@@ -32,31 +32,42 @@ def test_explicit_provider_overrides_the_key(monkeypatch):
 
 # --- the Gemini transport ---------------------------------------------------
 
-def _fake_post(capture, text='{"ok": true}', status=200):
+def _fake_post(capture, payload=None, status=200):
     def post(url, headers=None, json=None, timeout=None):
         capture.update(url=url, headers=headers, body=json)
         req = httpx.Request("POST", url)
-        payload = {"candidates": [{"content": {"parts": [{"text": text}]}}]}
-        return httpx.Response(status, request=req, json=payload)
+        return httpx.Response(status, request=req,
+                              json=payload or {"output_text": "{}"})
     return post
 
 
-def test_generate_sends_image_prompt_and_settings(monkeypatch):
+def test_generate_speaks_the_interactions_api(monkeypatch):
     monkeypatch.setattr(config, "GEMINI_API_KEY", "g-key")
-    monkeypatch.setattr(config, "GEMINI_MODEL", "gemini-2.5-flash")
+    monkeypatch.setattr(config, "GEMINI_MODEL", "gemini-3.6-flash")
     cap = {}
-    monkeypatch.setattr(gemini.httpx, "post", _fake_post(cap, text='{"a": 1}'))
+    monkeypatch.setattr(gemini.httpx, "post",
+                        _fake_post(cap, payload={"output_text": '{"a": 1}'}))
 
     out = gemini.generate("identify this", b"\xff\xd8jpegbytes", max_tokens=400)
     assert out == '{"a": 1}'
-    assert "gemini-2.5-flash:generateContent" in cap["url"]
+    assert cap["url"].endswith("/v1beta/interactions")
     assert cap["headers"]["x-goog-api-key"] == "g-key"
-    parts = cap["body"]["contents"][0]["parts"]
-    assert "inline_data" in parts[0] and parts[1]["text"] == "identify this"
-    gen = cap["body"]["generationConfig"]
-    assert gen["maxOutputTokens"] == 400
-    assert gen["responseMimeType"] == "application/json"
-    assert gen["thinkingConfig"]["thinkingBudget"] == 0   # extraction, not pondering
+    assert cap["body"]["model"] == "gemini-3.6-flash"
+    parts = cap["body"]["input"]
+    assert parts[0] == {"type": "text", "text": "identify this"}
+    assert parts[1]["type"] == "image" and parts[1]["mime_type"] == "image/jpeg"
+    assert cap["body"]["generation_config"]["thinking_level"] == "minimal"
+
+
+def test_extract_text_handles_the_shapes_the_api_returns():
+    assert gemini._extract_text({"output_text": "hi"}) == "hi"
+    assert gemini._extract_text(
+        {"output": [{"type": "text", "text": "a"},
+                    {"type": "text", "text": "b"}]}) == "ab"
+    assert gemini._extract_text(
+        {"steps": [{"content": [{"type": "text", "text": "deep"}]}]}) == "deep"
+    with pytest.raises(ValueError):
+        gemini._extract_text({"id": "x", "usage": {}})
 
 
 def test_generate_raises_on_http_errors_so_retry_counts_it(monkeypatch):

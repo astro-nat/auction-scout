@@ -30,7 +30,9 @@ EBAY_CERT_ID = os.environ.get("EBAY_CERT_ID", "")
 # priced by one model and audited by a different one is a genuinely
 # independent second opinion.
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+# 3.6-flash: the stable everyday multimodal tier — extraction at volume.
+# Set GEMINI_MODEL=gemini-3.8-flash for the smarter, pricier flash.
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
 VISION_PROVIDER = os.environ.get("VISION_PROVIDER", "")
 
 

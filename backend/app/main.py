@@ -91,6 +91,19 @@ _MIGRATIONS = [
     r"AND lots.title ~* '^\s*(more +lots +(loading|coming|to +come|being +added)"
     r"[\s.!*_-]*|pick[ -]?up +(location|information|info|details|instructions)"
     r"[\s.!*_-]*|do +not +bid.*|(test|sample) +lot[\s.!*_-]*)$'",
+    # Second wave: policy announcements ("2026 PICK UP POLICY UPDATE -
+    # PLEASE READ!!!" carried $150 of comp value). Same idempotence.
+    r"UPDATE enrichment SET est_resale=NULL, price_low=NULL, price_high=NULL, "
+    r"comp_count=0, comps=NULL, max_bid=NULL, est_roi=NULL, profit=NULL, "
+    r"roi_status=NULL, gold_check=NULL, gold_check_note=NULL, "
+    r"price_source='placeholder title — not an item, not priced' "
+    r"FROM lots WHERE enrichment.lot_id = lots.id "
+    r"AND enrichment.est_resale IS NOT NULL "
+    r"AND lots.title ~* '^\s*(\d{4} +)?(overview +of +)?(updated? +)?"
+    r"(pick[ -]?up|shipping|payment|bidding|auction) +"
+    r"(polic(y|ies)|options?|schedules?|updates?|changes?)"
+    r"( *([&+]|and)? *(polic(y|ies)|options?|schedules?|updates?|changes?))*"
+    r"( *[-:]* *please +read!*)?[\s.!*_-]*$'",
 ]
 
 def _run_migrations() -> list[str]:
