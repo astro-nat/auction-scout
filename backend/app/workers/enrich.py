@@ -439,9 +439,12 @@ def _enrich(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
         # price at the front of the title. That beats a comp search on this
         # kind of stock — the goods are new and generic, so keyword comps
         # come back full of unrelated listings — and it costs nothing.
-        titled = pricing.price_from_title(title)
+        # Expensive claims get cross-checked though: printed MSRPs run
+        # stale or inflated, and verified_title_price takes the lower of
+        # claim and market when real money is at stake.
+        _progress(db, e, "pricing from the title (checking big claims)…")
+        titled = pricing.verified_title_price(title, e.enriched_title)
         if titled:
-            _progress(db, e, "using the retail price in the title…")
             comps = titled
         else:
             _progress(db, e, "searching eBay for comparable sales…")
@@ -1013,8 +1016,10 @@ def run_reprice(lot_db_ids: list[int], resume_job_id: str | None = None) -> None
                             lot.title or "", lot.category or "", lot.description or "")
                     lot_title = lot.title or ""
                     search_title = e.enriched_title or lot_title
-                    comps = pricing.price_from_title(lot_title)
-                    if comps:
+                    retail = pricing.retail_from_title(lot_title)
+                    if retail is not None and retail < pricing.RETAIL_VERIFY_MIN:
+                        # Cheap claim: the zero-network path stands.
+                        comps = pricing.price_from_title(lot_title)
                         # The halved retail already carries the discount, so
                         # the stale AI verdict must not be applied on top of
                         # it — a $729 shelf came back at $255 (x0.5 x0.7)
@@ -1028,12 +1033,18 @@ def run_reprice(lot_db_ids: list[int], resume_job_id: str | None = None) -> None
                         # at up to 40s each, and holding an open transaction
                         # through all of it is what starved the pool: three
                         # long jobs did this at once while every request
-                        # queued behind them.
+                        # queued behind them. Expensive retail claims take
+                        # this path too now — their market cross-check is a
+                        # comp lookup like any other.
                         db.commit()
-                        comps = pricing.lookup_comps(search_title)
+                        comps = (pricing.verified_title_price(lot_title, search_title)
+                                 if retail is not None
+                                 else pricing.lookup_comps(search_title))
                         lot = (db.query(models.Lot)
                                  .filter(models.Lot.id == lot_db_id).first())
                         e = lot.enrichment if lot else None
+                        if retail is not None and e and "verdict" not in marks:
+                            e.verdict = pricing.condition_from_title(lot_title)
                     if e is None:
                         # Deleted while we were off querying comps. Fall
                         # through to the checkpoint update rather than

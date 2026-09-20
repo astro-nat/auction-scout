@@ -13,13 +13,21 @@ from app.workers import enrich
 
 @pytest.fixture
 def no_model_calls(monkeypatch):
-    """Turn every paid path into a test failure."""
+    """Turn every paid MODEL path into a test failure.
+
+    Comp lookups are not model spend: retail claims at or above
+    RETAIL_VERIFY_MIN legitimately cross-check the market now (a "$556
+    retail" wheel with a ~$130 used market was minting false golds). Here
+    the market has no data, so every claim stands — and test_retail_verify
+    pins that CHEAP claims still skip the lookup entirely."""
     def boom(*a, **kw):
         raise AssertionError("spent money on a lot that was already priced")
     monkeypatch.setattr(enrich, "_call_text", boom)
     monkeypatch.setattr(enrich, "_call_vision", boom)
     monkeypatch.setattr(enrich, "_download_image", boom)
-    monkeypatch.setattr(pricing, "lookup_comps", boom)
+    monkeypatch.setattr(pricing, "lookup_comps", lambda *a, **k: {
+        "est_resale": None, "price_low": None, "price_high": None,
+        "comp_count": 0, "price_source": None, "comps": []})
 
 
 class _FakeDB:

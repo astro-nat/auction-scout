@@ -201,6 +201,43 @@ def price_from_title(title: str) -> Optional[dict]:
     }
 
 
+# A printed retail claim at or above this gets a market cross-check. Below
+# it, being wrong costs a few dollars and the check costs comp quota; above
+# it, an inflated sticker mints a false gold mine — a "$556 retail" racing
+# wheel whose used market is ~$130 was badged GOLD MINE at a $111 max bid.
+RETAIL_VERIFY_MIN = 150.0
+
+
+def verified_title_price(title: str, search_title: str | None = None) -> Optional[dict]:
+    """price_from_title, cross-checked against the market when the claim is
+    big enough to hurt.
+
+    Liquidation houses print MSRPs that can be stale, list-price fiction,
+    or plain wrong — the claim is a data point, not an appraisal. Cheap
+    claims pass through untouched (zero-cost pricing is the whole feature);
+    expensive ones get a comp lookup and the LOWER answer wins. No market
+    data leaves the claim standing, labeled as unchecked.
+    """
+    titled = price_from_title(title)
+    if titled is None:
+        return None
+    retail = retail_from_title(title)
+    if retail is None or retail < RETAIL_VERIFY_MIN:
+        return titled
+    market = lookup_comps(search_title or title_without_retail_prefix(title)
+                          or title)
+    if market["est_resale"] and float(market["est_resale"]) < float(titled["est_resale"]):
+        market = dict(market)
+        market["price_source"] += (
+            f" — beat the retail ${retail:g} claim "
+            f"(×{MSRP_REALIZATION:g} would say ${titled['est_resale']:g})")
+        return market
+    titled = dict(titled)
+    titled["price_source"] += (" (market-checked)" if market["est_resale"]
+                               else " (no comps to check the claim)")
+    return titled
+
+
 # Active eBay listings are ASKING prices — what sellers hope for, often for
 # new stock — while we're valuing a used lot from an auction. Realized sale
 # prices run well below asking, so discount them. Sold-price sources
