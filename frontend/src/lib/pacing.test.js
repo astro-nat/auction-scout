@@ -79,12 +79,12 @@ describe('goldBadge', () => {
 
   it('shows count and profit, no floor note when it clears', () => {
     expect(goldBadge(auction(), 200, NOW))
-      .toBe('🟢 3 gold · ~$275 potential profit')
+      .toBe('3 gold · ~$275 potential profit')
   })
 
   it('names the configured floor when measured thin', () => {
     expect(goldBadge(auction({ gold_count: 1, gold_profit: 22 }), 200, NOW))
-      .toBe('🟢 1 gold · ~$22 potential profit · under $200 floor')
+      .toBe('1 gold · ~$22 potential profit · under $200 floor')
     expect(goldBadge(auction({ gold_count: 1, gold_profit: 22 }), 300, NOW))
       .toContain('under $300 floor')
   })
@@ -92,6 +92,6 @@ describe('goldBadge', () => {
   it('drops the floor note once the auction is closed', () => {
     expect(goldBadge(auction({ gold_count: 1, gold_profit: 22,
                                closing_date: CLOSED }), 200, NOW))
-      .toBe('🟢 1 gold · ~$22 potential profit')
+      .toBe('1 gold · ~$22 potential profit')
   })
 })

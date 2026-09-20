@@ -25,6 +25,6 @@ export function underFloor(a, floor, now = new Date()) {
 
 export function goldBadge(a, floor, now = new Date()) {
   if (!(a.gold_count > 0)) return null
-  return `🟢 ${a.gold_count} gold · ~$${Number(a.gold_profit).toFixed(0)} potential profit`
+  return `${a.gold_count} gold · ~$${Number(a.gold_profit).toFixed(0)} potential profit`
     + (underFloor(a, floor, now) ? ` · under $${floor} floor` : '')
 }

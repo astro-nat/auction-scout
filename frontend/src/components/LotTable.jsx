@@ -516,7 +516,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                   title={lot.hidden ? 'Hidden — tap to bring it back' : 'Hide this lot'}
                   style={{ fontSize: 14, padding: '0 4px 0 0',
                            opacity: lot.hidden ? 1 : 0.4 }}>
-                  {lot.hidden ? '👁' : '🚫'}
+                  {lot.hidden ? 'show' : 'hide'}
                 </button>
                 <button
                   className="bare"
@@ -526,7 +526,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                   style={{ fontSize: 14, padding: '0 4px 0 0',
                            opacity: lot.won ? 1 : 0.4,
                            filter: lot.won ? undefined : 'grayscale(1)' }}>
-                  🏆
+                  won
                 </button>
                 {lot.lot_number && (
                   <span style={{ color: 'var(--muted)', fontSize: 13, marginRight: 4 }}>
@@ -537,7 +537,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                    style={lot.hidden ? { opacity: 0.5, textDecoration: 'line-through' } : undefined}>{lot.title}</a>
               </div>
               <div style={{ color: 'var(--muted)', fontSize: 12 }}>
-                {(lot.item_closed ?? lot.auction_closed) ? '⏹ closed · ' : ''}
+                {(lot.item_closed ?? lot.auction_closed) ? 'closed · ' : ''}
                 <span onClick={() => onSelectAuction?.(lot.auction_id)}
                       title="Show only this auction's items"
                       style={{ cursor: 'pointer', textDecoration: 'underline dotted' }}>
@@ -550,7 +550,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', fontSize: 14, margin: '6px 0' }}>
                 <span style={closesIn(lot.closes_at, now).urgent
                              ? { color: 'var(--danger)', fontWeight: 700 } : undefined}>
-                  ⏱ {closesIn(lot.closes_at, now).text}
+                  closes {closesIn(lot.closes_at, now).text}
                 </span>
                 <span>Bid {money(lot.current_bid)} / {money(lot.next_bid)}</span>
                 <span>Cost {money(lot.est_cost)}</span>
@@ -575,14 +575,14 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                 {e.auth_required && (
                   <span className="badge bolo"
                         title="Luxury-brand match — resale value depends on authentication; don't trust the comps until verified">
-                    ⚠️ authenticate first
+                    authenticate first
                   </span>
                 )}
                 {e.verdict && (
                   <span className="badge"
                         title={e.gold_check_note || undefined}>
-                    {gold ? (e.gold_check === 'confirmed' ? '🟢✓' : '🟢')
-                      : e.roi_status === 'PASS' ? '🔴' : ''} {e.verdict}
+                    {gold ? (e.gold_check === 'confirmed' ? 'GOLD ✓' : 'GOLD')
+                      : ''} {e.verdict}
                   </span>
                 )}
                 <span className="badge">
@@ -726,7 +726,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                     : 'Hide this lot — it disappears from your items until you unhide it (Show hidden checkbox)'}
                   style={{ fontSize: 13, padding: '0 4px 0 0',
                            opacity: lot.hidden ? 1 : 0.4 }}>
-                  {lot.hidden ? '👁' : '🚫'}
+                  {lot.hidden ? 'show' : 'hide'}
                 </button>
                 <button
                   className="bare"
@@ -737,7 +737,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                   style={{ fontSize: 13, padding: '0 4px 0 0',
                            opacity: lot.won ? 1 : 0.4,
                            filter: lot.won ? undefined : 'grayscale(1)' }}>
-                  🏆
+                  won
                 </button>
                 {e.bolo_brand && (
                   <span style={{ cursor: 'help', marginRight: 4 }}
@@ -766,7 +766,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                 )}
               </td>
               <td style={{ ...cell, fontSize: 12, maxWidth: 140 }}>
-                {(lot.item_closed ?? lot.auction_closed) && <div><strong>⏹ closed</strong></div>}
+                {(lot.item_closed ?? lot.auction_closed) && <div><strong>closed</strong></div>}
                 <span onClick={() => onSelectAuction?.(lot.auction_id)}
                       title="Show only this auction's items"
                       style={{ cursor: 'pointer', textDecoration: 'underline dotted' }}>
@@ -835,8 +835,8 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                       ? `AI demoted this gold — ${e.gold_check_note || 'value judged implausible'}`
                       : undefined}
                   style={e.gold_check ? { cursor: 'help' } : undefined}>
-                  {gold ? (e.gold_check === 'confirmed' ? '🟢✓' : '🟢')
-                    : e.roi_status === 'PASS' ? '🔴' : ''}
+                  {gold ? (e.gold_check === 'confirmed' ? 'GOLD ✓' : 'GOLD')
+                    : ''}
                 </span>{' '}
                 <EditableCell
                   display={e.verdict ?? '—'}

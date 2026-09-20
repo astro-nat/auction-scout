@@ -124,7 +124,7 @@ export default function StatusBar({ onQuiet }) {
           <div key={l.key} style={{ marginBottom: lines.length > 1 ? 6 : 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               {/* A warning is not progress — no spinner, and it says so. */}
-              {l.warn ? <span aria-hidden="true">⚠</span> : <span className="spinner" />}
+              {l.warn ? <span aria-hidden="true">!</span> : <span className="spinner" />}
               <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis',
                              whiteSpace: 'nowrap',
                              color: l.warn ? 'var(--warn)' : undefined,

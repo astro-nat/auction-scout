@@ -621,12 +621,12 @@ def _finalize(title: str, prices: list[float], source: str, result: dict,
         spread = high / low
         cap_mult = 2.5 if spread <= 5 else (1.5 if spread <= 10 else 1.0)
         median = min(median, round(cap_mult * low, 2))
-        source += " ⚠ variance-capped"
+        source += " (variance-capped)"
 
     # Generic-title single-comp ceiling: one pricey comp + vague title = bad match
     if len(prices) == 1 and median > 100 and not _SPECIFIC_RE.search(title):
         median = low
-        source += " ⚠ generic-title single-comp"
+        source += " (generic-title single-comp)"
 
     if realization != 1.0:
         median = round(median * realization, 2)

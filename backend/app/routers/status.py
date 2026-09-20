@@ -140,7 +140,7 @@ def week_stats(db: Session = Depends(get_db)):
     "Trusted" mirrors the settlement reconciliations: a won lot counts at its
     stored profit unless the AI audit demoted its value, and losses count
     against the week — the same arithmetic that priced the Sterling haul at
-    $223 guaranteed. Wins enter via the 🏆 mark (won_at), so the number is
+    $223 guaranteed. Wins enter via the Won mark (won_at), so the number is
     only as complete as the marking; the available figure needs no marking
     at all, it is the summed profit of live GOLD MINE lots.
     """

@@ -12,7 +12,7 @@ router = APIRouter(prefix="/lots", tags=["enrichment"])
 
 
 def _not_hidden():
-    """Lots the user 🚫-dismissed never earn another cent or comp lookup —
+    """Lots the user hide-dismissed never earn another cent or comp lookup —
     every bulk path filters on this. Unhiding puts a lot back in scope."""
     return or_(models.Lot.hidden.is_(False), models.Lot.hidden.is_(None))
 

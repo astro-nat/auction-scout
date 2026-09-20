@@ -50,7 +50,7 @@ export default function App() {
   })
   const [hideUnshippable, setHideUnshippable] = useState(true)
   const [showHiddenLots, setShowHiddenLots] = useState(false)
-  // Show only lots marked won (🏆) — the resale-inventory view. Won lots
+  // Show only lots marked won — the resale-inventory view. Won lots
   // are always exempt from "Hide closed": winning is what closes a lot.
   const [wonOnly, setWonOnly] = useState(false)
   const [importedRows, setImportedRows] = useState({})
@@ -292,7 +292,7 @@ They're listed below — use "Enrich" to price them.`)
       const msg = `Permanently delete ${peek.lots} items from closed auctions?\n\n`
         + `Their enrichment results (the AI calls you paid for) are deleted `
         + `with them. This can't be undone.\n\n`
-        + `Lots marked watched (★) are kept, and lots marked won (🏆) are `
+        + `Lots marked watched are kept, and lots marked won are `
         + `kept for 7 days after marking — mark anything you won before `
         + `flushing.`
       if (!window.confirm(msg)) return
@@ -351,7 +351,7 @@ They're listed below — use "Enrich" to price them.`)
     if (hard > 0 && !hideHardShip) {
       // Enriching a sofa costs the same as enriching a Rolex and almost never
       // pays — make that explicit before the money is spent.
-      msg = `⚠ ${hard} of these ${todo} lots are HARD to ship (furniture, `
+      msg = `Warning: ${hard} of these ${todo} lots are HARD to ship (furniture, `
           + `appliances, pickup-only). They cost the same to enrich and rarely `
           + `clear your ROI bar.
 
@@ -431,11 +431,11 @@ Skipping ${hard} HARD-to-ship lots.`
   // full policy sentence.
   function shipBadge(a) {
     if (a.ship_cost_estimate != null) {
-      return { text: `📦 ~$${Math.round(a.ship_cost_estimate)}/item ship`, tip: a.ship_summary }
+      return { text: `~$${Math.round(a.ship_cost_estimate)}/item ship`, tip: a.ship_summary }
     }
     if (a.ship_summary) {
       const noShip = /pickup only|no shipping/i.test(a.ship_summary)
-      return { text: noShip ? '🚫 no ship' : '📦 ship: see terms', tip: a.ship_summary }
+      return { text: noShip ? 'no ship' : 'ship: see terms', tip: a.ship_summary }
     }
     return null
   }
@@ -575,8 +575,8 @@ Skipping ${hard} HARD-to-ship lots.`
   const watchedAuctions = notImported.filter((a) => a.favorite)
   const discoveredAuctions = notImported.filter((a) => !a.favorite)
   const auctionSections = [
-    ...(importedAuctions.length ? [{ key: 'imported', label: `📥 Imported (${importedAuctions.length})`, rows: importedAuctions }] : []),
-    ...(watchedAuctions.length ? [{ key: 'watched', label: `⭐ Watched houses (${watchedAuctions.length})`, rows: watchedAuctions }] : []),
+    ...(importedAuctions.length ? [{ key: 'imported', label: `Imported (${importedAuctions.length})`, rows: importedAuctions }] : []),
+    ...(watchedAuctions.length ? [{ key: 'watched', label: `★ Watched houses (${watchedAuctions.length})`, rows: watchedAuctions }] : []),
     ...(discoveredAuctions.length ? [{ key: 'discovered', label: (importedAuctions.length || watchedAuctions.length) ? `Discovered (${discoveredAuctions.length})` : null, rows: discoveredAuctions }] : []),
   ]
   // A section only collapses when it has a header to click — the lone
@@ -617,7 +617,7 @@ Skipping ${hard} HARD-to-ship lots.`
         if (l.won) return true
         // Lots the user just enriched/inspected are exempt from the hide
         // rules for a while — a fresh result that instantly trips a filter
-        // vanishes before it can be read. (The manual 🚫 hide still wins.)
+        // vanishes before it can be read. (The manual hide still wins.)
         if (touchedRef.current[l.lot_id] &&
             Date.now() - touchedRef.current[l.lot_id] < 15 * 60 * 1000) return true
         if (hideLowValue && isConfirmedLowValue(l)) return false
@@ -639,7 +639,7 @@ Skipping ${hard} HARD-to-ship lots.`
                     maxWidth: 1500, margin: '0 auto' }}>
       <h1 style={{ fontSize: isMobile ? 22 : 26, margin: '0 0 2px',
                    display: 'flex', alignItems: 'baseline', gap: 10 }}>
-        🔨 AuctionScout
+        AuctionScout
         {!isMobile && (
           <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--muted)',
                          letterSpacing: 0 }}>
@@ -668,7 +668,7 @@ Skipping ${hard} HARD-to-ship lots.`
       {view === 'auctions' && (
       <section style={{ marginBottom: '1.5rem' }}>
         {/* Acquisition pacing: is this week on track, and how much trusted
-            profit is still on the board. Wins enter via the 🏆 mark. */}
+            profit is still on the board. Wins enter via the Won mark. */}
         {weekStats && (() => {
           const goal = Number(weekStats.weekly_goal_usd)
           const won = Number(weekStats.won_trusted_profit)
@@ -687,7 +687,7 @@ Skipping ${hard} HARD-to-ship lots.`
                     style={{ width: 52, fontSize: 14, fontWeight: 700, padding: '0 2px' }}
                   /> goal</strong>
                 <span style={{ color: 'var(--muted)' }}>
-                  {weekStats.won_count ? `${weekStats.won_count} wins marked 🏆` : 'no wins marked 🏆 yet'}
+                  {weekStats.won_count ? `${weekStats.won_count} marked won` : 'nothing marked won yet'}
                   {' · '}~${avail.toFixed(0)} still on the board
                 </span>
                 <label style={{ marginLeft: 'auto', color: 'var(--muted)', fontSize: 13,
@@ -798,7 +798,7 @@ Skipping ${hard} HARD-to-ship lots.`
             <details className="picker" style={{ position: 'relative' }}>
               <summary style={{ fontSize: 13 }}
                        title="Auctions you've forgotten. Scans skip these — restore one to see it again.">
-                🚫 Forgotten ({dismissedList.length}) ▾
+                Forgotten ({dismissedList.length}) ▾
               </summary>
               <div className="panel">
                 {dismissedList.map((d) => (
@@ -825,7 +825,6 @@ Skipping ${hard} HARD-to-ship lots.`
         </form>
         {(importedAuctions.length + discoveredAuctions.length) === 0 && !busy && (
           <div className="empty-state" style={{ marginTop: '0.75rem' }}>
-            <div className="big">🔎</div>
             <div><strong>No auctions on screen yet.</strong></div>
             <div style={{ marginTop: 4 }}>
               Pick a category or radius above and press <strong>Scan auctions</strong> to
@@ -871,7 +870,7 @@ Skipping ${hard} HARD-to-ship lots.`
                       opacity: a.auctioneer_id ? 1 : 0.3,
                       filter: a.favorite ? 'none' : 'grayscale(1)',
                     }}>
-                    {a.favorite ? '⭐' : '☆'}
+                    {a.favorite ? '★' : '☆'}
                   </button>
                   <a href={a.source_url} target="_blank" rel="noreferrer">{a.name}</a>
                   <button
@@ -886,7 +885,7 @@ Skipping ${hard} HARD-to-ship lots.`
                   </button>
                 </div>
                 <div style={{ fontSize: 13, color: 'var(--muted)', margin: '4px 0' }}>
-                  {isClosed(a) ? '⏹ CLOSED · ' : ''}{a.city}, {a.state} · {a.lot_count ?? '—'} lots
+                  {isClosed(a) ? 'CLOSED · ' : ''}{a.city}, {a.state} · {a.lot_count ?? '—'} lots
                   · closes {a.closing_date ? parseUtc(a.closing_date).toLocaleDateString() : '—'}
                   {a.buyer_premium_mult ? ` · ${Math.round((a.buyer_premium_mult - 1) * 100)}% premium` : ''}
                   {hasCategoryCount(a)
@@ -972,7 +971,7 @@ Skipping ${hard} HARD-to-ship lots.`
                     <div style={{ fontSize: 11, color: 'var(--muted)' }}>{auctionState(a).text}</div>
                   </td>
                   <td style={{ paddingRight: 12 }}>
-                    {isClosed(a) && <strong>⏹ CLOSED<br /></strong>}
+                    {isClosed(a) && <strong>CLOSED<br /></strong>}
                     {a.city}, {a.state}{fulfillment(a) ? ` (${fulfillment(a)})` : ''}
                     {shipBadge(a) && (
                       <div style={{ fontSize: 11, color: 'var(--muted)' }}
@@ -1061,7 +1060,7 @@ Skipping ${hard} HARD-to-ship lots.`
                       <div style={{ color: 'var(--muted)', fontSize: 12 }}>
                         {[a.city, a.state].filter(Boolean).join(', ') || '—'}
                         {a.lot_count != null ? ` · ${a.lots_imported} of ${a.lot_count} imported` : ''}
-                        {a.gold_count ? ` · 🟢 ${a.gold_count} gold` : ''}
+                        {a.gold_count ? ` · ${a.gold_count} gold` : ''}
                       </div>
                     </span>
                   </label>
@@ -1081,7 +1080,7 @@ Skipping ${hard} HARD-to-ship lots.`
                       disabled={!!busy}
                       title={`"${a.name}" has ${a.lot_count} lots on HiBid but only ${a.lots_imported} in the database — import the rest (free, no AI calls)`}
                       style={{ padding: 8, fontSize: 14 }}>
-                📥 Import {a.lot_count - a.lots_imported} missing
+                Import {a.lot_count - a.lots_imported} missing
                 {selectedAuctions.length > 1 ? ` · ${a.name.length > 22 ? `${a.name.slice(0, 22)}…` : a.name}` : ''}
               </button>
             ))}
@@ -1189,7 +1188,7 @@ Skipping ${hard} HARD-to-ship lots.`
             /> Hide closed
           </label>
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
-                 title="Lots you hid with the 🚫 button — check to see and unhide them">
+                 title="Lots you hid with the hide button — check to see and unhide them">
             <input
               type="checkbox"
               checked={showHiddenLots}
@@ -1197,12 +1196,12 @@ Skipping ${hard} HARD-to-ship lots.`
             /> Show hidden ({lots.filter((l) => l.hidden).length})
           </label>
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
-                 title="Only lots you marked won with the 🏆 button — your resale inventory">
+                 title="Only lots you marked won — your resale inventory">
             <input
               type="checkbox"
               checked={wonOnly}
               onChange={(ev) => setWonOnly(ev.target.checked)}
-            /> 🏆 Won only ({lots.filter((l) => l.won).length})
+            /> Won only ({lots.filter((l) => l.won).length})
           </label>
           {(hideLowValue || hideHardShip || hideClosed || !showHiddenLots) && hiddenCount > 0 && (
             <span style={{ color: 'var(--muted)', whiteSpace: 'nowrap' }}>
@@ -1258,7 +1257,6 @@ Skipping ${hard} HARD-to-ship lots.`
           </div>
         ) : (
           <div className="empty-state">
-            <div className="big">📦</div>
             <div><strong>Nothing imported yet.</strong></div>
             <div style={{ marginTop: 4 }}>
               Go to <strong>Auctions</strong>, find an auction, and press{' '}
