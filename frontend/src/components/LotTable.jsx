@@ -1,6 +1,49 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { enrichLot, inspectLot, fetchLot, patchEnrichment, enrichBatch, setWatch, setHidden, setWon, alertOnce, parseUtc } from '../api'
+import { ebaySoldUrl, kindLabel } from '../lib/comps'
 import useMediaQuery from '../useMediaQuery'
+
+// The homework behind a resale number: the comp records the pricer actually
+// used (raw observed prices — never scaled to match the conclusion), plus a
+// one-tap eBay sold-listings search so distrust costs thirty seconds, not a
+// Google detour. Rows enriched before comps were stored still get the link.
+function CompsPeek({ lot, e }) {
+  const search = ebaySoldUrl(e.enriched_title || lot.title)
+  const comps = e.comps || []
+  if (!search && !comps.length) return null
+  return (
+    <details style={{ marginTop: 2 }}>
+      <summary style={{ color: 'var(--muted)', fontSize: 11, cursor: 'pointer' }}>
+        evidence{comps.length ? ` (${comps.length})` : ''}
+      </summary>
+      <div style={{ fontSize: 11, textAlign: 'left', maxWidth: 360, padding: '4px 0' }}>
+        {e.price_source && (
+          <div style={{ color: 'var(--muted)', marginBottom: 3 }}>{e.price_source}</div>
+        )}
+        {comps.map((c, i) => (
+          <div key={i} style={{ marginBottom: 2 }}>
+            ${Number(c.price).toFixed(2)} {kindLabel(c.kind)}
+            {c.date ? ` ${String(c.date).slice(0, 10)}` : ''}
+            {' — '}
+            {c.url
+              ? <a href={c.url} target="_blank" rel="noreferrer">{c.title}</a>
+              : c.title}
+          </div>
+        ))}
+        {!comps.length && (
+          <div style={{ color: 'var(--muted)', marginBottom: 2 }}>
+            no comp records stored (priced before they were kept)
+          </div>
+        )}
+        {search && (
+          <a href={search} target="_blank" rel="noreferrer">
+            check eBay sold listings yourself
+          </a>
+        )}
+      </div>
+    </details>
+  )
+}
 
 // Cell chrome (padding, borders) lives in index.css under .data-table;
 // this only carries per-cell overrides now.
@@ -567,6 +610,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                   </span>
                 )}
               </div>
+              {e.est_resale != null && <CompsPeek lot={lot} e={e} />}
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
                 <span className="badge">{lot.logistics_ease}</span>
                 {e.bolo_brand && (
@@ -811,6 +855,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                     house {houseEstimate(lot)}
                   </div>
                 )}
+                {e.est_resale != null && <CompsPeek lot={lot} e={e} />}
               </td>
               <td className="num" style={cell}>{money(e.max_bid)}</td>
               <td className="num" title={roiTooltip(lot, e)}

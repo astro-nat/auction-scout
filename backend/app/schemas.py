@@ -26,6 +26,8 @@ class EnrichmentOut(BaseModel):
     price_high: Optional[Decimal] = None
     comp_count: int = 0
     price_source: Optional[str] = None
+    # The evidence rows behind est_resale — [{price, title, url, date, kind}]
+    comps: Optional[list] = None
     max_bid: Optional[Decimal] = None
     all_in_cost: Optional[Decimal] = None
     est_roi: Optional[float] = None

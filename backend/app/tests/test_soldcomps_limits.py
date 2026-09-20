@@ -65,7 +65,7 @@ def test_a_rate_limited_call_is_retried_not_abandoned(monkeypatch):
     monkeypatch.setattr(pricing.httpx, "Client", FakeClient)
     out = pricing._soldcomps_lookup("widget")
     assert len(calls) == 3, "gave up instead of retrying"
-    assert out == [(40.0, "widget")]
+    assert [(c["price"], c["title"]) for c in out] == [(40.0, "widget")]
 
 
 def test_giving_up_returns_empty_rather_than_raising(monkeypatch):
@@ -188,7 +188,8 @@ def test_a_short_retry_after_is_still_retried(monkeypatch):
     FakeClient, calls = _client([_Resp(429, retry_after="2"), _Resp(200, sold)])
     monkeypatch.setattr(pricing.httpx, "Client", FakeClient)
 
-    assert pricing._soldcomps_lookup("widget") == [(12.0, "widget")]
+    out = pricing._soldcomps_lookup("widget")
+    assert [(c["price"], c["title"]) for c in out] == [(12.0, "widget")]
     assert len(calls) == 2
 
 

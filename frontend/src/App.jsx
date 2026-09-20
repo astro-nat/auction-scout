@@ -754,6 +754,7 @@ Skipping ${hard} HARD-to-ship lots.`
           />
           <select value={scan.radius_miles} onChange={(ev) => setScanField('radius_miles', ev.target.value)}
                   style={{ flex: isMobile ? '1 1 45%' : '0 1 auto', padding: 6, fontSize: 14, minWidth: 100 }}>
+            <option value={5}>5 miles</option>
             <option value={25}>25 miles</option>
             <option value={50}>50 miles</option>
             <option value={100}>100 miles</option>

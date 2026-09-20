@@ -154,6 +154,8 @@ def price_from_title(title: str) -> Optional[dict]:
         "price_high": round(est * 1.25, 2),
         "comp_count": 1,
         "price_source": f"retail ${retail:g} in title ×{MSRP_REALIZATION:g}",
+        "comps": [{"price": retail, "title": "retail price printed in the lot title",
+                   "url": None, "date": None, "kind": "retail"}],
     }
 
 
@@ -337,6 +339,16 @@ def _iqr_filter(prices: list[float]) -> list[float]:
     q1, _, q3 = statistics.quantiles(prices, n=4)
     fence = 1.5 * (q3 - q1)
     return [p for p in prices if q1 - fence <= p <= q3 + fence]
+
+
+def _iqr_records(comps: list[dict]) -> list[dict]:
+    """_iqr_filter over comp records — same fences, but each surviving price
+    keeps its evidence (title, url, date) attached for display."""
+    if len(comps) < 4:
+        return comps
+    q1, _, q3 = statistics.quantiles([c["price"] for c in comps], n=4)
+    fence = 1.5 * (q3 - q1)
+    return [c for c in comps if q1 - fence <= c["price"] <= q3 + fence]
 
 
 # ---------------------------------------------------------------- comp sources
@@ -526,7 +538,16 @@ def _soldcomps_lookup(query: str, count: int = 120) -> list[tuple[float, str]]:
             except ValueError:
                 continue
             if _PRICE_MIN < p < _PRICE_MAX:
-                out.append((p, item.get("title") or ""))
+                # Full records, not bare prices: the comps ARE the evidence,
+                # and showing them is what saves the user a manual re-search.
+                # url/date field names are defensive — the API's item shape
+                # isn't contractual, and a missing link is just an unlinked row.
+                out.append({"price": p, "title": item.get("title") or "",
+                            "url": item.get("link") or item.get("url")
+                                   or item.get("itemUrl"),
+                            "date": item.get("soldDate") or item.get("dateSold")
+                                    or item.get("date"),
+                            "kind": "sold"})
         # Cached even when empty: "nothing sold matching this" is an answer,
         # and re-asking it per variant is what built the burst.
         _cache_put(key, out)
@@ -535,7 +556,7 @@ def _soldcomps_lookup(query: str, count: int = 120) -> list[tuple[float, str]]:
     logger.warning("SoldComps gave up on %r (last status %s)", query, last_status)
     return []
 
-def _active_lookup(query: str) -> list[tuple[float, str]]:
+def _active_lookup(query: str) -> list[dict]:
     """eBay Browse active fixed-price listings — the always-available fallback."""
     out = []
     for item in ebay.search_active(query, limit=20):
@@ -544,7 +565,9 @@ def _active_lookup(query: str) -> list[tuple[float, str]]:
         except (ValueError, TypeError):
             continue
         if p > _PRICE_MIN:
-            out.append((p, item.get("title") or ""))
+            out.append({"price": p, "title": item.get("title") or "",
+                        "url": item.get("itemWebUrl"), "date": None,
+                        "kind": "asking"})
     return out
 
 
@@ -557,7 +580,7 @@ def lookup_comps(title: str) -> dict:
     est_resale is None when nothing priced.
     """
     result = {"est_resale": None, "price_low": None, "price_high": None,
-              "comp_count": 0, "price_source": None}
+              "comp_count": 0, "price_source": None, "comps": []}
     variants = query_variants(title)
     if not variants:
         return result
@@ -568,14 +591,14 @@ def lookup_comps(title: str) -> dict:
         source = "sold (SoldComps)"
         if not comps:
             continue
-        comps = [(p, t) for p, t in comps
-                 if _relevant(query, t) and _quantity_match(title, t)
-                 and _model_match(query, t) and _audience_match(title, t)]
-        prices = _iqr_filter([p for p, _ in comps])
-        if len(prices) >= _MIN_FULL_COMPS:
-            return _finalize(title, prices, source, result)
-        if prices and best_partial is None:
-            best_partial = (prices, f"sold (thin comps · {query})")
+        comps = [c for c in comps
+                 if _relevant(query, c["title"]) and _quantity_match(title, c["title"])
+                 and _model_match(query, c["title"]) and _audience_match(title, c["title"])]
+        kept = _iqr_records(comps)
+        if len(kept) >= _MIN_FULL_COMPS:
+            return _finalize(title, kept, source, result)
+        if kept and best_partial is None:
+            best_partial = (kept, f"sold (thin comps · {query})")
 
     if best_partial:
         return _finalize(title, best_partial[0], best_partial[1], result)
@@ -589,25 +612,31 @@ def lookup_comps(title: str) -> dict:
     best = None
     for query in variants:
         comps = _active_lookup(query)
-        comps = [(p, t) for p, t in comps
-                 if _relevant(query, t) and _quantity_match(title, t)
-                 and _model_match(title, t) and _audience_match(title, t)]
-        prices = _iqr_filter([p for p, _ in comps])
-        if not prices:
+        comps = [c for c in comps
+                 if _relevant(query, c["title"]) and _quantity_match(title, c["title"])
+                 and _model_match(title, c["title"]) and _audience_match(title, c["title"])]
+        kept = _iqr_records(comps)
+        if not kept:
             continue
-        if len(prices) >= _MIN_FULL_COMPS:
-            return _finalize(title, prices, "active (eBay)", result,
+        if len(kept) >= _MIN_FULL_COMPS:
+            return _finalize(title, kept, "active (eBay)", result,
                              realization=ACTIVE_REALIZATION)
-        if best is None or len(prices) > len(best):
-            best = prices
+        if best is None or len(kept) > len(best):
+            best = kept
     if best:
         return _finalize(title, best, "active (eBay)", result,
                          realization=ACTIVE_REALIZATION)
     return result
 
 
-def _finalize(title: str, prices: list[float], source: str, result: dict,
+# How many comp records survive into the enrichment row. Enough to judge
+# the evidence at a glance; the row is display data, not an archive.
+_COMPS_STORED = 15
+
+
+def _finalize(title: str, comps: list[dict], source: str, result: dict,
               realization: float = 1.0) -> dict:
+    prices = [c["price"] for c in comps]
     median = round(statistics.median(prices), 2)
     if len(prices) >= 4:
         q1, _, q3 = statistics.quantiles(prices, n=4)
@@ -634,7 +663,17 @@ def _finalize(title: str, prices: list[float], source: str, result: dict,
         high = round(high * realization, 2)
         source += f" ×{realization:g} asking→sold"
 
+    # The stored comps are RAW observations — no realization scaling, no
+    # variance caps. est_resale is the conclusion; these are the evidence,
+    # and evidence that's been adjusted to match the conclusion proves
+    # nothing. price_source records every adjustment applied.
     result.update(est_resale=median, price_low=min(low, median),
                   price_high=max(high, median), comp_count=len(prices),
-                  price_source=source)
+                  price_source=source,
+                  comps=[{"price": round(c["price"], 2),
+                          "title": (c["title"] or "")[:120],
+                          "url": c.get("url"), "date": c.get("date"),
+                          "kind": c.get("kind", "sold")}
+                         for c in sorted(comps, key=lambda c: -c["price"])
+                         [:_COMPS_STORED]])
     return result

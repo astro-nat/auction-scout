@@ -435,6 +435,9 @@ def _enrich(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
                         if comps["price_high"] else None)
         e.comp_count = comps["comp_count"]
         e.price_source = comps["price_source"]
+        # .get: the retail-in-title path predates the comps key on some
+        # builders — missing simply means no evidence rows to show.
+        e.comps = comps.get("comps") or None
         if mult != 1.0 and comps["price_source"]:
             e.price_source += f" ×{mult:g} condition"
         _apply_estimate_cap(lot, e)
@@ -1023,6 +1026,7 @@ def run_reprice(lot_db_ids: list[int], resume_job_id: str | None = None) -> None
                                         if comps["price_high"] else None)
                         e.comp_count = comps["comp_count"]
                         e.price_source = comps["price_source"]
+                        e.comps = comps.get("comps") or None
                         if mult != 1.0 and comps["price_source"]:
                             e.price_source += f" ×{mult:g} condition"
                         _apply_estimate_cap(lot, e)

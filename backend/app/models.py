@@ -135,6 +135,11 @@ class Enrichment(Base):
     price_high = Column(Numeric)
     comp_count = Column(Integer, default=0)
     price_source = Column(String)
+    # The evidence behind est_resale: the comp records that survived
+    # filtering, as [{price, title, url, date, kind}] — raw observed prices,
+    # never scaled. NULL on rows enriched before this column existed; the UI
+    # falls back to a sold-listings search link.
+    comps = Column(JSONB)
 
     # --- ROI verdict ---
     max_bid = Column(Numeric)          # highest hammer price that still hits target ROI
