@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { enrichLot, inspectLot, fetchLot, patchEnrichment, enrichBatch, setWatch, setHidden, setWon, alertOnce, parseUtc } from '../api'
-import { ebaySoldUrl, kindLabel } from '../lib/comps'
+import { compRows, ebaySoldUrl } from '../lib/comps'
 import useMediaQuery from '../useMediaQuery'
 
 // The homework behind a resale number: the comp records the pricer actually
@@ -9,28 +9,27 @@ import useMediaQuery from '../useMediaQuery'
 // Google detour. Rows enriched before comps were stored still get the link.
 function CompsPeek({ lot, e }) {
   const search = ebaySoldUrl(e.enriched_title || lot.title)
-  const comps = e.comps || []
-  if (!search && !comps.length) return null
+  const rows = compRows(e.comps)
+  if (!search && !rows.length) return null
   return (
     <details style={{ marginTop: 2 }}>
       <summary style={{ color: 'var(--muted)', fontSize: 11, cursor: 'pointer' }}>
-        evidence{comps.length ? ` (${comps.length})` : ''}
+        evidence{rows.length ? ` (${rows.length})` : ''}
       </summary>
       <div style={{ fontSize: 11, textAlign: 'left', maxWidth: 360, padding: '4px 0' }}>
         {e.price_source && (
           <div style={{ color: 'var(--muted)', marginBottom: 3 }}>{e.price_source}</div>
         )}
-        {comps.map((c, i) => (
+        {rows.map((r, i) => (
           <div key={i} style={{ marginBottom: 2 }}>
-            ${Number(c.price).toFixed(2)} {kindLabel(c.kind)}
-            {c.date ? ` ${String(c.date).slice(0, 10)}` : ''}
+            {r.label}
             {' — '}
-            {c.url
-              ? <a href={c.url} target="_blank" rel="noreferrer">{c.title}</a>
-              : c.title}
+            {r.url
+              ? <a href={r.url} target="_blank" rel="noreferrer">{r.title}</a>
+              : r.title}
           </div>
         ))}
-        {!comps.length && (
+        {!rows.length && (
           <div style={{ color: 'var(--muted)', marginBottom: 2 }}>
             no comp records stored (priced before they were kept)
           </div>

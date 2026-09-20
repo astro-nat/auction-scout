@@ -18,3 +18,15 @@ export function kindLabel(kind) {
   if (kind === 'retail') return 'retail'
   return 'sold'
 }
+
+// Render-ready evidence rows, so the panel component is a dumb map and the
+// formatting (price, provenance, date truncation, link fallback) is
+// testable without a DOM.
+export function compRows(comps) {
+  return (comps || []).map((c) => ({
+    label: `$${Number(c.price).toFixed(2)} ${kindLabel(c.kind)}`
+      + (c.date ? ` ${String(c.date).slice(0, 10)}` : ''),
+    title: c.title || '',
+    url: c.url || null,
+  }))
+}

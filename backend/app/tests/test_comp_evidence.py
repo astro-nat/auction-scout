@@ -72,6 +72,46 @@ def test_retail_in_title_documents_itself():
     assert r["comps"][0]["price"] == 120.0
 
 
+def test_thin_comps_partial_still_carries_its_evidence(monkeypatch):
+    """The thin-comps path (fewer than the full-comp minimum) prices off a
+    partial set — the user distrusts exactly these, so the evidence rows
+    matter most here."""
+    records = [_sold(40.0, "rare widget", "https://ebay.com/itm/9", "2026-09-05")]
+    monkeypatch.setattr(pricing, "_soldcomps_lookup", lambda q, count=120: list(records))
+    monkeypatch.setattr(pricing, "_active_lookup", lambda q: [])
+    monkeypatch.setattr(pricing, "query_variants", lambda t: ["rare widget"])
+    monkeypatch.setattr(pricing, "_relevant", lambda q, t: True)
+
+    r = pricing.lookup_comps("rare widget")
+    assert "thin comps" in r["price_source"]
+    assert [c["url"] for c in r["comps"]] == ["https://ebay.com/itm/9"]
+
+
+def test_record_fences_match_the_price_fences():
+    """_iqr_records must keep exactly the prices _iqr_filter keeps — if the
+    two ever disagree, the stored evidence stops matching the estimate."""
+    for prices in ([40.0], [40, 41, 42], [40, 41, 42, 43, 44, 400],
+                   [5, 5, 5, 5, 250], [10, 20, 30, 40, 50, 60, 70]):
+        records = [_sold(float(p), f"w {p}") for p in prices]
+        kept = sorted(c["price"] for c in pricing._iqr_records(records))
+        assert kept == sorted(pricing._iqr_filter([float(p) for p in prices]))
+
+
+def test_variance_cap_shrinks_the_estimate_not_the_evidence(monkeypatch):
+    """A wild spread caps the median, but the comps that showed the spread
+    stay on display — they are WHY the cap fired."""
+    records = [_sold(float(p), f"widget {p}") for p in (10, 11, 80, 90, 100)]
+    monkeypatch.setattr(pricing, "_soldcomps_lookup", lambda q, count=120: list(records))
+    monkeypatch.setattr(pricing, "query_variants", lambda t: ["widget"])
+    monkeypatch.setattr(pricing, "_relevant", lambda q, t: True)
+
+    r = pricing.lookup_comps("widget")
+    assert "(variance-capped)" in r["price_source"]
+    assert r["est_resale"] < 80                    # median clamped hard
+    assert len(r["comps"]) == 5                    # evidence intact
+    assert max(c["price"] for c in r["comps"]) == 100.0
+
+
 def test_no_comps_means_an_empty_list_not_a_missing_key(monkeypatch):
     monkeypatch.setattr(pricing, "_soldcomps_lookup", lambda q, count=120: [])
     monkeypatch.setattr(pricing, "_active_lookup", lambda q: [])

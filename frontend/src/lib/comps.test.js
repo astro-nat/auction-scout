@@ -2,7 +2,7 @@
 // nothing.
 import { describe, expect, it } from 'vitest'
 
-import { ebaySoldUrl, kindLabel } from './comps'
+import { compRows, ebaySoldUrl, kindLabel } from './comps'
 
 describe('ebaySoldUrl', () => {
   it('builds a completed+sold search for the title', () => {
@@ -30,5 +30,32 @@ describe('kindLabel', () => {
     expect(kindLabel('asking')).toBe('asking')
     expect(kindLabel('retail')).toBe('retail')
     expect(kindLabel(undefined)).toBe('sold')   // legacy records carry no kind
+  })
+})
+
+describe('compRows', () => {
+  it('formats price, provenance and a truncated date into the label', () => {
+    const [row] = compRows([{ price: 45, title: 'Widget mint',
+                              url: 'https://ebay.com/itm/2',
+                              date: '2026-08-20T14:03:00Z', kind: 'sold' }])
+    expect(row.label).toBe('$45.00 sold 2026-08-20')   // datetime cut to date
+    expect(row.title).toBe('Widget mint')
+    expect(row.url).toBe('https://ebay.com/itm/2')
+  })
+
+  it('omits the date when there is none and nulls a missing link', () => {
+    const [row] = compRows([{ price: 42.5, title: 'Widget boxed', kind: 'asking' }])
+    expect(row.label).toBe('$42.50 asking')
+    expect(row.url).toBeNull()
+  })
+
+  it('shrugs at nothing: null, undefined and empty all give no rows', () => {
+    expect(compRows(null)).toEqual([])
+    expect(compRows(undefined)).toEqual([])
+    expect(compRows([])).toEqual([])
+  })
+
+  it('survives a record with a missing title', () => {
+    expect(compRows([{ price: 10, kind: 'sold' }])[0].title).toBe('')
   })
 })
