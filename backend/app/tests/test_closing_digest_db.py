@@ -8,6 +8,7 @@ network and no phone buzzing during a test run.
 
 from datetime import datetime, timedelta
 
+import httpx
 import pytest
 
 from app.database import SessionLocal
@@ -134,6 +135,84 @@ def test_watched_lot_alone_earns_the_digest(pushes, clean):
 
     assert notify.check_closing_digests() == 1
     assert "★ #3 pytest just-watched — bid $5" in pushes[0]["body"]
+
+
+def _validating_post(url, params=None, content=None, headers=None, timeout=None):
+    """No network, real validation: constructing the Request runs httpx's
+    header/URL encoding — which is exactly where non-ASCII dies."""
+    req = httpx.Request("POST", url, params=params, headers=headers,
+                        content=content)
+    return httpx.Response(200, request=req)
+
+
+def test_push_survives_the_titles_we_actually_send(monkeypatch):
+    """The digest title leads with ⏱ and auction names carry anything.
+    HTTP headers are ASCII-only in httpx, so metadata must not ride there."""
+    monkeypatch.setattr(notify.config, "NTFY_TOPIC", "pytest-topic")
+    monkeypatch.setattr(notify.httpx, "post", _validating_post)
+    assert notify._push("⏱ Sépt Sale — closing window", "★ #7 lot — bid $5",
+                        "https://hibid.com/catalog/x") is True
+
+
+def test_push_swallows_transport_errors(monkeypatch):
+    def boom(*a, **k):
+        raise httpx.ConnectError("ntfy down")
+    monkeypatch.setattr(notify.config, "NTFY_TOPIC", "pytest-topic")
+    monkeypatch.setattr(notify.httpx, "post", boom)
+    assert notify._push("t", "b", None) is False    # never raises
+
+
+def test_failed_push_is_retried_next_pass(pushes, clean, monkeypatch):
+    """ntfy being down for one poll must not eat the digest: the stamp is
+    only written on a successful push."""
+    db = SessionLocal()
+    a = _mk_auction(db, 5, "PYTEST flaky-push sale", closes_in_hours=1)
+    _mk_lot(db, a, "flaky-gold", profit=300, roi_status="GOLD MINE", max_bid=90)
+    db.commit()
+    db.close()
+
+    attempts = {"n": 0}
+
+    def flaky(title, body, click):
+        attempts["n"] += 1
+        return attempts["n"] > 1        # first delivery fails, second lands
+
+    monkeypatch.setattr(notify, "_push", flaky)
+    assert notify.check_closing_digests() == 0      # failed → not stamped
+    assert notify.check_closing_digests() == 1      # retried → delivered
+    assert notify.check_closing_digests() == 0      # …and only once
+    assert attempts["n"] == 2
+
+
+def test_digest_caps_at_eight_lot_lines(pushes, clean):
+    db = SessionLocal()
+    a = _mk_auction(db, 6, "PYTEST deep sale", closes_in_hours=1)
+    for i in range(10):
+        _mk_lot(db, a, f"deep-{i}", profit=100 + i, roi_status="GOLD MINE",
+                max_bid=50, lot_number=str(i))
+    db.commit()
+    db.close()
+
+    assert notify.check_closing_digests() == 1
+    lines = pushes[0]["body"].splitlines()
+    assert len(lines) == 1 + notify.MAX_LOT_LINES + 1   # head + lots + more
+    assert lines[-1] == "…and 2 more"
+    assert "#9 " in lines[1]                            # best profit leads
+
+
+def test_watched_lot_without_enrichment_row_still_digests(pushes, clean):
+    """★ on a lot the enricher never touched — the outer join must keep it."""
+    db = SessionLocal()
+    a = _mk_auction(db, 7, "PYTEST bare-watch sale", closes_in_hours=1)
+    lot = models.Lot(lot_id=f"{PREFIX}bare-watch", auction_id=a.id,
+                     title="pytest bare-watch", status="OPEN",
+                     current_bid=5, watched=True)
+    db.add(lot)
+    db.commit()
+    db.close()
+
+    assert notify.check_closing_digests() == 1
+    assert "★ pytest bare-watch — bid $5" in pushes[0]["body"]
 
 
 def test_outside_the_window_nothing_happens(pushes, clean):

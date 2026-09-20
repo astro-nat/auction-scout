@@ -34,12 +34,17 @@ MAX_LOT_LINES = 8
 
 
 def _push(title: str, body: str, click_url: str | None) -> bool:
-    headers = {"Title": title, "Priority": "high", "Tags": "hourglass_flowing_sand"}
+    # Metadata rides in query params, NOT headers: HTTP headers are
+    # ASCII-only in httpx, and titles carry whatever
+    # an auction house typed. As headers, every push failed the encode,
+    # _push swallowed it, and the digest retried forever — delivering
+    # nothing. ntfy accepts ?title=&priority=&tags=&click= equivalently.
+    params = {"title": title, "priority": "high"}
     if click_url:
-        headers["Click"] = click_url
+        params["click"] = click_url
     try:
         r = httpx.post(f"{config.NTFY_URL}/{config.NTFY_TOPIC}",
-                       content=body.encode(), headers=headers, timeout=10)
+                       params=params, content=body.encode(), timeout=10)
         r.raise_for_status()
         return True
     except Exception as exc:  # noqa: BLE001 — alerting must never crash the app
@@ -131,7 +136,7 @@ def check_closing_digests() -> int:
             if len(lots) > MAX_LOT_LINES:
                 lines.append(f"…and {len(lots) - MAX_LOT_LINES} more")
             body = "\n".join([head, *lines])
-            if _push(f"⏱ {auction.name[:60]} — closing window", body,
+            if _push(f"Closing window: {auction.name[:60]}", body,
                      auction.source_url):
                 auction.closing_digest_sent_at = now
                 for l in lots:
