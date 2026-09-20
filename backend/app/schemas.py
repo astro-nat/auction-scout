@@ -82,6 +82,11 @@ class LotOut(BaseModel):
     created_at: datetime
     auction_name: Optional[str] = None
     auction_closed: bool = False
+    # The auction house's estimate-to-hammer calibration (median ratio over
+    # its observed closed sales, and how many back it) — shown beside the
+    # house estimate so the anchor carries its track record with it.
+    house_ratio: Optional[float] = None
+    house_ratio_n: int = 0
     enrichment: Optional[EnrichmentOut] = None
 
 
@@ -116,6 +121,8 @@ class AuctionOut(BaseModel):
     imported_at: Optional[datetime] = None
     gold_count: int = 0                       # GOLD MINE lots found so far
     gold_profit: Optional[Decimal] = None     # summed potential profit of those lots
+    estimate_ratio: Optional[float] = None    # median estimate-low/hammer for this house
+    estimate_ratio_n: int = 0                 # closed sales backing that median
     category_lot_count: Optional[int] = None  # lots matching the last scanned category
     category_count_for: Optional[int] = None  # which category that count is for
     ship_cost_estimate: Optional[float] = None  # AI-read rough $ to ship a small/medium item

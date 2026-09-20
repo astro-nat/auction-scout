@@ -104,6 +104,7 @@ def list_lots(
         q = q.filter(models.Enrichment.bolo_brand.isnot(None))
 
     from datetime import datetime
+    from ..services import calibration
     now = datetime.now()
     # LIMIT/OFFSET without ORDER BY has no stability guarantee, and the UI
     # chains pages to assemble the full set. Under concurrent writes — which
@@ -113,6 +114,7 @@ def list_lots(
     # so the pages tile. The client re-sorts for display anyway; this only
     # has to be deterministic.
     rows = q.order_by(models.Lot.id).offset(offset).limit(limit).all()
+    house_ratios = calibration.ratios(db)
     for lot in rows:
         # Serve the auction's name and closed-state with the lot, so the UI
         # never has to guess from a separately-fetched auction list.
@@ -120,6 +122,11 @@ def list_lots(
         lot.auction_closed = bool(
             lot.auction and lot.auction.closing_date
             and lot.auction.closing_date < now)
+        # The house's estimate calibration, right where its estimate shows —
+        # the anchor loses its pull when its track record sits beside it.
+        cal = house_ratios.get(lot.auction.auctioneer_id) if lot.auction else None
+        lot.house_ratio = cal["ratio"] if cal else None
+        lot.house_ratio_n = cal["n"] if cal else 0
     return rows
 
 
@@ -139,12 +146,12 @@ def flush_closed_now(db: Session, dry_run: bool = False) -> dict:
     from datetime import datetime, timedelta
     from sqlalchemy import func, or_
     from .auctions import purge_stale_auctions
+    from ..services import calibration
 
     _CLOSED_STATUSES = ("CLOSED", "SOLD", "ENDED", "PASSED", "ARCHIVED")
     won_cutoff = datetime.now() - timedelta(days=WON_RETENTION_DAYS)
-    lot_ids = [
-        row[0] for row in
-        db.query(models.Lot.id)
+    doomed = (
+        db.query(models.Lot, models.Auction.auctioneer_id)
           .join(models.Auction, models.Lot.auction_id == models.Auction.id)
           .filter(or_(
               (models.Auction.closing_date.isnot(None))
@@ -158,9 +165,13 @@ def flush_closed_now(db: Session, dry_run: bool = False) -> dict:
                       models.Lot.won_at < won_cutoff),
                   func.coalesce(models.Lot.watched, False).is_(False))
           .all()
-    ]
+    )
+    lot_ids = [lot.id for lot, _ in doomed]
     if dry_run:
         return {"lots": len(lot_ids), "dry_run": True}
+    # Last chance to learn from these lots: estimate-vs-hammer observations
+    # feed the per-house calibration, and the rows are about to be deleted.
+    calibration.capture(db, doomed)
     if lot_ids:
         # No delete-cascade on the models, so enrichments go first.
         (db.query(models.Enrichment)

@@ -233,6 +233,33 @@ class FavoriteAuctioneer(Base):
     created_at = Column(DateTime, server_default=func.now())
 
 
+class EstimateObservation(Base):
+    """One closed lot's low estimate against what it actually hammered for —
+    the raw material for per-house estimate calibration.
+
+    House estimates are promotional, and how promotional varies by house:
+    the Sterling sale's ran 3-5x above realized prices, and anchoring on one
+    cost the user $84 on a single lot. Each house's estimate-to-hammer ratio,
+    measured from its own closed lots, is what lets the UI say "this house's
+    estimates run ~4x hot" next to the anchor.
+
+    Captured by the flush (routers/lots.py) because that is where closed lots
+    leave the database — without this table the evidence evaporates within
+    hours of every sale. Keyed by HiBid's lot id so re-flushing can't
+    double-count. hammer is the last bid the refresher saw before close;
+    occasionally stale mid-webcast, which the median shrugs off.
+    """
+    __tablename__ = "estimate_obs"
+
+    id = Column(Integer, primary_key=True)
+    lot_id = Column(String, unique=True, nullable=False)   # HiBid lot id
+    auctioneer_id = Column(Integer, index=True, nullable=False)
+    estimate_low = Column(Numeric, nullable=False)
+    estimate_high = Column(Numeric)
+    hammer = Column(Numeric, nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+
+
 class DismissedAuction(Base):
     """An auction the user has forgotten — never show it again.
 

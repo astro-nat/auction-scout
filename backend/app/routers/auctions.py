@@ -143,12 +143,19 @@ def _attach_stats(db: Session, auctions: list) -> list:
     stats = {r[0]: r[1:] for r in stat_rows}
 
     starred = favorites.ids(db)
+    from ..services import calibration
+    house_ratios = calibration.ratios(db)
     for a in auctions:
         a.gold_count, a.gold_profit = gold.get(a.id, (0, 0))
         (a.lots_imported, a.lots_enriched, a.lots_pending,
          a.lots_failed, a.lots_inspected,
          a.lots_hard_pending) = stats.get(a.id, (0, 0, 0, 0, 0, 0))
         a.favorite = a.auctioneer_id in starred
+        # This house's estimate-to-hammer track record, from its own closed
+        # lots — how much to discount everything it claims.
+        cal = house_ratios.get(a.auctioneer_id)
+        a.estimate_ratio = cal["ratio"] if cal else None
+        a.estimate_ratio_n = cal["n"] if cal else 0
     return auctions
 
 

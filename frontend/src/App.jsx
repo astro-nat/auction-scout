@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, importLots, importAllAuctions, enrichAll, enrichCategory, flushClosed, refreshBids, reinspectNoComps, fetchSettings, saveTargetRoi, savePacing, fetchWeekStats, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
 import { auctionClosed, clearsFloor, underFloor, goldBadge as pacingGoldBadge } from './lib/pacing'
+import { houseRatioLabel, houseRatioTitle } from './lib/calibration'
 import LotTable from './components/LotTable'
 import StatusBar from './components/StatusBar'
 import useMediaQuery from './useMediaQuery'
@@ -889,6 +890,12 @@ Skipping ${hard} HARD-to-ship lots.`
                   {isClosed(a) ? 'CLOSED · ' : ''}{a.city}, {a.state} · {a.lot_count ?? '—'} lots
                   · closes {a.closing_date ? parseUtc(a.closing_date).toLocaleDateString() : '—'}
                   {a.buyer_premium_mult ? ` · ${Math.round((a.buyer_premium_mult - 1) * 100)}% premium` : ''}
+                  {houseRatioLabel(a.estimate_ratio, a.estimate_ratio_n) && (
+                    <span title={houseRatioTitle(a.estimate_ratio, a.estimate_ratio_n)}
+                          style={{ cursor: 'help' }}>
+                      {' · '}{houseRatioLabel(a.estimate_ratio, a.estimate_ratio_n)}
+                    </span>
+                  )}
                   {hasCategoryCount(a)
                     ? ` · ${a.category_lot_count} in ${scanCategoryName ?? 'category'}` : ''}
                   {shipBadge(a) ? ` · ${shipBadge(a).text}` : ''}
@@ -977,6 +984,12 @@ Skipping ${hard} HARD-to-ship lots.`
                     {shipBadge(a) && (
                       <div style={{ fontSize: 11, color: 'var(--muted)' }}
                            title={shipBadge(a).tip}>{shipBadge(a).text}</div>
+                    )}
+                    {houseRatioLabel(a.estimate_ratio, a.estimate_ratio_n) && (
+                      <div style={{ fontSize: 11, color: 'var(--muted)', cursor: 'help' }}
+                           title={houseRatioTitle(a.estimate_ratio, a.estimate_ratio_n)}>
+                        {houseRatioLabel(a.estimate_ratio, a.estimate_ratio_n)}
+                      </div>
                     )}
                   </td>
                   <td className="num">

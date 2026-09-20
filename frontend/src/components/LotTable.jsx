@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { enrichLot, inspectLot, fetchLot, patchEnrichment, enrichBatch, setWatch, setHidden, setWon, alertOnce, parseUtc } from '../api'
 import { compRows, ebaySoldUrl } from '../lib/comps'
+import { houseRatioLabel, houseRatioTitle } from '../lib/calibration'
 import useMediaQuery from '../useMediaQuery'
 
 // The homework behind a resale number: the comp records the pricer actually
@@ -598,7 +599,12 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                 <span>Cost {money(lot.est_cost)}</span>
                 <span>Resale {money(e.est_resale)}{e.comp_count > 0 ? ` (${e.comp_count})` : ''}</span>
                 {houseEstimate(lot) && (
-                  <span style={{ color: 'var(--muted)' }}>house {houseEstimate(lot)}</span>
+                  <span style={{ color: 'var(--muted)' }}
+                        title={houseRatioTitle(lot.house_ratio, lot.house_ratio_n) || undefined}>
+                    house {houseEstimate(lot)}
+                    {houseRatioLabel(lot.house_ratio, lot.house_ratio_n)
+                      ? ` · ${houseRatioLabel(lot.house_ratio, lot.house_ratio_n)}` : ''}
+                  </span>
                 )}
                 <span>Max bid {money(e.max_bid)}</span>
                 {e.est_roi != null && (
@@ -850,8 +856,11 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                 )}
                 {houseEstimate(lot) && (
                   <div style={{ color: 'var(--muted)', fontSize: 11 }}
-                       title="The auction house's own estimate range — promotional, but weak-evidence values are capped against it">
+                       title={houseRatioTitle(lot.house_ratio, lot.house_ratio_n)
+                         || "The auction house's own estimate range — promotional, but weak-evidence values are capped against it"}>
                     house {houseEstimate(lot)}
+                    {houseRatioLabel(lot.house_ratio, lot.house_ratio_n)
+                      ? ` · ${houseRatioLabel(lot.house_ratio, lot.house_ratio_n)}` : ''}
                   </div>
                 )}
                 {e.est_resale != null && <CompsPeek lot={lot} e={e} />}

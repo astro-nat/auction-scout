@@ -70,6 +70,13 @@ _MIGRATIONS = [
     "ON CONFLICT (hibid_id) DO NOTHING",
     "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS closing_digest_sent_at TIMESTAMP",
     "ALTER TABLE enrichment ADD COLUMN IF NOT EXISTS comps JSONB",
+    "CREATE TABLE IF NOT EXISTS estimate_obs ("
+    "id SERIAL PRIMARY KEY, lot_id VARCHAR UNIQUE NOT NULL, "
+    "auctioneer_id INTEGER NOT NULL, estimate_low NUMERIC NOT NULL, "
+    "estimate_high NUMERIC, hammer NUMERIC NOT NULL, "
+    "created_at TIMESTAMP DEFAULT now())",
+    "CREATE INDEX IF NOT EXISTS ix_estimate_obs_auctioneer "
+    "ON estimate_obs (auctioneer_id)",
 ]
 
 def _run_migrations() -> list[str]:
