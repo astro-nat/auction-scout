@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, importLots, importAllAuctions, enrichAll, enrichCategory, flushClosed, refreshBids, reinspectNoComps, fetchSettings, saveTargetRoi, savePacing, fetchWeekStats, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
+import { auctionClosed, clearsFloor, underFloor, goldBadge as pacingGoldBadge } from './lib/pacing'
 import LotTable from './components/LotTable'
 import StatusBar from './components/StatusBar'
 import useMediaQuery from './useMediaQuery'
@@ -589,21 +590,12 @@ Skipping ${hard} HARD-to-ship lots.`
     ]
   })
 
-  // An auction is "hot" when its gold-mine lots clear the per-auction floor:
-  // every auction costs a shipping minimum or a pickup trip, so a couple of
-  // thin wins lose even when each lot individually "wins". gold_profit sums
-  // audit-surviving GOLD MINEs only, so this is the trusted number.
-  const isClosed = (a) => a.closing_date && parseUtc(a.closing_date) < new Date()
-  const isHotAuction = (a) => Number(a.gold_profit ?? 0) >= auctionFloor
-  // Below the floor with enrichment done = measured and found thin. An
-  // un-enriched auction is unknown, not bad — never dimmed.
-  const isUnderFloor = (a) =>
-    a.lots_enriched > 0 && !isHotAuction(a) && !isClosed(a)
-  const goldBadge = (a) =>
-    a.gold_count > 0
-      ? `🟢 ${a.gold_count} gold · ~$${Number(a.gold_profit).toFixed(0)} potential profit`
-        + (isUnderFloor(a) ? ` · under $${auctionFloor} floor` : '')
-      : null
+  // Floor verdicts live in lib/pacing.js (pure, unit-tested); these wrappers
+  // just bind the user's configured floor.
+  const isClosed = (a) => auctionClosed(a)
+  const isHotAuction = (a) => clearsFloor(a, auctionFloor)
+  const isUnderFloor = (a) => underFloor(a, auctionFloor)
+  const goldBadge = (a) => pacingGoldBadge(a, auctionFloor)
 
   // Stamp each lot with its auction's name so the table can show/filter it.
   // Memoized: with several thousand lots streamed in, rebuilding this array
