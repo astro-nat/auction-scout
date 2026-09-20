@@ -21,6 +21,25 @@ HIBID_TIMEOUT_SECONDS = float(os.environ.get("HIBID_TIMEOUT_SECONDS", "15.0"))
 EBAY_APP_ID = os.environ.get("EBAY_APP_ID", "")
 EBAY_CERT_ID = os.environ.get("EBAY_CERT_ID", "")
 
+# --- vision provider (image understanding for enrichment + inspection) ---
+# Gemini identified the user's jewelry lots better than Claude in practice,
+# so image analysis is switchable. Setting GEMINI_API_KEY is the switch:
+# vision calls route to Gemini automatically, VISION_PROVIDER overrides
+# explicitly ("claude" | "gemini"). Text enrichment and the gold-check
+# audit stay on Claude regardless — the audit especially, because a value
+# priced by one model and audited by a different one is a genuinely
+# independent second opinion.
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+VISION_PROVIDER = os.environ.get("VISION_PROVIDER", "")
+
+
+def vision_provider() -> str:
+    if VISION_PROVIDER:
+        return VISION_PROVIDER.strip().lower()
+    return "gemini" if GEMINI_API_KEY else "claude"
+
+
 # --- default commercial assumptions when an auction doesn't specify ---
 DEFAULT_BUYER_PREMIUM_PCT = float(os.environ.get("DEFAULT_BUYER_PREMIUM_PCT", "15.0"))
 

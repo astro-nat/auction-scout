@@ -35,7 +35,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from ..database import SessionLocal
 from .. import models, config
-from ..services import financials, hibid, jobs, pricing
+from ..services import financials, gemini, hibid, jobs, pricing
 from ..services.bolo import BoloMatcher
 from ..services.hibid import classify_logistics
 
@@ -582,7 +582,7 @@ def _verify_gold(db: Session, lot: models.Lot, e: models.Enrichment) -> None:
                                       "data": base64.b64encode(image_bytes).decode()}})
     result = _call_with_retry(lambda: client.messages.create(
         model=MODEL, max_tokens=250,
-        messages=[{"role": "user", "content": content}]))
+        messages=[{"role": "user", "content": content}]).content[0].text)
     if result is None or not isinstance(result.get("plausible"), bool):
         return
     reason = str(result.get("reason") or "")[:300]
@@ -690,22 +690,11 @@ def _inspect(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
         raise RuntimeError("no image available for inspection")
 
     _progress(db, e, "AI identifying each item in the photo…")
-    b64 = base64.b64encode(image_bytes).decode()
-    result = _call_with_retry(lambda: client.messages.create(
-        model=MODEL,
-        max_tokens=800,
-        messages=[{
-            "role": "user",
-            "content": [
-                {"type": "image", "source": {"type": "base64",
-                                             "media_type": "image/jpeg",
-                                             "data": b64}},
-                {"type": "text", "text": INSPECT_PROMPT.format(
-                    title=lot.title or "",
-                    description=(lot.description or "")[:1500] or "(none)")},
-            ],
-        }],
-    ))
+    result = _vision_json(
+        INSPECT_PROMPT.format(
+            title=lot.title or "",
+            description=(lot.description or "")[:1500] or "(none)"),
+        image_bytes, max_tokens=800)
     if result is None:
         raise RuntimeError("vision call failed")
 
@@ -832,11 +821,12 @@ def _inspect(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
 # ------------------------------------------------------------------ AI calls
 
 def _call_with_retry(make_call) -> dict | None:
+    """make_call returns the model's TEXT (any provider); this parses JSON
+    out of it, retrying transport and parse failures alike."""
     last: Exception | None = None
     for _ in range(MAX_ATTEMPTS):
         try:
-            resp = make_call()
-            return _parse_json_response(resp.content[0].text)
+            return _parse_json_response(make_call())
         except Exception as exc:  # noqa: BLE001
             last = exc
     logger.warning("AI call failed after %s attempts: %s", MAX_ATTEMPTS, last)
@@ -850,26 +840,40 @@ def _call_text(title: str, description: str) -> dict | None:
         messages=[{"role": "user",
                    "content": TEXT_PROMPT.format(title=title,
                                                  description=description[:2000])}],
-    ))
+    ).content[0].text)
 
 
-def _call_vision(title: str, image_bytes: bytes, description: str = "") -> dict | None:
+def _vision_json(prompt: str, image_bytes: bytes, max_tokens: int) -> dict | None:
+    """One dispatcher for every image-understanding call. Provider comes
+    from config: Gemini when its key is set (it identified the user's
+    jewelry lots better in practice), Claude otherwise, VISION_PROVIDER to
+    force either. The gold-check audit is deliberately NOT routed through
+    here — a value priced by one model and audited by another is a
+    genuinely independent second opinion."""
+    if config.vision_provider() == "gemini":
+        return _call_with_retry(
+            lambda: gemini.generate(prompt, image_bytes, max_tokens=max_tokens))
     b64 = base64.b64encode(image_bytes).decode()
     return _call_with_retry(lambda: client.messages.create(
         model=MODEL,
-        max_tokens=400,
+        max_tokens=max_tokens,
         messages=[{
             "role": "user",
             "content": [
                 {"type": "image", "source": {"type": "base64",
                                              "media_type": "image/jpeg",
                                              "data": b64}},
-                {"type": "text", "text": VISION_PROMPT.format(
-                    title=title,
-                    description=(description or "")[:1500] or "(none)")},
+                {"type": "text", "text": prompt},
             ],
         }],
-    ))
+    ).content[0].text)
+
+
+def _call_vision(title: str, image_bytes: bytes, description: str = "") -> dict | None:
+    return _vision_json(
+        VISION_PROMPT.format(title=title,
+                             description=(description or "")[:1500] or "(none)"),
+        image_bytes, max_tokens=400)
 
 
 def _download_image(url: str | None) -> bytes | None:
@@ -1142,7 +1146,7 @@ def run_ship_analysis(auction_ids: list[int], resume_job_id: str | None = None) 
                                    "content": SHIPPING_PROMPT.format(
                                        ship_text=ship_text[:4000] or "(none posted)",
                                        terms_text=terms_text[:6000] or "(none posted)")}],
-                    ))
+                    ).content[0].text)
                     if result is None:
                         raise RuntimeError("shipping AI call failed")
                     cost = result.get("cost_estimate")
