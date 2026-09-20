@@ -93,7 +93,10 @@ def patch_settings(payload: dict,
     enriched lot (free — reuses stored AI results); the pacing numbers are
     display-only, so saving them re-grades nothing. Each field optional."""
     from ..services import settings as settings_store
-    saved = {}
+    # Validate the WHOLE payload before writing any of it — a mixed request
+    # with one bad field must not half-save (the 422 would read as "nothing
+    # happened" while the valid half quietly stuck).
+    to_save = {}
     for key, low, high in (("weekly_goal_usd", 0, 100000),
                            ("auction_floor_usd", 0, 100000)):
         if key in payload:
@@ -101,16 +104,20 @@ def patch_settings(payload: dict,
             if not isinstance(v, (int, float)) or not (low <= v <= high):
                 raise HTTPException(status_code=422,
                                     detail=f"{key} must be a number from {low} to {high}")
-            settings_store.set(key, str(float(v)))
-            saved[key] = v
-    n = 0
-    if "target_roi_pct" in payload or not saved:
-        pct = payload.get("target_roi_pct")
-        if not isinstance(pct, (int, float)) or not (1 <= pct <= 10000):
+            to_save[key] = v
+    roi = None
+    if "target_roi_pct" in payload or not to_save:
+        roi = payload.get("target_roi_pct")
+        if not isinstance(roi, (int, float)) or not (1 <= roi <= 10000):
             raise HTTPException(status_code=422,
                                 detail="target_roi_pct must be a number from 1 to 10000")
-        settings_store.set("target_roi_pct", str(float(pct)))
-        saved["target_roi_pct"] = pct
+
+    for key, v in to_save.items():
+        settings_store.set(key, str(float(v)))
+    n = 0
+    if roi is not None:
+        settings_store.set("target_roi_pct", str(float(roi)))
+        to_save["target_roi_pct"] = roi
         # Re-GRADE, not re-price: the ROI target doesn't change what anything
         # is worth, so this is arithmetic over stored values — no comp lookups.
         n = (db.query(models.Enrichment)
@@ -118,7 +125,24 @@ def patch_settings(payload: dict,
         if n:
             jobs.enqueue("regrade", "Re-grading items at the new ROI target",
                          total=n)
-    return {**saved, "regrading": n}
+    return {**to_save, "regrading": n}
+
+
+def week_start_utc(now):
+    """Start of `now`'s acquisition week: Monday ~midnight Central, expressed
+    in the naive UTC the database stores (05:00 UTC).
+
+    A plain UTC Monday would reset the tracker on Sunday evening for the
+    user; anchoring five hours back keeps Sunday-night bidding in the week
+    it feels like it belongs to. Pure so the boundary is testable at fixed
+    datetimes — DST drifts the true midnight an hour, which is accepted:
+    the reset lands between midnight and 1am rather than mid-evening.
+    """
+    from datetime import timedelta
+    anchor = now - timedelta(hours=5)
+    start = (anchor - timedelta(days=anchor.weekday())).replace(
+        hour=0, minute=0, second=0, microsecond=0)
+    return start + timedelta(hours=5)
 
 
 @router.get("/stats/week")
@@ -132,14 +156,10 @@ def week_stats(db: Session = Depends(get_db)):
     only as complete as the marking; the available figure needs no marking
     at all, it is the summed profit of live GOLD MINE lots.
     """
-    from datetime import datetime, timedelta
+    from datetime import datetime
     from sqlalchemy import func
-    # Week starts Monday ~midnight Central (05:00 UTC) — the DB keeps naive
-    # UTC, and a plain UTC Monday would reset Sunday evening for the user.
     now = datetime.now()
-    anchor = now - timedelta(hours=5)
-    week_start = (anchor - timedelta(days=anchor.weekday())).replace(
-        hour=0, minute=0, second=0, microsecond=0) + timedelta(hours=5)
+    week_start = week_start_utc(now)
 
     rows = (db.query(models.Enrichment.profit, models.Enrichment.gold_check)
               .join(models.Lot, models.Lot.id == models.Enrichment.lot_id)
