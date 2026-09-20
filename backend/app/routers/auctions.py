@@ -9,13 +9,11 @@ GET  /auctions               — list what we know about
 from datetime import datetime, timezone  # noqa: F401 — datetime used in filters
 from typing import List
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException
 
 from .. import models, schemas
 from ..database import get_db
 from ..services import dismissed, favorites, hibid, jobs
-from ..workers.import_all import save_lots
 from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/auctions", tags=["auctions"])
@@ -331,53 +329,29 @@ async def scan_auctions(payload: schemas.ScanRequest,
     return _attach_stats(db, stored)
 
 
-@router.post("/{auction_id}/import")
-async def import_lots(auction_id: int, category_id: int = -1,
-                      db: Session = Depends(get_db)):
-    """Pull open lots for one auction into Postgres (idempotent upsert).
-    category_id limits the import to one HiBid category server-side."""
+@router.post("/{auction_id}/import", status_code=202)
+def import_lots(auction_id: int, category_id: int = -1,
+                db: Session = Depends(get_db)):
+    """Queue one auction's lot import on the worker (idempotent upsert).
+    category_id limits the import to one HiBid category server-side.
+
+    This used to fetch and save inline, holding the HTTP request open while
+    HiBid paged through the catalog — fine at 80 lots, a timeout at 1,200,
+    and closing the tab cancelled the request coroutine and the import with
+    it. The worker's bulk path is resumable, survives deploys, and fetches
+    the same premium metadata; a single auction is simply a bulk of one.
+    """
     auction = db.query(models.Auction).filter(models.Auction.id == auction_id).first()
     if not auction or not auction.hibid_id:
         raise HTTPException(status_code=404, detail="Auction not found")
-
-    async with httpx.AsyncClient() as client:
-        meta = await hibid.fetch_auction_meta(client, [auction.hibid_id])
-    auction_meta = meta.get(auction.hibid_id, {})
-    if auction_meta.get("premium_mult"):
-        auction.buyer_premium_mult = auction_meta["premium_mult"]
-        auction.cond_ship = auction_meta.get("cond_ship", False)
-
-    ctx = {"premium_mult": auction.buyer_premium_mult, "source": auction.source}
-    job = jobs.start("import", f"Fetching lots from {auction.name}")
-    # try/FINALLY, not try/except: a closed browser tab cancels this request
-    # coroutine with CancelledError (a BaseException), which `except
-    # Exception` never sees — that's how a cancelled import once haunted the
-    # status bar for two days. finish() is idempotent, so the happy path
-    # calling it inside the block is fine.
-    try:
-        lots = await hibid.fetch_lots(
-            auction.hibid_id, auction_ctx=ctx, category_id=category_id,
-            on_progress=lambda fetched, total: jobs.update(
-                job, current=fetched, total=total,
-                label=f"Fetching lots from {auction.name}"),
-            should_cancel=lambda: jobs.is_cancelled(job),
-        )
-        jobs.update(job, current=0, total=len(lots),
-                    label=f"Saving lots from {auction.name}")
-
-        # Shared with the bulk import-all worker — one upsert, two callers.
-        created, updated, cancelled = save_lots(
-            db, auction, lots,
-            on_progress=lambda i, title: jobs.update(job, current=i, detail=title),
-            should_cancel=lambda: jobs.is_cancelled(job))
-    except hibid.HibidEventNotFound as exc:
-        # Stale/wrong hibid_id — fetching anyway would import HiBid's global
-        # lot feed as this auction's lots (see hibid.fetch_lots).
-        raise HTTPException(status_code=502, detail=str(exc))
-    finally:
-        jobs.finish(job)
-    return {"auction_id": auction_id, "fetched": len(lots),
-            "created": created, "updated": updated, "cancelled": cancelled}
+    # Same dedupe as the bulk button: two clicks must not import twice, and
+    # a single import queued under a running bulk would double-fetch.
+    if jobs.has_pending("import-all"):
+        return {"auction_id": auction_id, "queued": False, "already_running": True}
+    jobs.enqueue("import-all", f"Importing lots from {auction.name}",
+                 total=1,
+                 payload={"auction_ids": [auction_id], "category_id": category_id})
+    return {"auction_id": auction_id, "queued": True}
 
 
 @router.post("/import-all", status_code=202)

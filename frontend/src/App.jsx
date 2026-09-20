@@ -236,20 +236,21 @@ export default function App() {
   // categoryId defaults to the last scan's category (the auctions-tab flow);
   // pass -1 to import the full catalog regardless — the items-tab "import
   // the rest" button must not silently inherit a stale category filter.
+  // Imports run on the worker now: holding the request open while HiBid
+  // paged through a 1,200-lot catalog was a timeout with a progress bar,
+  // and closing the tab cancelled the import mid-save.
   async function handleImport(auctionId, categoryId = scanCategoryId) {
-    setBusy('Importing lots…')
     try {
       const r = await importLots(auctionId, categoryId)
-      setBusy('')
+      if (r.already_running) {
+        alert('An import is already running — let it finish first. Progress shows in the top bar.')
+        return
+      }
       setSelectedAuctions([auctionId])
       setView('items')
-      await syncAuctionStats()
-      alert(`Imported ${r.created} new lots into the database`
-            + (r.updated ? ` (${r.updated} already there, refreshed)` : '')
-            + `.
-
-They're listed below — use "Enrich" to price them.`)
-    } catch (e) { alertOnce(e.message); setBusy('') }
+      alert(`Importing in the background — progress shows in the top bar, `
+            + `and the items appear here when it finishes.`)
+    } catch (e) { alertOnce(e.message) }
   }
 
   async function handleSaveRoi() {
