@@ -137,6 +137,38 @@ def title_without_retail_prefix(title: str) -> str:
     return rest or (title or "").strip()
 
 
+# House boilerplate posing as lots. Auction software pads catalogs with
+# rows like "More Lots Loading....." and "Pick Up Location" — there is no
+# item, so any money or model time spent pricing one produces a confident
+# number for nothing (a placeholder priced at $474.19 off a motorcycle part
+# and a stamp album; a pickup-location row hallucinated into a $7,734
+# building). Full-title match only: "Preview" alone is boilerplate,
+# "Preview Dresser" is furniture.
+_PLACEHOLDER_RE = re.compile(
+    r"^\s*(?:"
+    r"more +lots +(?:loading|coming|to +come|being +added).*"
+    r"|lots? +loading"
+    r"|pick[ -]?up +(?:location|info(?:rmation)?|details|instructions|only).*"
+    r"|preview(?: +(?:night|day|info(?:rmation)?|times?|hours?))?"
+    r"|payment +(?:info(?:rmation)?|details|instructions)"
+    r"|shipping +(?:info(?:rmation)?|details|instructions|available)"
+    r"|terms(?: +(?:and|&) +conditions)?(?: +of +sale)?"
+    r"|auction +(?:info(?:rmation)?|details|terms)"
+    r"|removal(?: +(?:info(?:rmation)?|details|times?|day))?"
+    r"|welcome(?: +to +.{0,40})?"
+    r"|thank +you.{0,40}"
+    r"|(?:test|sample) +lot"
+    r"|do +not +bid.*"
+    r"|read +(?:before +bidding|description|terms).*"
+    r")[\s.!*_\-]*$",
+    re.IGNORECASE)
+
+
+def is_placeholder_title(title: str) -> bool:
+    """True when a lot 'title' is catalog boilerplate, not an item."""
+    return bool(title) and bool(_PLACEHOLDER_RE.match(title))
+
+
 def price_from_title(title: str) -> Optional[dict]:
     """A comps-shaped result built from the title's retail price, or None.
 
@@ -581,6 +613,10 @@ def lookup_comps(title: str) -> dict:
     """
     result = {"est_resale": None, "price_low": None, "price_high": None,
               "comp_count": 0, "price_source": None, "comps": []}
+    # Boilerplate rows can't be priced, only mispriced: searching "More Lots
+    # Loading" once matched a motorcycle part and a stamp album into $474.19.
+    if is_placeholder_title(title):
+        return result
     variants = query_variants(title)
     if not variants:
         return result

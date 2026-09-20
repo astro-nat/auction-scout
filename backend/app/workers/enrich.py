@@ -336,6 +336,27 @@ def _enrich(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
     # Fields the user hand-corrected are never overwritten by re-enrichment.
     protected = set(e.user_overrides or [])
 
+    # --- 0. Boilerplate rows are not items ---
+    # "More Lots Loading", "Pick Up Location" and kin get no AI call, no
+    # comp lookup, and no number — every cent spent on one buys a confident
+    # price for nothing. Marked success so bulk enrich never re-queues it.
+    if pricing.is_placeholder_title(title):
+        e.enriched_title = None
+        e.verdict = None
+        e.ai_source = "none"
+        e.est_resale = None
+        e.price_low = None
+        e.price_high = None
+        e.comp_count = 0
+        e.comps = None
+        e.price_source = "placeholder title — not an item, not priced"
+        e.max_bid = None
+        e.est_roi = None
+        e.profit = None
+        e.roi_status = None
+        _progress(db, e, None)
+        return
+
     # --- 1. BOLO match (free, deterministic) ---
     _progress(db, e, "matching against BOLO brand list…")
     match = bolo_matcher.match(title, description)

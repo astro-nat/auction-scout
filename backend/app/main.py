@@ -77,6 +77,20 @@ _MIGRATIONS = [
     "created_at TIMESTAMP DEFAULT now())",
     "CREATE INDEX IF NOT EXISTS ix_estimate_obs_auctioneer "
     "ON estimate_obs (auctioneer_id)",
+    # Null out values already minted for placeholder rows ("More Lots
+    # Loading" priced at $474.19 off a motorcycle part and a stamp album).
+    # Idempotent: matches nothing once est_resale is null. The SQL pattern
+    # is a conservative subset of pricing._PLACEHOLDER_RE — only the
+    # unambiguous full-title shapes.
+    r"UPDATE enrichment SET est_resale=NULL, price_low=NULL, price_high=NULL, "
+    r"comp_count=0, comps=NULL, max_bid=NULL, est_roi=NULL, profit=NULL, "
+    r"roi_status=NULL, gold_check=NULL, gold_check_note=NULL, "
+    r"price_source='placeholder title — not an item, not priced' "
+    r"FROM lots WHERE enrichment.lot_id = lots.id "
+    r"AND enrichment.est_resale IS NOT NULL "
+    r"AND lots.title ~* '^\s*(more +lots +(loading|coming|to +come|being +added)"
+    r"[\s.!*_-]*|pick[ -]?up +(location|information|info|details|instructions)"
+    r"[\s.!*_-]*|do +not +bid.*|(test|sample) +lot[\s.!*_-]*)$'",
 ]
 
 def _run_migrations() -> list[str]:
