@@ -40,6 +40,9 @@ class Auction(Base):
     ship_cost_estimate = Column(Float)
     ship_summary = Column(String)
     ship_analyzed_at = Column(DateTime)
+    # The closing-window digest (workers/notify.py) fires once per auction as
+    # it enters the final WATCH_ALERT_HOURS — this is the once.
+    closing_digest_sent_at = Column(DateTime)
     created_at = Column(DateTime, server_default=func.now())
 
     lots = relationship("Lot", back_populates="auction")

@@ -68,6 +68,7 @@ _MIGRATIONS = [
     "SELECT hibid_id, name FROM auctions "
     "WHERE hidden IS TRUE AND hibid_id IS NOT NULL "
     "ON CONFLICT (hibid_id) DO NOTHING",
+    "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS closing_digest_sent_at TIMESTAMP",
 ]
 
 def _run_migrations() -> list[str]:

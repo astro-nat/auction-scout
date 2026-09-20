@@ -60,30 +60,18 @@ def get_status(db: Session = Depends(get_db)):
             "workers": {"live": len(workers), "ids": [w["id"] for w in workers]}}
 
 
-# Acquisition pacing defaults (see /stats/week). Every auction carries a
-# fixed cost — a shipping minimum or a pickup trip — so an auction must put
-# at least the floor on the table to be worth touching; the weekly goal is
-# what the auction channel should contribute to the business overall.
-DEFAULT_WEEKLY_GOAL = 500.0
-DEFAULT_AUCTION_FLOOR = 200.0
-
-
-def _money_setting(key: str, default: float) -> float:
-    from ..services import settings as settings_store
-    try:
-        v = settings_store.get(key)
-        return float(v) if v else default
-    except Exception:  # noqa: BLE001 — settings table missing on first boot
-        return default
-
-
 @router.get("/settings")
 def get_settings():
-    """The tunables the UI can edit. target_roi_pct is served as a percent."""
+    """The tunables the UI can edit. target_roi_pct is served as a percent.
+    The pacing knobs (weekly goal, per-auction floor) live in the settings
+    service — the closing-digest notifier reads the floor too."""
     from ..services import financials
+    from ..services import settings as settings_store
     return {"target_roi_pct": round(financials.current_target_roi() * 100),
-            "weekly_goal_usd": _money_setting("weekly_goal_usd", DEFAULT_WEEKLY_GOAL),
-            "auction_floor_usd": _money_setting("auction_floor_usd", DEFAULT_AUCTION_FLOOR)}
+            "weekly_goal_usd": settings_store.money(
+                "weekly_goal_usd", settings_store.WEEKLY_GOAL_DEFAULT),
+            "auction_floor_usd": settings_store.money(
+                "auction_floor_usd", settings_store.AUCTION_FLOOR_DEFAULT)}
 
 
 @router.patch("/settings")
@@ -180,12 +168,15 @@ def week_stats(db: Session = Depends(get_db)):
                   models.Auction.closing_date >= now)
           .scalar())
 
+    from ..services import settings as settings_store
     return {"week_start": week_start.isoformat(),
             "won_trusted_profit": round(won_profit, 2),
             "won_count": len(rows),
             "available_gold_profit": round(available, 2),
-            "weekly_goal_usd": _money_setting("weekly_goal_usd", DEFAULT_WEEKLY_GOAL),
-            "auction_floor_usd": _money_setting("auction_floor_usd", DEFAULT_AUCTION_FLOOR)}
+            "weekly_goal_usd": settings_store.money(
+                "weekly_goal_usd", settings_store.WEEKLY_GOAL_DEFAULT),
+            "auction_floor_usd": settings_store.money(
+                "auction_floor_usd", settings_store.AUCTION_FLOOR_DEFAULT)}
 
 
 @router.post("/jobs/{job_id}/cancel")

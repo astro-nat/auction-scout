@@ -34,3 +34,18 @@ def set(key: str, value: str) -> None:
             "INSERT INTO settings (key, value) VALUES (:k, :v) "
             "ON CONFLICT (key) DO UPDATE SET value = :v"), {"k": key, "v": value})
     _CACHE[key] = (time.monotonic(), value)
+
+
+# Acquisition pacing knobs, shared by the settings API and the closing-digest
+# notifier — defined here so neither imports the other's module.
+WEEKLY_GOAL_DEFAULT = 500.0
+AUCTION_FLOOR_DEFAULT = 200.0
+
+
+def money(key: str, default: float) -> float:
+    """A dollar setting, falling back on first boot or a garbage row."""
+    try:
+        v = get(key)
+        return float(v) if v else default
+    except Exception:  # noqa: BLE001 — settings table missing on first boot
+        return default
