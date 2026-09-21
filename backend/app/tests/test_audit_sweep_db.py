@@ -121,5 +121,9 @@ def test_endpoint_counts_what_the_sweep_will_visit(auctions, monkeypatch):
     open_a, _ = auctions
     before = client.post("/lots/audit-golds").json()
     _insert(open_a, "endpoint-gold")
+    # A thin candidate must be counted too — the endpoint's count gates the
+    # enqueue, and a 0 here silently skipped every promotion candidate.
+    _insert(open_a, "endpoint-thin", roi_status="PASS", profit=40,
+            roi_reason="only 0 comps — the badge needs 2 agreeing")
     after = client.post("/lots/audit-golds").json()
-    assert after["auditing"] - before["auditing"] == 1
+    assert after["auditing"] - before["auditing"] == 2

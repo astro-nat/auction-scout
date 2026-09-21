@@ -102,17 +102,22 @@ def reprice(auction_id: int | None = None,
 @router.post("/audit-golds", status_code=202)
 def audit_golds(db: Session = Depends(get_db)):
     """Queue the second-opinion audit for every GOLD MINE the checker never
-    saw. Regrades and bid refreshes mint golds without AI, so a badge can
-    stand on an unverified value; this sends each one through the same audit
-    a fresh gold gets. Costs ~half a cent per gold, nothing when none need it."""
+    saw — and for every thin-evidence lot with enough profit on the table
+    to be worth promoting (see workers/enrich.run_audit_sweep, whose
+    filters this count must mirror or the job never enqueues for them).
+    Costs ~half a cent per lot, nothing when none need it."""
+    from ..workers.enrich import PROMOTE_MIN_PROFIT
     n = (db.query(models.Lot.id)
            .join(models.Enrichment, models.Enrichment.lot_id == models.Lot.id)
            .join(models.Auction, models.Lot.auction_id == models.Auction.id)
-           .filter(models.Enrichment.roi_status == "GOLD MINE",
-                   models.Enrichment.gold_check.is_(None),
+           .filter(models.Enrichment.gold_check.is_(None),
                    _not_hidden(),
                    (models.Auction.closing_date.is_(None))
-                   | (models.Auction.closing_date >= datetime.now()))
+                   | (models.Auction.closing_date >= datetime.now()),
+                   (models.Enrichment.roi_status == "GOLD MINE")
+                   | ((models.Enrichment.roi_status == "PASS")
+                      & models.Enrichment.roi_reason.like("only %")
+                      & (models.Enrichment.profit >= PROMOTE_MIN_PROFIT)))
            .count())
     if not n:
         return {"auditing": 0}
