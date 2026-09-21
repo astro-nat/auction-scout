@@ -99,6 +99,29 @@ def reprice(auction_id: int | None = None,
     return {"repricing": len(lot_ids)}
 
 
+@router.post("/audit-golds", status_code=202)
+def audit_golds(db: Session = Depends(get_db)):
+    """Queue the second-opinion audit for every GOLD MINE the checker never
+    saw. Regrades and bid refreshes mint golds without AI, so a badge can
+    stand on an unverified value; this sends each one through the same audit
+    a fresh gold gets. Costs ~half a cent per gold, nothing when none need it."""
+    n = (db.query(models.Lot.id)
+           .join(models.Enrichment, models.Enrichment.lot_id == models.Lot.id)
+           .join(models.Auction, models.Lot.auction_id == models.Auction.id)
+           .filter(models.Enrichment.roi_status == "GOLD MINE",
+                   models.Enrichment.gold_check.is_(None),
+                   _not_hidden(),
+                   (models.Auction.closing_date.is_(None))
+                   | (models.Auction.closing_date >= datetime.now()))
+           .count())
+    if not n:
+        return {"auditing": 0}
+    if jobs.has_pending("audit-golds"):
+        return {"auditing": 0, "already_running": True}
+    jobs.enqueue("audit-golds", "Auditing unchecked golds", total=n)
+    return {"auditing": n}
+
+
 @router.post("/enrich-category", status_code=202)
 def enrich_category(category: str, skip_hard: bool = False, dry_run: bool = False,
                     db: Session = Depends(get_db)):

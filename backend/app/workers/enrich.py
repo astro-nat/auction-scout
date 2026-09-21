@@ -31,6 +31,7 @@ from datetime import datetime, timezone
 
 import anthropic
 import httpx
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from ..database import SessionLocal
@@ -1032,6 +1033,48 @@ def run_regrade(resume_job_id: str | None = None) -> None:
         db.close()
     tail = f" — {lost} rows LOST to failed commits, see warnings" if lost else ""
     print(f"Re-grade complete: {changed} verdicts changed{tail}")
+
+
+def run_audit_sweep(resume_job_id: str | None = None) -> None:
+    """Second-opinion audit for every gold the checker never saw.
+
+    Regrades and bid refreshes mint golds by pure arithmetic — no AI — so a
+    lot can carry the badge without _verify_gold ever seeing it (Bacliff
+    came out of a full reprice with 15 of its 19 golds unaudited). This
+    sweeps them: every visible GOLD MINE in an open auction with no
+    gold_check gets the same audit a fresh gold gets at enrichment.
+    Idempotent — audited lots drop out of the query — so a resume after a
+    deploy simply re-queries what's left."""
+    db: Session = SessionLocal()
+    job = resume_job_id or jobs.start("audit-golds", "Auditing unchecked golds")
+    audited = 0
+    try:
+        rows = (db.query(models.Lot)
+                  .join(models.Enrichment)
+                  .options(joinedload(models.Lot.enrichment))
+                  .join(models.Auction, models.Lot.auction_id == models.Auction.id)
+                  .filter(models.Enrichment.roi_status == "GOLD MINE",
+                          models.Enrichment.gold_check.is_(None),
+                          or_(models.Lot.hidden.is_(False),
+                              models.Lot.hidden.is_(None)),
+                          (models.Auction.closing_date.is_(None))
+                          | (models.Auction.closing_date >= datetime.now()))
+                  .all())
+        jobs.update(job, total=len(rows))
+        for i, lot in enumerate(rows, 1):
+            if jobs.is_cancelled(job):
+                print(f"Audit sweep cancelled after {i - 1} lots")
+                break
+            try:
+                _verify_gold(db, lot, lot.enrichment)
+                audited += 1
+            except Exception as exc:  # noqa: BLE001 — one lot must not stop the sweep
+                logger.warning("Audit sweep failed for lot %s: %s", lot.id, exc)
+            jobs.update(job, current=i, detail=(lot.title or "")[:40])
+    finally:
+        jobs.finish(job)
+        db.close()
+    print(f"Audit sweep complete: {audited} golds checked")
 
 
 def run_reprice(lot_db_ids: list[int], resume_job_id: str | None = None) -> None:
