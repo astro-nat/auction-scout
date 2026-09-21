@@ -34,7 +34,7 @@ def _gold_lot(**enrichment_kw):
 @pytest.fixture
 def verify_with(monkeypatch):
     """Run _verify_gold with a canned model verdict, counting model calls."""
-    def run(lot, e, verdict):
+    def run(lot, e, verdict, *, candidate=False):
         calls = []
 
         def fake_call(fn):
@@ -43,7 +43,7 @@ def verify_with(monkeypatch):
 
         monkeypatch.setattr(enrich, "_download_image", lambda *a: None)
         monkeypatch.setattr(enrich, "_call_with_retry", fake_call)
-        enrich._verify_gold(_FakeDB(), lot, e)
+        enrich._verify_gold(_FakeDB(), lot, e, candidate=candidate)
         return len(calls)
     return run
 
@@ -175,6 +175,63 @@ def test_a_corrected_retail_gold_survives_the_thin_evidence_gate(verify_with):
                          "realistic_value": 80})
     assert e.gold_check == "corrected"
     assert e.roi_status == "GOLD MINE"
+
+
+# --- thin-evidence candidates: the audit as promoter ---------------------
+
+def _thin_lot(**over):
+    """A comp-less lot the itemized vision pass valued — blocked by the
+    thin gate, eligible for a promotion audit."""
+    defaults = dict(comp_count=0, price_source="itemized (vision)",
+                    roi_status="PASS",
+                    roi_reason="only 0 comps — the badge needs 2 agreeing")
+    defaults.update(over)
+    return _gold_lot(**defaults)
+
+
+def test_a_confirmed_candidate_earns_the_badge(verify_with):
+    lot, e = _thin_lot()
+    calls = verify_with(lot, e, {"plausible": True,
+                                 "reason": "the spines add up"},
+                        candidate=True)
+    assert calls == 1
+    assert e.gold_check == "confirmed"
+    assert e.roi_status == "GOLD MINE"
+    assert e.roi_reason is None
+
+
+def test_a_promotion_survives_a_bid_refresh(verify_with):
+    lot, e = _thin_lot()
+    verify_with(lot, e, {"plausible": True, "reason": "x"}, candidate=True)
+    lot.current_bid, lot.next_bid = 12, 14
+    enrich._apply_roi(lot, e)
+    assert e.roi_status == "GOLD MINE"      # confirmed exempts the thin gate
+
+
+def test_a_corrected_candidate_regrades_on_the_honest_number(verify_with):
+    """$225 from one comp-less inspection, auditor says $80 — at a $10 bid
+    that's STILL a real gold, on a number someone actually defended."""
+    lot, e = _thin_lot(est_resale=225)
+    verify_with(lot, e, {"plausible": False, "reason": "sums a bit hot",
+                         "realistic_value": 80}, candidate=True)
+    assert e.gold_check == "corrected"
+    assert float(e.est_resale) == 80
+    assert e.roi_status == "GOLD MINE"
+
+
+def test_a_demoted_candidate_stays_blocked(verify_with):
+    lot, e = _thin_lot()
+    verify_with(lot, e, {"plausible": False, "reason": "junk pile",
+                         "realistic_value": 0}, candidate=True)
+    assert e.gold_check == "demoted"
+    assert e.roi_status == "PASS"
+
+
+def test_non_candidates_still_require_the_badge(verify_with):
+    lot, e = _thin_lot()
+    calls = verify_with(lot, e, {"plausible": True, "reason": "x"})
+    assert calls == 0                        # PASS + not a candidate = no spend
+    assert e.roi_status == "PASS"
 
 
 def test_a_correction_survives_a_bid_refresh(verify_with):

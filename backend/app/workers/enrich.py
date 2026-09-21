@@ -66,6 +66,11 @@ MIN_DESC_FOR_TEXT_PASS = 80     # below this the description carries no signal
 # median lot's all-in cost and swamped everything the ROI was meant to show.
 LOGISTICS_COST = {"EASY": 3.50, "NEUTRAL": 6.50, "HARD": 21.00}
 
+# The audit sweep promotes thin-evidence lots (no comps, value from the
+# itemized vision pass) when at least this much profit is on the table —
+# a half-cent audit isn't worth spending on a $4 pile.
+PROMOTE_MIN_PROFIT = float(os.environ.get("PROMOTE_MIN_PROFIT", "15"))
+
 # Getting the lot FROM the auction house is a separate, real cost that the
 # model ignored entirely — ship_cost_estimate was read off each auction's
 # terms page and then never used by anything. It's zero when you drive out
@@ -523,10 +528,14 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
         from_title = (e.price_source or "").startswith("retail $")
         # An audit-corrected value is the auditor's own appraisal — a
         # deliberate second opinion outranks the comp count that priced the
-        # number it replaced.
-        audit_priced = (e.price_source or "").startswith("audit-corrected")
+        # number it replaced. A CONFIRMED value has the same standing: the
+        # auditor is the second agreeing source the thin gate demands, and
+        # any value change clears gold_check, so the exemption can't
+        # outlive the number it vouched for.
+        audit_backed = ((e.price_source or "").startswith("audit-corrected")
+                        or e.gold_check in ("confirmed", "corrected"))
         thin_evidence = ((e.comp_count or 0) < 2
-                         and not (from_title or audit_priced))
+                         and not (from_title or audit_backed))
         e.profit = lead.profit
         # An audit demotion stands until the VALUE changes (which clears
         # gold_check) — recomputing ROI on a new bid or a reprice must not
@@ -612,19 +621,27 @@ def _audit_correction(result: dict, claimed: float) -> float | None:
     return round(value, 2)
 
 
-def _verify_gold(db: Session, lot: models.Lot, e: models.Enrichment) -> None:
-    """Second-opinion audit on a fresh GOLD MINE.
+def _verify_gold(db: Session, lot: models.Lot, e: models.Enrichment, *,
+                 candidate: bool = False) -> None:
+    """Second-opinion audit on a fresh GOLD MINE — or, with candidate=True,
+    on a thin-evidence lot the sweep wants a verdict on.
 
-    Confirmed golds keep the badge (plus a ✓ in the UI). An implausible
-    value is REPLACED by the auditor's own estimate and the lot regraded on
-    it — the audit note already said what the item really sells for, and
-    discarding that left debunked numbers on display with no ROI signal
-    (the SCS egg: 'worth $80-150' demoted to limbo at a $2 bid instead of
-    regraded as a real gold). Only when the auditor offers no usable number
-    does the lot fall to a plain demotion. Fail-open: if the call fails the
-    gold stands but stays unchecked, so the next reprice retries it.
-    Hand-set prices are never second-guessed."""
-    if not GOLD_CHECK or e.roi_status != "GOLD MINE" or e.gold_check:
+    Confirmed golds keep the badge (plus a ✓ in the UI), and a confirmed
+    CANDIDATE is promoted to it: comp-less values come from the itemized
+    vision pass summing what it reads in the photo, and the thin gate
+    blocked every one of them no matter how good — 529 of 731 Vinted
+    media piles, including an $8 lot the inspection priced at $225. The
+    auditor is the second source of evidence the badge demands. An
+    implausible value is REPLACED by the auditor's own estimate and the
+    lot regraded on it — the audit note already said what the item really
+    sells for, and discarding that left debunked numbers on display with
+    no ROI signal. Only when the auditor offers no usable number does the
+    lot fall to a plain demotion. Fail-open: if the call fails the lot
+    stands unchanged, so the next sweep retries it. Hand-set prices are
+    never second-guessed."""
+    if not GOLD_CHECK or e.gold_check:
+        return
+    if e.roi_status != "GOLD MINE" and not candidate:
         return
     if "est_resale" in set(e.user_overrides or []):
         return
@@ -660,6 +677,11 @@ def _verify_gold(db: Session, lot: models.Lot, e: models.Enrichment) -> None:
     if result["plausible"]:
         e.gold_check = "confirmed"
         e.gold_check_note = reason or None
+        # A confirmed candidate earns the badge: 'confirmed' now exempts
+        # the thin gate in _apply_roi, so the promotion survives every
+        # later regrade and bid refresh too.
+        if candidate:
+            _apply_roi(lot, e)
     else:
         e.gold_check_note = reason or "resale value judged implausible"
         corrected = _audit_correction(result, float(e.est_resale))
@@ -1078,25 +1100,36 @@ def run_audit_sweep(resume_job_id: str | None = None) -> None:
     db: Session = SessionLocal()
     job = resume_job_id or jobs.start("audit-golds", "Auditing unchecked golds")
     audited = 0
+    candidates: list = []
     try:
-        rows = (db.query(models.Lot)
+        base = (db.query(models.Lot)
                   .join(models.Enrichment)
                   .options(joinedload(models.Lot.enrichment))
                   .join(models.Auction, models.Lot.auction_id == models.Auction.id)
-                  .filter(models.Enrichment.roi_status == "GOLD MINE",
-                          models.Enrichment.gold_check.is_(None),
+                  .filter(models.Enrichment.gold_check.is_(None),
                           or_(models.Lot.hidden.is_(False),
                               models.Lot.hidden.is_(None)),
                           (models.Auction.closing_date.is_(None))
-                          | (models.Auction.closing_date >= datetime.now()))
-                  .all())
+                          | (models.Auction.closing_date >= datetime.now())))
+        golds = base.filter(
+            models.Enrichment.roi_status == "GOLD MINE").all()
+        # Promotion candidates: blocked ONLY by thin evidence, with enough
+        # profit on the table to be worth half a cent. Comp-less values
+        # come from the itemized vision pass; the auditor is the second
+        # agreeing source the thin gate demands.
+        candidates = base.filter(
+            models.Enrichment.roi_status == "PASS",
+            models.Enrichment.roi_reason.like("only %"),
+            models.Enrichment.profit >= PROMOTE_MIN_PROFIT).all()
+        rows = [(lot, False) for lot in golds] + [(lot, True)
+                                                  for lot in candidates]
         jobs.update(job, total=len(rows))
-        for i, lot in enumerate(rows, 1):
+        for i, (lot, is_candidate) in enumerate(rows, 1):
             if jobs.is_cancelled(job):
                 print(f"Audit sweep cancelled after {i - 1} lots")
                 break
             try:
-                _verify_gold(db, lot, lot.enrichment)
+                _verify_gold(db, lot, lot.enrichment, candidate=is_candidate)
                 audited += 1
             except Exception as exc:  # noqa: BLE001 — one lot must not stop the sweep
                 logger.warning("Audit sweep failed for lot %s: %s", lot.id, exc)
@@ -1104,7 +1137,8 @@ def run_audit_sweep(resume_job_id: str | None = None) -> None:
     finally:
         jobs.finish(job)
         db.close()
-    print(f"Audit sweep complete: {audited} golds checked")
+    print(f"Audit sweep complete: {audited} lots checked "
+          f"({len(candidates)} thin candidates)")
 
 
 def run_reprice(lot_db_ids: list[int], resume_job_id: str | None = None) -> None:

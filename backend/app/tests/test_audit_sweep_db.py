@@ -52,14 +52,15 @@ def auctions():
 
 
 def _insert(auction_id, suffix, *, roi_status="GOLD MINE", gold_check=None,
-            hidden=False):
+            hidden=False, roi_reason=None, profit=None):
     db = SessionLocal()
     lot = models.Lot(lot_id=f"{PREFIX}{suffix}", auction_id=auction_id,
                      title=f"pytest {suffix}", status="OPEN", hidden=hidden)
     db.add(lot)
     db.flush()
     db.add(models.Enrichment(lot_id=lot.id, status="success", est_resale=100,
-                             roi_status=roi_status, gold_check=gold_check))
+                             roi_status=roi_status, gold_check=gold_check,
+                             roi_reason=roi_reason, profit=profit))
     db.commit()
     lot_id = lot.id
     db.close()
@@ -68,13 +69,16 @@ def _insert(auction_id, suffix, *, roi_status="GOLD MINE", gold_check=None,
 
 @pytest.fixture()
 def sweep(monkeypatch):
-    """Run the sweep with _verify_gold recorded; returns OUR lots it visited."""
+    """Run the sweep with _verify_gold recorded; returns OUR lots it visited
+    as (lot_id, candidate) pairs."""
     def run():
         visited = []
-        monkeypatch.setattr(enrich, "_verify_gold",
-                            lambda db, lot, e: visited.append(lot.lot_id))
+        monkeypatch.setattr(
+            enrich, "_verify_gold",
+            lambda db, lot, e, candidate=False: visited.append(
+                (lot.lot_id, candidate)))
         enrich.run_audit_sweep()
-        return [v for v in visited if v.startswith(PREFIX)]
+        return [v for v in visited if v[0].startswith(PREFIX)]
     return run
 
 
@@ -84,7 +88,18 @@ def test_only_the_unchecked_gold_is_audited(auctions, sweep):
     _insert(open_a, "confirmed", gold_check="confirmed")
     _insert(open_a, "corrected", gold_check="corrected")
     _insert(open_a, "pass", roi_status="PASS")
-    assert sweep() == [f"{PREFIX}unchecked"]
+    assert sweep() == [(f"{PREFIX}unchecked", False)]
+
+
+def test_thin_lots_with_profit_become_promotion_candidates(auctions, sweep):
+    open_a, _ = auctions
+    _insert(open_a, "thin-rich", roi_status="PASS", profit=40,
+            roi_reason="only 0 comps — the badge needs 2 agreeing")
+    _insert(open_a, "thin-poor", roi_status="PASS", profit=4,
+            roi_reason="only 0 comps — the badge needs 2 agreeing")
+    _insert(open_a, "rich-but-demoted-reason", roi_status="PASS", profit=40,
+            roi_reason="audit demoted the value (see its note)")
+    assert sweep() == [(f"{PREFIX}thin-rich", True)]
 
 
 def test_closed_auctions_and_hidden_lots_are_left_alone(auctions, sweep):
