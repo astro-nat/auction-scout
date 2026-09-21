@@ -159,6 +159,19 @@ export function scanAuctions(filters = {}) {
   })
 }
 
+// GovDeals: one card per government seller near the zip. Import pulls that
+// seller's open assets in as lots (and re-importing refreshes their bids).
+export function scanGovDeals(filters = {}) {
+  return request('/govdeals/scan', {
+    method: 'POST',
+    body: JSON.stringify(filters),
+  })
+}
+
+export function importGovDeals(auctionId) {
+  return request(`/govdeals/${auctionId}/import`, { method: 'POST' })
+}
+
 export function importLots(auctionId, categoryId = -1) {
   const q = categoryId && categoryId !== -1 ? `?category_id=${categoryId}` : ''
   return request(`/auctions/${auctionId}/import${q}`, { method: 'POST' })

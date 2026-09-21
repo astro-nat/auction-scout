@@ -17,6 +17,20 @@ HIBID_USER_AGENT = os.environ.get(
 )
 HIBID_TIMEOUT_SECONDS = float(os.environ.get("HIBID_TIMEOUT_SECONDS", "15.0"))
 
+# --- GovDeals (Liquidity Services maestro API) ---
+# These two keys are NOT secrets: they're the anonymous app keys served to
+# every visitor inside govdeals.com's public JS bundle (x-user-id -1, no
+# account). Env overrides exist so a site release that rotates them is a
+# config change, not a deploy.
+GOVDEALS_API_KEY = os.environ.get(
+    "GOVDEALS_API_KEY", "af93060f-337e-428c-87b8-c74b5837d6cd")
+GOVDEALS_SUB_KEY = os.environ.get(
+    "GOVDEALS_SUB_KEY", "cf620d1d8f904b5797507dc5fd1fdb80")
+# Buyer's premium varies by seller (12.5%-18%, shown per asset page, absent
+# from the search API). 15% is the conservative middle: overestimating cost
+# a little makes max bids safer, never riskier.
+GOVDEALS_PREMIUM_MULT = float(os.environ.get("GOVDEALS_PREMIUM_MULT", "1.15"))
+
 # --- eBay API (comps + image search); empty string disables those features ---
 EBAY_APP_ID = os.environ.get("EBAY_APP_ID", "")
 EBAY_CERT_ID = os.environ.get("EBAY_CERT_ID", "")

@@ -12,6 +12,10 @@ class Auction(Base):
 
     id = Column(Integer, primary_key=True)
     hibid_id = Column(Integer, unique=True, index=True)  # HiBid event id
+    # Identity on other platforms ("gd-{accountId}" for a GovDeals seller's
+    # synthetic auction). NULL for HiBid rows; hibid_id NULL for these — the
+    # HiBid-only workers (bid refresh, import-all) already filter on that.
+    external_id = Column(String, unique=True, index=True)
     name = Column(String, nullable=False)
     auctioneer = Column(String)
     auctioneer_id = Column(Integer, index=True)   # HiBid company id

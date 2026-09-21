@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .database import Base, engine
 from . import models  # noqa: F401 — import registers models on Base before create_all
-from .routers import lots, enrichment, auctions, status
+from .routers import lots, enrichment, auctions, govdeals, status
 
 # Dev convenience only — creates tables from models if they don't exist.
 # Once this is a real app with data you care about, replace this with Alembic
@@ -105,6 +105,12 @@ _MIGRATIONS = [
     r"(polic(y|ies)|options?|schedules?|updates?|changes?)"
     r"( *([&+]|and)? *(polic(y|ies)|options?|schedules?|updates?|changes?))*"
     r"( *[-:]* *please +read!*)?[\s.!*_-]*$'",
+    # GovDeals: synthetic per-seller auctions carry their identity here
+    # (hibid_id stays NULL, which is what keeps them out of the HiBid-only
+    # workers).
+    "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS external_id VARCHAR",
+    "CREATE UNIQUE INDEX IF NOT EXISTS ix_auctions_external_id "
+    "ON auctions (external_id)",
 ]
 
 def _run_migrations() -> list[str]:
@@ -228,6 +234,7 @@ app.add_middleware(
 app.include_router(lots.router)
 app.include_router(enrichment.router)
 app.include_router(auctions.router)
+app.include_router(govdeals.router)
 app.include_router(status.router)
 
 
