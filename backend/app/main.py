@@ -77,6 +77,7 @@ _MIGRATIONS = [
     "created_at TIMESTAMP DEFAULT now())",
     "CREATE INDEX IF NOT EXISTS ix_estimate_obs_auctioneer "
     "ON estimate_obs (auctioneer_id)",
+    "ALTER TABLE enrichment ADD COLUMN IF NOT EXISTS roi_reason VARCHAR",
     # Null out values already minted for placeholder rows ("More Lots
     # Loading" priced at $474.19 off a motorcycle part and a stamp album).
     # Idempotent: matches nothing once est_resale is null. The SQL pattern

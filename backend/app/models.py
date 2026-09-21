@@ -150,6 +150,11 @@ class Enrichment(Base):
     est_roi = Column(Float)            # at current bid
     profit = Column(Numeric)
     roi_status = Column(String)        # GOLD MINE | PASS
+    # WHY the verdict is what it is — the gate that blocked a PASS ("only 1
+    # comp — needs 2 agreeing", "bid $21 already past the $4 ceiling") or
+    # NULL on a clean GOLD MINE. Refreshed by every _apply_roi run, so it
+    # tracks the verdict through bid refreshes and regrades.
+    roi_reason = Column(String)
     # Second-opinion audit on GOLD MINEs (workers/enrich._verify_gold):
     # NULL = not yet checked, 'confirmed' = the AI agrees the value is
     # realistic, 'demoted' = it called the value implausible and the

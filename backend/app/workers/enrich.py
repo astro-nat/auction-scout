@@ -519,6 +519,26 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
         e.roi_status = ("PASS" if (red_flag or lot.unreachable_pickup
                                    or thin_evidence or demoted)
                         else lead.status)
+        # Name the gate, in gate order — the first one that blocked is the
+        # one the user should read. NULL on a clean gold: nothing to explain.
+        if red_flag:
+            e.roi_reason = f"condition red flag: {e.verdict}"
+        elif lot.unreachable_pickup:
+            e.roi_reason = "pickup-only and outside your radius"
+        elif thin_evidence:
+            n = e.comp_count or 0
+            e.roi_reason = (f"only {n} comp{'s' if n != 1 else ''} — "
+                            "the badge needs 2 agreeing")
+        elif demoted:
+            e.roi_reason = "audit demoted the value (see its note)"
+        elif e.roi_status == "PASS":
+            if lead.max_bid <= 0:
+                e.roi_reason = "value too low to clear costs at any bid"
+            else:
+                e.roi_reason = (f"bid ${effective_bid:.0f} already past the "
+                                f"${float(lead.max_bid):.0f} ceiling")
+        else:
+            e.roi_reason = None
     else:
         # No usable price means no usable verdict. Leaving the previous run's
         # numbers in place is how a lot whose comps were just rejected stayed
@@ -527,6 +547,9 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
         e.profit = None
         e.est_roi = None
         e.roi_status = "PASS" if (red_flag or lot.unreachable_pickup) else None
+        e.roi_reason = (f"condition red flag: {e.verdict}" if red_flag
+                        else "pickup-only and outside your radius"
+                        if lot.unreachable_pickup else "no resale value found")
 
 
 GOLD_CHECK_PROMPT = """You are auditing a resale-auction buying decision. Be skeptical.

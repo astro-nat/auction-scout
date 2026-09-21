@@ -18,6 +18,11 @@ function CompsPeek({ lot, e }) {
         evidence{rows.length ? ` (${rows.length})` : ''}
       </summary>
       <div style={{ fontSize: 11, textAlign: 'left', maxWidth: 360, padding: '4px 0' }}>
+        {e.roi_reason && (
+          <div style={{ marginBottom: 3 }}>
+            {e.roi_status === 'PASS' ? 'not gold: ' : ''}{e.roi_reason}
+          </div>
+        )}
         {e.price_source && (
           <div style={{ color: 'var(--muted)', marginBottom: 3 }}>{e.price_source}</div>
         )}
@@ -629,7 +634,8 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                 )}
                 {e.verdict && (
                   <span className="badge"
-                        title={e.gold_check_note || undefined}>
+                        title={e.gold_check_note || e.roi_reason || undefined}
+                        style={(e.gold_check_note || e.roi_reason) ? { cursor: 'help' } : undefined}>
                     {gold ? (e.gold_check === 'confirmed' ? 'GOLD ✓' : 'GOLD')
                       : ''} {e.verdict}
                   </span>
@@ -886,8 +892,8 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                     ? `AI double-checked this gold${e.gold_check_note ? `: ${e.gold_check_note}` : ''}`
                     : e.gold_check === 'demoted'
                       ? `AI demoted this gold — ${e.gold_check_note || 'value judged implausible'}`
-                      : undefined}
-                  style={e.gold_check ? { cursor: 'help' } : undefined}>
+                      : e.roi_reason || undefined}
+                  style={(e.gold_check || e.roi_reason) ? { cursor: 'help' } : undefined}>
                   {gold ? (e.gold_check === 'confirmed' ? 'GOLD ✓' : 'GOLD')
                     : ''}
                 </span>{' '}
