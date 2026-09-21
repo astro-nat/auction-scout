@@ -119,3 +119,71 @@ def test_a_garbage_verdict_changes_nothing(verify_with):
     verify_with(lot, e, {"plausible": "yes", "reason": 3})
     assert e.gold_check is None
     assert e.roi_status == "GOLD MINE"
+
+
+# --- the auditor's own number replaces the one it rejected ---------------
+
+def test_a_rejected_value_is_replaced_by_the_auditors_own(verify_with):
+    """The SCS egg case: comps said $370, the audit note said $80-150 — the
+    old code kept $370 on display and threw the note's number away."""
+    lot, e = _gold_lot()
+    verify_with(lot, e, {"plausible": False,
+                         "reason": "common year sells for far less",
+                         "realistic_value": 80})
+    assert e.gold_check == "corrected"
+    assert float(e.est_resale) == 80
+    assert e.price_source == "audit-corrected (comps said $200)"
+    # Regraded on the corrected number — at an $80 value and a $12 bid this
+    # is a REAL gold, not a lot stuck in demotion limbo.
+    assert e.roi_status == "GOLD MINE"
+    assert e.roi_reason is None
+    assert "common year" in e.gold_check_note
+
+
+def test_a_correction_can_still_fail_the_roi_bar(verify_with):
+    lot, e = _gold_lot()
+    lot.current_bid, lot.next_bid = 60, 65
+    verify_with(lot, e, {"plausible": False, "reason": "x",
+                         "realistic_value": 80})
+    assert e.gold_check == "corrected"
+    assert e.roi_status == "PASS"          # $65 bid on an $80 item
+
+
+def test_zero_realistic_value_is_a_plain_demotion(verify_with):
+    lot, e = _gold_lot()
+    verify_with(lot, e, {"plausible": False, "reason": "decorative only",
+                         "realistic_value": 0})
+    assert e.gold_check == "demoted"
+    assert float(e.est_resale) == 200      # nothing to replace it with
+    assert e.roi_status == "PASS"
+
+
+def test_an_incoherent_higher_value_is_ignored(verify_with):
+    """'Implausible, and it's worth MORE' contradicts itself — demote."""
+    lot, e = _gold_lot()
+    verify_with(lot, e, {"plausible": False, "reason": "x",
+                         "realistic_value": 500})
+    assert e.gold_check == "demoted"
+    assert float(e.est_resale) == 200
+
+
+def test_a_corrected_retail_gold_survives_the_thin_evidence_gate(verify_with):
+    """Retail-in-title golds have few or no comps; once the price_source no
+    longer starts with 'retail $' the thin gate would kill the correction."""
+    lot, e = _gold_lot(comp_count=0, price_source="retail $199 in title")
+    verify_with(lot, e, {"plausible": False, "reason": "sells under retail",
+                         "realistic_value": 80})
+    assert e.gold_check == "corrected"
+    assert e.roi_status == "GOLD MINE"
+
+
+def test_a_correction_survives_a_bid_refresh(verify_with):
+    lot, e = _gold_lot()
+    verify_with(lot, e, {"plausible": False, "reason": "x",
+                         "realistic_value": 80})
+    assert e.roi_status == "GOLD MINE"
+    lot.current_bid, lot.next_bid = 13, 14     # new bid (still under the
+                                               # $15.91 ceiling), ROI recomputes
+    enrich._apply_roi(lot, e)
+    assert e.roi_status == "GOLD MINE"
+    assert e.gold_check == "corrected"         # and no re-audit gate flip

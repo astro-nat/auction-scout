@@ -509,7 +509,12 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
         # A retail price printed in the lot title is the exception: it's one
         # data point but an authoritative one, not a hopeful asking price.
         from_title = (e.price_source or "").startswith("retail $")
-        thin_evidence = (e.comp_count or 0) < 2 and not from_title
+        # An audit-corrected value is the auditor's own appraisal — a
+        # deliberate second opinion outranks the comp count that priced the
+        # number it replaced.
+        audit_priced = (e.price_source or "").startswith("audit-corrected")
+        thin_evidence = ((e.comp_count or 0) < 2
+                         and not (from_title or audit_priced))
         e.profit = lead.profit
         # An audit demotion stands until the VALUE changes (which clears
         # gold_check) — recomputing ROI on a new bid or a reprice must not
@@ -569,17 +574,41 @@ plate priced as sterling; broken/for-parts items priced as working; one
 item carrying a whole-pile total; hype or asking prices nowhere near what
 actually sells.
 
-Return ONLY valid JSON: {{"plausible": true or false, "reason": string}}
-reason = one short sentence a reseller can act on."""
+Return ONLY valid JSON:
+{{"plausible": true or false, "reason": string, "realistic_value": number}}
+reason = one short sentence a reseller can act on.
+realistic_value = YOUR estimate of what this exact item in this condition
+actually sells for on eBay — a single number (the midpoint if you'd give a
+range), 0 if it has no meaningful resale value. Required when plausible is
+false: it replaces the claim you rejected."""
+
+
+def _audit_correction(result: dict, claimed: float) -> float | None:
+    """The auditor's own value, when usable: a positive number meaningfully
+    below the claim it just rejected. Zero means 'no real value' (plain
+    demotion says that better), and anything at or above the claim is
+    incoherent with calling the claim implausible."""
+    try:
+        value = float(result.get("realistic_value"))
+    except (TypeError, ValueError):
+        return None
+    if not 0 < value < claimed:
+        return None
+    return round(value, 2)
 
 
 def _verify_gold(db: Session, lot: models.Lot, e: models.Enrichment) -> None:
     """Second-opinion audit on a fresh GOLD MINE.
 
-    Confirmed golds keep the badge (plus a ✓ in the UI); an implausible
-    value demotes the verdict to PASS with the reason stored. Fail-open:
-    if the call fails the gold stands but stays unchecked, so the next
-    reprice retries it. Hand-set prices are never second-guessed."""
+    Confirmed golds keep the badge (plus a ✓ in the UI). An implausible
+    value is REPLACED by the auditor's own estimate and the lot regraded on
+    it — the audit note already said what the item really sells for, and
+    discarding that left debunked numbers on display with no ROI signal
+    (the SCS egg: 'worth $80-150' demoted to limbo at a $2 bid instead of
+    regraded as a real gold). Only when the auditor offers no usable number
+    does the lot fall to a plain demotion. Fail-open: if the call fails the
+    gold stands but stays unchecked, so the next reprice retries it.
+    Hand-set prices are never second-guessed."""
     if not GOLD_CHECK or e.roi_status != "GOLD MINE" or e.gold_check:
         return
     if "est_resale" in set(e.user_overrides or []):
@@ -616,9 +645,20 @@ def _verify_gold(db: Session, lot: models.Lot, e: models.Enrichment) -> None:
         e.gold_check = "confirmed"
         e.gold_check_note = reason or None
     else:
-        e.gold_check = "demoted"
         e.gold_check_note = reason or "resale value judged implausible"
-        e.roi_status = "PASS"
+        corrected = _audit_correction(result, float(e.est_resale))
+        if corrected is not None:
+            e.gold_check = "corrected"
+            e.price_source = (f"audit-corrected "
+                              f"(comps said ${float(e.est_resale):g})")
+            e.est_resale = corrected
+            # Regrade on the corrected number: 'corrected' passes the
+            # demotion gate, and the guard above means no second audit —
+            # this value IS the audit's.
+            _apply_roi(lot, e)
+        else:
+            e.gold_check = "demoted"
+            e.roi_status = "PASS"
     db.commit()
 
 

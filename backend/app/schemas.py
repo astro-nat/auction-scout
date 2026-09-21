@@ -35,7 +35,7 @@ class EnrichmentOut(BaseModel):
     roi_status: Optional[str] = None
     # The gate that blocked a PASS, in plain words; null on a clean gold.
     roi_reason: Optional[str] = None
-    gold_check: Optional[str] = None       # confirmed | demoted | null
+    gold_check: Optional[str] = None       # confirmed | corrected | demoted | null
     gold_check_note: Optional[str] = None
     progress: Optional[str] = None
     error_message: Optional[str] = None

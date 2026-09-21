@@ -636,7 +636,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                   <span className="badge"
                         title={e.gold_check_note || e.roi_reason || undefined}
                         style={(e.gold_check_note || e.roi_reason) ? { cursor: 'help' } : undefined}>
-                    {gold ? (e.gold_check === 'confirmed' ? 'GOLD ✓' : 'GOLD')
+                    {gold ? (e.gold_check === 'confirmed' || e.gold_check === 'corrected' ? 'GOLD ✓' : 'GOLD')
                       : ''} {e.verdict}
                   </span>
                 )}
@@ -890,11 +890,13 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                 <span
                   title={e.gold_check === 'confirmed'
                     ? `AI double-checked this gold${e.gold_check_note ? `: ${e.gold_check_note}` : ''}`
-                    : e.gold_check === 'demoted'
-                      ? `AI demoted this gold — ${e.gold_check_note || 'value judged implausible'}`
-                      : e.roi_reason || undefined}
+                    : e.gold_check === 'corrected'
+                      ? `AI replaced the comp value with its own — ${e.gold_check_note || 'see price source'}`
+                      : e.gold_check === 'demoted'
+                        ? `AI demoted this gold — ${e.gold_check_note || 'value judged implausible'}`
+                        : e.roi_reason || undefined}
                   style={(e.gold_check || e.roi_reason) ? { cursor: 'help' } : undefined}>
-                  {gold ? (e.gold_check === 'confirmed' ? 'GOLD ✓' : 'GOLD')
+                  {gold ? (e.gold_check === 'confirmed' || e.gold_check === 'corrected' ? 'GOLD ✓' : 'GOLD')
                     : ''}
                 </span>{' '}
                 <EditableCell
