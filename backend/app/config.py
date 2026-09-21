@@ -140,6 +140,8 @@ SHIP_KILLERS = (
     r"|(?<!rc )(?<!toy )(?<!slot )\bcars?\b(?!\s+(?:photo|chargers?|mounts?|keys?|covers?|mats?|seats?|wash|care|audio|stereo|holders?|organizers?|vacuums?|adapters?|fresheners?))"
     r"|vehicle|(?<!rc )(?<!toy )\btrucks?\b(?!\s+bed liner)|\bsuv\b|\bsedan\b"
     r"|motorcycle|\batv\b|\butv\b|\bboat\b|jet ski|\btrailer\b|\brv\b|\bcamper\b|motorhome"
+    r"|(?<!usb )(?<!can )(?<!data )\bbus(es)?\b(?!\s*(?:powered|interface|bars?|strips?))"
+    r"|\bvan\b(?!\s+gogh)"
     r"|\bhouse\b|real estate|\bproperty\b|\bland\b|\bacreage\b|\bcondo\b|\bshed\b|\bbarn\b"
     r"|\bfence\b|\bpallet\b|bulk lot|pool table|hot tub|aquarium|fish tank"
     r"|oversized"
