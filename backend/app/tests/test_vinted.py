@@ -44,6 +44,20 @@ def test_missing_brand_and_single_price_still_parse():
     assert it["price"] == 12.0
 
 
+def test_media_cards_have_no_brand_segment():
+    """CDs and books go straight to Condition — the pyrex shape with an
+    optional-brand regex would let a greedy title swallow the brand."""
+    card = ('<img src="https://images1.vinted.net/t/z.webp" '
+            'alt="Tom Petty &amp; The Heartbreakers - Hard Promises CD 1981, '
+            'Condition: Very good, 21.47 $, 23.62 $" '
+            'data-testid="product-item-id-888--image--img"/>')
+    it = vinted.parse_catalog(card)[0]
+    assert it["title"] == "Tom Petty & The Heartbreakers - Hard Promises CD 1981"
+    assert it["brand"] is None
+    assert it["condition"] == "Very good"
+    assert it["price"] == 21.47
+
+
 def test_an_unrecognized_alt_is_skipped_not_mangled():
     assert vinted.parse_catalog(GARBAGE_ALT) == []
 

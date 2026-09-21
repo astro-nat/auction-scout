@@ -31,8 +31,14 @@ PAGES_MAX = 2   # newest-first: two pages of ~96 is the whole "fresh" window
 _CARD_RE = re.compile(
     r'<img src="(https://images\d*\.vinted\.net/[^"]+)" '
     r'alt="([^"]+)"[^>]*data-testid="product-item-id-(\d+)--image--img"')
-_ALT_RE = re.compile(
+# Two shapes: clothing/housewares carry "Brand: X", media (CDs, books)
+# goes straight to Condition. Tried in that order — a single regex with an
+# optional brand group lets a greedy title swallow the brand instead.
+_ALT_BRANDED_RE = re.compile(
     r"^(?P<title>.*), Brand: (?P<brand>[^,]*), Condition: (?P<cond>[^,]*), "
+    r"(?P<price>[\d.,]+) \$(?:, [\d.,]+ \$)?$")
+_ALT_PLAIN_RE = re.compile(
+    r"^(?P<title>.*), Condition: (?P<cond>[^,]*), "
     r"(?P<price>[\d.,]+) \$(?:, [\d.,]+ \$)?$")
 
 
@@ -44,7 +50,7 @@ def parse_catalog(html: str) -> list[dict]:
     items = []
     for thumb, alt, item_id in _CARD_RE.findall(html):
         alt = unescape(alt)
-        m = _ALT_RE.match(alt)
+        m = _ALT_BRANDED_RE.match(alt) or _ALT_PLAIN_RE.match(alt)
         if not m:
             # A reshuffled alt format should fail loudly in counts, not
             # silently import titles with prices glued on.
@@ -54,7 +60,7 @@ def parse_catalog(html: str) -> list[dict]:
             price = float(m.group("price").replace(",", ""))
         except ValueError:
             continue
-        brand = m.group("brand").strip()
+        brand = (m.groupdict().get("brand") or "").strip()
         cond = m.group("cond").strip()
         title = m.group("title").strip()[:400]
         items.append({
