@@ -172,6 +172,19 @@ export function importGovDeals(auctionId) {
   return request(`/govdeals/${auctionId}/import`, { method: 'POST' })
 }
 
+// PublicSurplus: one card per search area (the listing rows don't name the
+// selling agency, so the radius is the grouping). Import doubles as refresh.
+export function scanPublicSurplus(filters = {}) {
+  return request('/publicsurplus/scan', {
+    method: 'POST',
+    body: JSON.stringify(filters),
+  })
+}
+
+export function importPublicSurplus(auctionId) {
+  return request(`/publicsurplus/${auctionId}/import`, { method: 'POST' })
+}
+
 export function importLots(auctionId, categoryId = -1) {
   const q = categoryId && categoryId !== -1 ? `?category_id=${categoryId}` : ''
   return request(`/auctions/${auctionId}/import${q}`, { method: 'POST' })

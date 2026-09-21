@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, scanGovDeals, importGovDeals, importLots, importAllAuctions, enrichAll, enrichCategory, flushClosed, refreshBids, reinspectNoComps, fetchSettings, saveTargetRoi, savePacing, fetchWeekStats, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
+import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, scanGovDeals, importGovDeals, scanPublicSurplus, importPublicSurplus, importLots, importAllAuctions, enrichAll, enrichCategory, flushClosed, refreshBids, reinspectNoComps, fetchSettings, saveTargetRoi, savePacing, fetchWeekStats, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
 import { auctionClosed, clearsFloor, underFloor, goldBadge as pacingGoldBadge } from './lib/pacing'
 import { houseRatioLabel, houseRatioTitle } from './lib/calibration'
 import LotTable from './components/LotTable'
@@ -198,6 +198,20 @@ export default function App() {
     } catch (e) { alertOnce(e.message) } finally { setBusy('') }
   }
 
+  async function handleScanPublicSurplus() {
+    setBusy('Scanning PublicSurplus…')
+    try {
+      const found = await scanPublicSurplus({
+        zip: scan.zip || undefined,
+        // Pickup-only, same as GovDeals: "Anywhere" is capped.
+        radius_miles: scanIsAnywhere ? 100 : Number(scan.radius_miles),
+      })
+      rememberAuctions(found)
+      setAuctions(found)
+      setAuctionLimit(50)
+    } catch (e) { alertOnce(e.message) } finally { setBusy('') }
+  }
+
   // Called when the status bar sees the server go idle — pull fresh data so
   // finished imports/enrichments appear without a manual refresh.
   // Pull fresh auction stats and merge them into whatever is on screen, so
@@ -255,15 +269,18 @@ export default function App() {
   // paged through a 1,200-lot catalog was a timeout with a progress bar,
   // and closing the tab cancelled the import mid-save.
   async function handleImport(auctionId, categoryId = scanCategoryId) {
-    // A GovDeals seller imports through its own endpoint: synchronous and
-    // small (one search response), so the lots are there on the spot.
+    // GovDeals / PublicSurplus import through their own endpoints:
+    // synchronous and small (one search response), lots there on the spot.
     const target = auctions.find((a) => a.id === auctionId)
-    if (target?.external_id?.startsWith('gd-')) {
+    const platformImport = target?.external_id?.startsWith('gd-') ? importGovDeals
+      : target?.external_id?.startsWith('ps-') ? importPublicSurplus
+      : null
+    if (platformImport) {
       try {
-        const r = await importGovDeals(auctionId)
+        const r = await platformImport(auctionId)
         setSelectedAuctions([auctionId])
         setView('items')
-        alert(`Imported ${r.created + r.updated} GovDeals lots `
+        alert(`Imported ${r.created + r.updated} lots `
               + `(${r.created} new). Enrich them from the items view.`)
         refreshAll()
       } catch (e) { alertOnce(e.message) }
@@ -498,9 +515,9 @@ Skipping ${hard} HARD-to-ship lots.`
   const importAllCandidates = visibleAuctions.filter((a) =>
     !(a.closing_date && parseUtc(a.closing_date) < new Date())
     && !(hasCategoryCount(a) && a.category_lot_count === 0)
-    // GovDeals sellers import one at a time through their own endpoint —
-    // the HiBid bulk job would silently skip them anyway.
-    && !a.external_id?.startsWith('gd-'))
+    // GovDeals/PublicSurplus import one at a time through their own
+    // endpoints — the HiBid bulk job would silently skip them anyway.
+    && !a.external_id)
 
   async function handleImportAll() {
     const ids = importAllCandidates.map((a) => a.id)
@@ -809,6 +826,12 @@ Skipping ${hard} HARD-to-ship lots.`
                   style={isMobile ? { flex: '1 1 100%', padding: 10, fontSize: 15 }
                                   : { padding: '8px 18px' }}>
             Scan GovDeals
+          </button>
+          <button type="button" onClick={handleScanPublicSurplus} disabled={!!busy}
+                  title="Search PublicSurplus (school & city surplus) near your zip — one card for the whole area"
+                  style={isMobile ? { flex: '1 1 100%', padding: 10, fontSize: 15 }
+                                  : { padding: '8px 18px' }}>
+            Scan PublicSurplus
           </button>
           {importAllCandidates.length > 1 && (
             <button type="button" onClick={handleImportAll} disabled={!!busy}

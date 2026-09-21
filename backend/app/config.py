@@ -31,6 +31,14 @@ GOVDEALS_SUB_KEY = os.environ.get(
 # a little makes max bids safer, never riskier.
 GOVDEALS_PREMIUM_MULT = float(os.environ.get("GOVDEALS_PREMIUM_MULT", "1.15"))
 
+# --- PublicSurplus ---
+# Server-rendered site, no keys needed. Region is the state slug in its
+# URLs; the buyer's premium is ~10-12% depending on payment method, so 12%
+# errs on the safe side of every max bid.
+PUBLICSURPLUS_REGION = os.environ.get("PUBLICSURPLUS_REGION", "tx")
+PUBLICSURPLUS_PREMIUM_MULT = float(
+    os.environ.get("PUBLICSURPLUS_PREMIUM_MULT", "1.12"))
+
 # --- eBay API (comps + image search); empty string disables those features ---
 EBAY_APP_ID = os.environ.get("EBAY_APP_ID", "")
 EBAY_CERT_ID = os.environ.get("EBAY_CERT_ID", "")
