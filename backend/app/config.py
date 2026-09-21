@@ -39,6 +39,13 @@ PUBLICSURPLUS_REGION = os.environ.get("PUBLICSURPLUS_REGION", "tx")
 PUBLICSURPLUS_PREMIUM_MULT = float(
     os.environ.get("PUBLICSURPLUS_PREMIUM_MULT", "1.12"))
 
+# --- Vinted (fixed-price sourcing watches) ---
+# Buyer protection is ~5% + $0.70 plus sales tax; 1.08 swallows all three
+# on typical item prices, erring toward overestimating cost. Shipping is
+# paid by the buyer at checkout ($4-8 for most parcels).
+VINTED_PREMIUM_MULT = float(os.environ.get("VINTED_PREMIUM_MULT", "1.08"))
+VINTED_SHIP_ESTIMATE = float(os.environ.get("VINTED_SHIP_ESTIMATE", "6.0"))
+
 # --- eBay API (comps + image search); empty string disables those features ---
 EBAY_APP_ID = os.environ.get("EBAY_APP_ID", "")
 EBAY_CERT_ID = os.environ.get("EBAY_CERT_ID", "")

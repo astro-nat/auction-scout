@@ -185,6 +185,16 @@ export function importPublicSurplus(auctionId) {
   return request(`/publicsurplus/${auctionId}/import`, { method: 'POST' })
 }
 
+// Vinted: a fixed-price WATCH — scanning a query imports the newest
+// matching listings in the same call, and re-scanning refreshes prices
+// and closes out whatever sold.
+export function scanVinted(query, maxPrice) {
+  return request('/vinted/scan', {
+    method: 'POST',
+    body: JSON.stringify({ query, max_price: maxPrice || undefined }),
+  })
+}
+
 export function importLots(auctionId, categoryId = -1) {
   const q = categoryId && categoryId !== -1 ? `?category_id=${categoryId}` : ''
   return request(`/auctions/${auctionId}/import${q}`, { method: 'POST' })

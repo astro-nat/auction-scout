@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, scanGovDeals, importGovDeals, scanPublicSurplus, importPublicSurplus, importLots, importAllAuctions, enrichAll, enrichCategory, flushClosed, refreshBids, reinspectNoComps, fetchSettings, saveTargetRoi, savePacing, fetchWeekStats, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
+import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, scanGovDeals, importGovDeals, scanPublicSurplus, importPublicSurplus, scanVinted, importLots, importAllAuctions, enrichAll, enrichCategory, flushClosed, refreshBids, reinspectNoComps, fetchSettings, saveTargetRoi, savePacing, fetchWeekStats, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
 import { auctionClosed, clearsFloor, underFloor, goldBadge as pacingGoldBadge } from './lib/pacing'
 import { houseRatioLabel, houseRatioTitle } from './lib/calibration'
 import LotTable from './components/LotTable'
@@ -212,6 +212,22 @@ export default function App() {
     } catch (e) { alertOnce(e.message) } finally { setBusy('') }
   }
 
+  async function handleScanVinted() {
+    const query = scan.search_text.trim()
+    if (!query) {
+      alert('Type what to watch in the keyword box first — Vinted scans a '
+            + 'search ("pyrex", "coach bag"), not an area.')
+      return
+    }
+    setBusy(`Scanning Vinted for "${query}"…`)
+    try {
+      const found = await scanVinted(query)
+      rememberAuctions(found)
+      setAuctions(found)
+      setAuctionLimit(50)
+    } catch (e) { alertOnce(e.message) } finally { setBusy('') }
+  }
+
   // Called when the status bar sees the server go idle — pull fresh data so
   // finished imports/enrichments appear without a manual refresh.
   // Pull fresh auction stats and merge them into whatever is on screen, so
@@ -274,6 +290,13 @@ export default function App() {
     const target = auctions.find((a) => a.id === auctionId)
     const platformImport = target?.external_id?.startsWith('gd-') ? importGovDeals
       : target?.external_id?.startsWith('ps-') ? importPublicSurplus
+      // A Vinted card's "import" is just its scan run again: same query,
+      // fresh prices, sold items closed out.
+      : target?.external_id?.startsWith('vt-')
+        ? () => scanVinted(target.name.replace(/^Vinted: /, '')).then((cards) => {
+            const c = cards.find((x) => x.id === auctionId)
+            return { created: 0, updated: c?.lot_count ?? 0 }
+          })
       : null
     if (platformImport) {
       try {
@@ -832,6 +855,12 @@ Skipping ${hard} HARD-to-ship lots.`
                   style={isMobile ? { flex: '1 1 100%', padding: 10, fontSize: 15 }
                                   : { padding: '8px 18px' }}>
             Scan PublicSurplus
+          </button>
+          <button type="button" onClick={handleScanVinted} disabled={!!busy}
+                  title="Watch a Vinted search (uses the keyword box) — newest listings graded at their asking price; rescan to refresh"
+                  style={isMobile ? { flex: '1 1 100%', padding: 10, fontSize: 15 }
+                                  : { padding: '8px 18px' }}>
+            Scan Vinted
           </button>
           {importAllCandidates.length > 1 && (
             <button type="button" onClick={handleImportAll} disabled={!!busy}
