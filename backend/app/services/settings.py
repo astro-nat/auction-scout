@@ -41,6 +41,20 @@ def set(key: str, value: str) -> None:
 WEEKLY_GOAL_DEFAULT = 500.0
 AUCTION_FLOOR_DEFAULT = 200.0
 
+# Titled vehicles (cars, buses, boats) never earn the GOLD MINE badge while
+# this is on — the fleet listings on the government platforms price out
+# "profitably" and are still not this business.
+EXCLUDE_VEHICLES_DEFAULT = True
+
+
+def flag(key: str, default: bool) -> bool:
+    """A boolean setting, falling back on first boot or a garbage row."""
+    try:
+        v = get(key)
+        return v.strip().lower() in ("1", "true", "yes", "on") if v else default
+    except Exception:  # noqa: BLE001 — settings table missing on first boot
+        return default
+
 
 def money(key: str, default: float) -> float:
     """A dollar setting, falling back on first boot or a garbage row."""

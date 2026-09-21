@@ -37,6 +37,7 @@ from sqlalchemy.orm import Session, joinedload
 from ..database import SessionLocal
 from .. import models, config
 from ..services import financials, gemini, hibid, jobs, pricing
+from ..services import settings as settings_store
 from ..services.bolo import BoloMatcher
 from ..services.hibid import classify_logistics
 
@@ -509,6 +510,16 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
         # context; the GOLD MINE badge requires at least 2 agreeing comps.
         # A retail price printed in the lot title is the exception: it's one
         # data point but an authoritative one, not a hopeful asking price.
+        # A titled vehicle can price out "profitably" ($5,679 max on a
+        # $12,500 school bus, math intact) and still be no part of this
+        # business — DMV paperwork, not a parcel. Gate, don't delete: the
+        # numbers stay visible, the badge never mints, the audit never
+        # spends on it.
+        titled_vehicle = (settings_store.flag(
+                              "exclude_titled_vehicles",
+                              settings_store.EXCLUDE_VEHICLES_DEFAULT)
+                          and pricing.is_titled_vehicle(lot.title or "",
+                                                        lot.category))
         from_title = (e.price_source or "").startswith("retail $")
         # An audit-corrected value is the auditor's own appraisal — a
         # deliberate second opinion outranks the comp count that priced the
@@ -523,6 +534,7 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
         # re-minted golds the audit had already rejected.
         demoted = getattr(e, "gold_check", None) == "demoted"
         e.roi_status = ("PASS" if (red_flag or lot.unreachable_pickup
+                                   or titled_vehicle
                                    or thin_evidence or demoted)
                         else lead.status)
         # Name the gate, in gate order — the first one that blocked is the
@@ -531,6 +543,8 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
             e.roi_reason = f"condition red flag: {e.verdict}"
         elif lot.unreachable_pickup:
             e.roi_reason = "pickup-only and outside your radius"
+        elif titled_vehicle:
+            e.roi_reason = "titled vehicle — excluded by your settings"
         elif thin_evidence:
             n = e.comp_count or 0
             e.roi_reason = (f"only {n} comp{'s' if n != 1 else ''} — "

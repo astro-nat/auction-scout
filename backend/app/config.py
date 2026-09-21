@@ -147,6 +147,43 @@ SHIP_KILLERS = (
     r"|oversized"
 )
 
+# --- titled vehicles (cars, buses, boats — DMV paperwork, not parcels) ---
+# The government platforms are full of fleet vehicles whose resale math is
+# genuinely right ($5,679 max bid on a $12,500 school bus) and whose
+# logistics are genuinely not this business. Matching is category-first
+# (the platforms label vehicles cleanly), then title evidence. Parts,
+# accessories and toys are NOT vehicles — a truck bed liner, a diecast
+# Mustang and a "Motor Pool Parts" pallet all stay flippable.
+VEHICLE_CATEGORY = (
+    r"\b(automobiles?|cars?|vehicles?|suvs?|trucks?|vans?|bus(es)?"
+    r"|motorcycles?|motor ?homes?|rvs?|boats?|motor pool|aviation)\b"
+)
+VEHICLE_CATEGORY_GUARD = r"parts|supplies|accessor"
+# Unambiguous vehicle nouns in a title. Bare "scooter"/"moped" stay out —
+# a kids kick scooter is a $30 flip, and real ones carry year/make anyway.
+VEHICLE_NOUNS = (
+    r"\b(sedan|coupe|hatchback|minivan|cargo van|passenger van|box truck"
+    r"|tow truck|dump truck|school bus|transit bus|shuttle bus|motorhome"
+    r"|travel trailer|5th wheel|fifth wheel|jet ski|waverunner)\b"
+)
+# Title evidence: paperwork words, odometer readings, or year + make.
+VEHICLE_MARKERS = (
+    r"\b(vin\b|odometer|(salvage|clean|rebuilt) title|title in hand"
+    r"|\d{1,3},\d{3} miles|\d+k miles"
+    r"|(19|20)\d{2}\s+(ford|chevrolet|chevy|gmc|dodge|ram|toyota|honda"
+    r"|nissan|jeep|chrysler|buick|cadillac|lincoln|kia|hyundai|subaru"
+    r"|mazda|volkswagen|vw|bmw|mercedes|audi|lexus|acura|infiniti|volvo"
+    r"|tesla|aston martin|freightliner|international|kenworth|peterbilt"
+    r"|mack|isuzu|hino|navistar|thomas|saf-?t-?liner|blue ?bird"
+    r"|harley|yamaha|kawasaki|suzuki|polaris|kubota)\b)"
+)
+# Things that only look like vehicles: toys, models, parts callouts.
+VEHICLE_TOY_GUARD = (
+    r"\b(diecast|die-cast|hot ?wheels|matchbox|\brc\b|remote control"
+    r"|toy|model kit|scale model|1[:/]\d{2}\b|lego|tonka|pedal car"
+    r"|parts? only|for parts)\b"
+)
+
 # Small, dense, valuable — fits in a mailbox, ships cheap: EASY logistics.
 # Word-boundaried: bare substrings false-positive constantly ("gold" inside
 # "QuartzGold", "pen" inside "expensive", "ink" inside "drink").

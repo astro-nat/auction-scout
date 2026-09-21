@@ -71,7 +71,10 @@ def get_settings():
             "weekly_goal_usd": settings_store.money(
                 "weekly_goal_usd", settings_store.WEEKLY_GOAL_DEFAULT),
             "auction_floor_usd": settings_store.money(
-                "auction_floor_usd", settings_store.AUCTION_FLOOR_DEFAULT)}
+                "auction_floor_usd", settings_store.AUCTION_FLOOR_DEFAULT),
+            "exclude_titled_vehicles": settings_store.flag(
+                "exclude_titled_vehicles",
+                settings_store.EXCLUDE_VEHICLES_DEFAULT)}
 
 
 @router.patch("/settings")
@@ -93,8 +96,14 @@ def patch_settings(payload: dict,
                 raise HTTPException(status_code=422,
                                     detail=f"{key} must be a number from {low} to {high}")
             to_save[key] = v
+    vehicles = None
+    if "exclude_titled_vehicles" in payload:
+        vehicles = payload["exclude_titled_vehicles"]
+        if not isinstance(vehicles, bool):
+            raise HTTPException(status_code=422,
+                                detail="exclude_titled_vehicles must be true or false")
     roi = None
-    if "target_roi_pct" in payload or not to_save:
+    if "target_roi_pct" in payload or (not to_save and vehicles is None):
         roi = payload.get("target_roi_pct")
         if not isinstance(roi, (int, float)) or not (1 <= roi <= 10000):
             raise HTTPException(status_code=422,
@@ -102,16 +111,24 @@ def patch_settings(payload: dict,
 
     for key, v in to_save.items():
         settings_store.set(key, str(float(v)))
-    n = 0
+    regrade = False
+    if vehicles is not None:
+        settings_store.set("exclude_titled_vehicles",
+                           "true" if vehicles else "false")
+        to_save["exclude_titled_vehicles"] = vehicles
+        regrade = True   # the gate reshapes verdicts fleet-wide
     if roi is not None:
         settings_store.set("target_roi_pct", str(float(roi)))
         to_save["target_roi_pct"] = roi
-        # Re-GRADE, not re-price: the ROI target doesn't change what anything
-        # is worth, so this is arithmetic over stored values — no comp lookups.
+        regrade = True
+    n = 0
+    if regrade:
+        # Re-GRADE, not re-price: neither knob changes what anything is
+        # worth, so this is arithmetic over stored values — no comp lookups.
         n = (db.query(models.Enrichment)
                .filter(models.Enrichment.est_resale.isnot(None)).count())
         if n:
-            jobs.enqueue("regrade", "Re-grading items at the new ROI target",
+            jobs.enqueue("regrade", "Re-grading items under the new rules",
                          total=n)
     return {**to_save, "regrading": n}
 

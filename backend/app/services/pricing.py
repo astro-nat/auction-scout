@@ -179,6 +179,34 @@ def is_placeholder_title(title: str) -> bool:
     return bool(title) and bool(_PLACEHOLDER_RE.match(title))
 
 
+# --- Titled vehicles ----------------------------------------------------
+from .. import config as _config  # noqa: E402 — regexes live with their kin
+
+_VEH_CATEGORY_RE = re.compile(_config.VEHICLE_CATEGORY, re.I)
+_VEH_CATEGORY_GUARD_RE = re.compile(_config.VEHICLE_CATEGORY_GUARD, re.I)
+_VEH_NOUNS_RE = re.compile(_config.VEHICLE_NOUNS, re.I)
+_VEH_MARKERS_RE = re.compile(_config.VEHICLE_MARKERS, re.I)
+_VEH_TOY_GUARD_RE = re.compile(_config.VEHICLE_TOY_GUARD, re.I)
+
+
+def is_titled_vehicle(title: str, category: str | None = None) -> bool:
+    """True when the lot is a DMV-paperwork vehicle, not a parcel.
+
+    Category first — the platforms label vehicles cleanly ("Automobiles/
+    Cars", "SUV", "Motor Pool") — then title evidence: an unambiguous
+    vehicle noun, or paperwork/odometer/year+make markers. Toys, models,
+    parts and accessory lots stay out on either path."""
+    title = title or ""
+    if _VEH_TOY_GUARD_RE.search(title):
+        return False
+    cat = category or ""
+    if (_VEH_CATEGORY_RE.search(cat)
+            and not _VEH_CATEGORY_GUARD_RE.search(cat)):
+        return True
+    return bool(_VEH_NOUNS_RE.search(title)
+                or _VEH_MARKERS_RE.search(title))
+
+
 def price_from_title(title: str) -> Optional[dict]:
     """A comps-shaped result built from the title's retail price, or None.
 
