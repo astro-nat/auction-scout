@@ -53,14 +53,14 @@ def _extract_text(data: dict) -> str:
 
 
 def generate(prompt: str, image_bytes: bytes | None = None,
-             max_tokens: int = 800) -> str:
+             max_tokens: int = 800, mime_type: str = "image/jpeg") -> str:
     # max_tokens is accepted for signature parity with the Claude path but
     # not sent: the Interactions field name for it is unverified, and
     # thinking_level minimal plus bounded prompts keep outputs tight anyway.
     del max_tokens
     parts: list[dict] = [{"type": "text", "text": prompt}]
     if image_bytes:
-        parts.append({"type": "image", "mime_type": "image/jpeg",
+        parts.append({"type": "image", "mime_type": mime_type,
                       "data": base64.b64encode(image_bytes).decode()})
     r = httpx.post(
         _URL,

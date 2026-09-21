@@ -30,6 +30,26 @@ def test_explicit_provider_overrides_the_key(monkeypatch):
     assert config.vision_provider() == "claude"
 
 
+# --- image format sniffing --------------------------------------------------
+
+def test_mime_is_sniffed_from_magic_bytes():
+    """Vinted serves webp; a mislabeled media_type is a rejected API call
+    that fail-open turns into a silently blind vision pass."""
+    assert enrich._image_mime(b"RIFF\x00\x00\x00\x00WEBPVP8 ") == "image/webp"
+    assert enrich._image_mime(b"\x89PNG\r\n\x1a\n rest") == "image/png"
+    assert enrich._image_mime(b"GIF89a...") == "image/gif"
+    assert enrich._image_mime(b"\xff\xd8\xff\xe0 jpeg") == "image/jpeg"
+    assert enrich._image_mime(b"mystery bytes") == "image/jpeg"   # default
+
+
+def test_gemini_carries_the_sniffed_mime(monkeypatch):
+    cap = {}
+    monkeypatch.setattr(gemini.httpx, "post", _fake_post(cap))
+    monkeypatch.setattr(config, "GEMINI_API_KEY", "g-key")
+    gemini.generate("look", b"RIFFxxxxWEBP", mime_type="image/webp")
+    assert cap["body"]["input"][1]["mime_type"] == "image/webp"
+
+
 # --- the Gemini transport ---------------------------------------------------
 
 def _fake_post(capture, payload=None, status=200):
@@ -83,9 +103,10 @@ def test_vision_json_routes_to_gemini_and_parses(monkeypatch):
     monkeypatch.setattr(config, "VISION_PROVIDER", "gemini")
     calls = []
 
-    def fake_generate(prompt, image_bytes=None, max_tokens=800):
+    def fake_generate(prompt, image_bytes=None, max_tokens=800,
+                      mime_type="image/jpeg"):
         calls.append({"prompt": prompt, "image": image_bytes,
-                      "max_tokens": max_tokens})
+                      "max_tokens": max_tokens, "mime_type": mime_type})
         return json.dumps({"title": "Widget", "condition": "used"})
 
     monkeypatch.setattr(enrich.gemini, "generate", fake_generate)
@@ -123,7 +144,8 @@ def test_gemini_failure_retries_then_gives_up(monkeypatch):
     monkeypatch.setattr(config, "VISION_PROVIDER", "gemini")
     attempts = {"n": 0}
 
-    def flaky(prompt, image_bytes=None, max_tokens=800):
+    def flaky(prompt, image_bytes=None, max_tokens=800,
+              mime_type="image/jpeg"):
         attempts["n"] += 1
         raise RuntimeError("gemini down")
 

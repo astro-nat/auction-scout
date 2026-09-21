@@ -648,7 +648,8 @@ def _verify_gold(db: Session, lot: models.Lot, e: models.Enrichment) -> None:
     content = [{"type": "text", "text": prompt}]
     if image_bytes:
         content.insert(0, {"type": "image",
-                           "source": {"type": "base64", "media_type": "image/jpeg",
+                           "source": {"type": "base64",
+                                      "media_type": _image_mime(image_bytes),
                                       "data": base64.b64encode(image_bytes).decode()}})
     result = _call_with_retry(lambda: client.messages.create(
         model=MODEL, max_tokens=250,
@@ -924,6 +925,19 @@ def _call_text(title: str, description: str) -> dict | None:
     ).content[0].text)
 
 
+def _image_mime(image_bytes: bytes) -> str:
+    """Sniff the real format from magic bytes. HiBid serves JPEG, but
+    Vinted serves webp — and a mislabeled media_type is a rejected API
+    call, which fail-open turns into a silently blind vision pass."""
+    if image_bytes[:4] == b"RIFF" and image_bytes[8:12] == b"WEBP":
+        return "image/webp"
+    if image_bytes[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if image_bytes[:4] == b"GIF8":
+        return "image/gif"
+    return "image/jpeg"
+
+
 def _vision_json(prompt: str, image_bytes: bytes, max_tokens: int) -> dict | None:
     """One dispatcher for every image-understanding call. Provider comes
     from config: Gemini when its key is set (it identified the user's
@@ -931,9 +945,11 @@ def _vision_json(prompt: str, image_bytes: bytes, max_tokens: int) -> dict | Non
     force either. The gold-check audit is deliberately NOT routed through
     here — a value priced by one model and audited by another is a
     genuinely independent second opinion."""
+    mime = _image_mime(image_bytes)
     if config.vision_provider() == "gemini":
         return _call_with_retry(
-            lambda: gemini.generate(prompt, image_bytes, max_tokens=max_tokens))
+            lambda: gemini.generate(prompt, image_bytes, max_tokens=max_tokens,
+                                    mime_type=mime))
     b64 = base64.b64encode(image_bytes).decode()
     return _call_with_retry(lambda: client.messages.create(
         model=MODEL,
@@ -942,7 +958,7 @@ def _vision_json(prompt: str, image_bytes: bytes, max_tokens: int) -> dict | Non
             "role": "user",
             "content": [
                 {"type": "image", "source": {"type": "base64",
-                                             "media_type": "image/jpeg",
+                                             "media_type": mime,
                                              "data": b64}},
                 {"type": "text", "text": prompt},
             ],
