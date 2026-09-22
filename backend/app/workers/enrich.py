@@ -23,6 +23,7 @@ at startup.
 
 import asyncio
 import json
+from contextlib import contextmanager
 import os
 import re
 import base64
@@ -319,7 +320,12 @@ def run_enrichment(lot_db_id: int) -> None:
         e.last_attempted_at = datetime.now(timezone.utc)
 
         try:
-            _enrich(lot, e, db)
+            with timed("enrich", "lot", auction_id=lot.auction_id,
+                       label=(lot.title or "")[:60]) as ph:
+                _enrich(lot, e, db, phase=ph)
+                ph.add(1)
+                ph.note(ai_source=e.ai_source, comps=e.comp_count,
+                        price_source=(e.price_source or "")[:40])
             e.status = "success"
             e.error_message = None
         except Exception as exc:  # noqa: BLE001 — one lot failing must not kill a batch
@@ -336,6 +342,17 @@ def run_enrichment(lot_db_id: int) -> None:
     finally:
         db.close()
 
+
+
+
+@contextmanager
+def _step(phase, name: str):
+    """Time an inner step, or do nothing when no phase is recording."""
+    if phase is None:
+        yield
+        return
+    with phase.sub(name):
+        yield
 
 
 def apply_bolo_match(e: models.Enrichment, title: str, description: str,
@@ -378,7 +395,8 @@ def apply_bolo_match(e: models.Enrichment, title: str, description: str,
     return True
 
 
-def _enrich(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
+def _enrich(lot: models.Lot, e: models.Enrichment, db: Session,
+            phase=None) -> None:
     title = lot.title or ""
     description = lot.description or ""
     # Fields the user hand-corrected are never overwritten by re-enrichment.
@@ -407,7 +425,8 @@ def _enrich(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
 
     # --- 1. BOLO match (free, deterministic) ---
     _progress(db, e, "matching against BOLO brand list…")
-    apply_bolo_match(e, title, description, protected)
+    with _step(phase, "bolo"):
+        apply_bolo_match(e, title, description, protected)
 
     # --- 2. AI title + condition verdict ---
     # Unless the house already told us everything the model would: the retail
@@ -429,15 +448,18 @@ def _enrich(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
                        "no AI spend on this lot.")
     elif len(description.strip()) >= MIN_DESC_FOR_TEXT_PASS:
         _progress(db, e, "AI reading the description…")
-        ai = _call_text(title, description)
+        with _step(phase, "ai_text"):
+            ai = _call_text(title, description)
         e.ai_source = "text"
     # The photo pass is the expensive one — never reach for it on a lot whose
     # price and condition were already free.
     if not from_title and (ai is None or not ai.get("confident")):
         _progress(db, e, "AI examining the photo…")
-        image_bytes = _download_image(lot.thumbnail_url or lot.hd_thumbnail_url)
+        with _step(phase, "image_download"):
+            image_bytes = _download_image(lot.thumbnail_url or lot.hd_thumbnail_url)
         if image_bytes:
-            vision = _call_vision(title, image_bytes, description)
+            with _step(phase, "ai_vision"):
+                vision = _call_vision(title, image_bytes, description)
             if vision is not None and (ai is None or vision.get("confident")):
                 ai = vision
                 e.ai_source = "vision"
@@ -475,7 +497,8 @@ def _enrich(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
         else:
             _progress(db, e, "searching eBay for comparable sales…")
             search_title = e.enriched_title or title
-            comps = pricing.lookup_comps(search_title)
+            with _step(phase, "comps"):
+                comps = pricing.lookup_comps(search_title)
         mult = CONDITION_MULTIPLIER.get(e.verdict, 1.0)
         e.est_resale = (round(float(comps["est_resale"]) * mult, 2)
                         if comps["est_resale"] else None)

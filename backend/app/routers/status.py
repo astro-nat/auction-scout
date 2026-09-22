@@ -1,6 +1,9 @@
 """GET /status — everything happening server-side right now, for the top bar."""
 
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .. import models
@@ -58,6 +61,56 @@ def get_status(db: Session = Depends(get_db)):
     workers = jobs.live_workers()
     return {"jobs": jobs.active(), "enrichment": enrichment,
             "workers": {"live": len(workers), "ids": [w["id"] for w in workers]}}
+
+
+@router.get("/timings")
+def get_timings(kind: str | None = None, hours: int = 24, limit: int = 200,
+                db: Session = Depends(get_db)):
+    """Recent phase timings, newest first, with a per-kind summary.
+
+    Stored in Postgres rather than read from the log: Railway keeps a
+    shallow buffer and returns a few dozen lines at a time, which is no use
+    for a job that ran for twenty minutes.
+    """
+    since = datetime.now(timezone.utc) - timedelta(hours=hours)
+    q = (db.query(models.TaskTiming)
+           .filter(models.TaskTiming.started_at >= since)
+           .order_by(models.TaskTiming.started_at.desc()))
+    if kind:
+        q = q.filter(models.TaskTiming.kind == kind)
+    rows = q.limit(min(limit, 1000)).all()
+
+    # Summary over the SAME window, not just the rows returned, so a busy
+    # run does not make the averages depend on the page size.
+    agg = (db.query(models.TaskTiming.kind, models.TaskTiming.phase,
+                    func.count(models.TaskTiming.id),
+                    func.sum(models.TaskTiming.duration_ms),
+                    func.sum(models.TaskTiming.items),
+                    func.avg(models.TaskTiming.per_item_ms))
+             .filter(models.TaskTiming.started_at >= since))
+    if kind:
+        agg = agg.filter(models.TaskTiming.kind == kind)
+    agg = agg.group_by(models.TaskTiming.kind, models.TaskTiming.phase).all()
+
+    return {
+        "window_hours": hours,
+        "summary": [
+            {"kind": k, "phase": p, "runs": runs,
+             "total_s": round((total or 0) / 1000, 1),
+             "items": int(items or 0),
+             "avg_per_item_ms": round(avg, 2) if avg is not None else None}
+            for k, p, runs, total, items, avg in agg
+        ],
+        "recent": [
+            {"kind": r.kind, "phase": r.phase, "label": r.label,
+             "auction_id": r.auction_id, "job_id": r.job_id,
+             "started_at": r.started_at.isoformat() if r.started_at else None,
+             "duration_s": round(r.duration_ms / 1000, 2),
+             "items": r.items, "per_item_ms": r.per_item_ms,
+             "detail": r.detail}
+            for r in rows
+        ],
+    }
 
 
 @router.get("/settings")

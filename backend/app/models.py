@@ -302,3 +302,28 @@ class WorkerHeartbeat(Base):
     id = Column(String, primary_key=True)     # host:pid, from jobs.WORKER_ID
     last_seen = Column(DateTime, nullable=False)
     started_at = Column(DateTime, server_default=func.now())
+
+
+class TaskTiming(Base):
+    """How long one phase of a long job actually took.
+
+    In Postgres rather than the log because Railway keeps a shallow buffer
+    and the CLI returns a few dozen lines at a time, which is no use for a
+    job that ran for twenty minutes. Rows are small and written once per
+    phase, not per item.
+    """
+    __tablename__ = "task_timings"
+
+    id = Column(Integer, primary_key=True)
+    kind = Column(String, nullable=False, index=True)   # import | enrich | ...
+    phase = Column(String, nullable=False)              # fetch | save | ...
+    job_id = Column(String, index=True)
+    auction_id = Column(Integer, index=True)
+    label = Column(String)
+    started_at = Column(DateTime, nullable=False)
+    duration_ms = Column(Float, nullable=False)
+    items = Column(Integer)
+    per_item_ms = Column(Float)
+    # Sub-step totals and anything else worth seeing beside the duration.
+    detail = Column(JSONB)
+    created_at = Column(DateTime, server_default=func.now())

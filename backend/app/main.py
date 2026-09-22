@@ -48,6 +48,14 @@ _MIGRATIONS = [
     "CREATE TABLE IF NOT EXISTS worker_heartbeats ("
     "id VARCHAR PRIMARY KEY, last_seen TIMESTAMP NOT NULL, "
     "started_at TIMESTAMP DEFAULT now())",
+    "CREATE TABLE IF NOT EXISTS task_timings ("
+    "id SERIAL PRIMARY KEY, kind VARCHAR NOT NULL, phase VARCHAR NOT NULL, "
+    "job_id VARCHAR, auction_id INTEGER, label VARCHAR, "
+    "started_at TIMESTAMP NOT NULL, duration_ms DOUBLE PRECISION NOT NULL, "
+    "items INTEGER, per_item_ms DOUBLE PRECISION, detail JSONB, "
+    "created_at TIMESTAMP DEFAULT now())",
+    "CREATE INDEX IF NOT EXISTS ix_task_timings_kind ON task_timings (kind)",
+    "CREATE INDEX IF NOT EXISTS ix_task_timings_created ON task_timings (created_at)",
     "CREATE INDEX IF NOT EXISTS ix_auctions_auctioneer_id ON auctions (auctioneer_id)",
     "ALTER TABLE enrichment ADD COLUMN IF NOT EXISTS gold_check VARCHAR",
     "ALTER TABLE enrichment ADD COLUMN IF NOT EXISTS gold_check_note VARCHAR",

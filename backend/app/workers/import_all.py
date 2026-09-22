@@ -11,6 +11,7 @@ routers/auctions.py; both share save_lots() below.
 
 import asyncio
 import logging
+from contextlib import contextmanager
 from datetime import datetime, timezone
 
 import httpx
@@ -19,15 +20,31 @@ from sqlalchemy.orm import Session
 from ..database import SessionLocal
 from .. import models
 from ..services import hibid, jobs
+from ..services.timing import timed
 from .enrich import apply_bolo_match, looks_multi_item
 from ..services.bolo import category_hint
 
 logger = logging.getLogger(__name__)
 
 
+
+@contextmanager
+def _step(phase, name: str):
+    """Time an inner step, or do nothing when the caller passed no phase.
+
+    save_lots is called from tests and from paths that do not record, so
+    the instrumentation has to be free when it is switched off.
+    """
+    if phase is None:
+        yield
+        return
+    with phase.sub(name):
+        yield
+
+
 def save_lots(db: Session, auction: models.Auction, lots: list[dict], *,
               on_progress=None, should_cancel=None,
-              bolo_only: bool = False) -> tuple[int, int, bool]:
+              bolo_only: bool = False, phase=None) -> tuple[int, int, bool]:
     """Idempotent upsert of fetched lot dicts into one auction.
 
     Bids/status/time-left always come fresh on rows we already have;
@@ -49,8 +66,9 @@ def save_lots(db: Session, auction: models.Auction, lots: list[dict], *,
         bolo_hit = None
         if bolo_only:
             probe = models.Enrichment(lot_id=0)
-            bolo_hit = apply_bolo_match(
-                probe, data.get("title") or "", data.get("description") or "")
+            with _step(phase, "bolo_match"):
+                bolo_hit = apply_bolo_match(
+                    probe, data.get("title") or "", data.get("description") or "")
 
         # A box lot rarely names a brand, so a brand-only filter drops the
         # "Lot of Assorted Cameras" that is worth opening precisely because
@@ -62,7 +80,9 @@ def save_lots(db: Session, auction: models.Auction, lots: list[dict], *,
             if looks_multi_item(title_text):
                 bolo_hit = bool(category_hint(title_text))
 
-        row = db.query(models.Lot).filter(models.Lot.lot_id == data["lot_id"]).first()
+        with _step(phase, "lookup_existing"):
+            row = (db.query(models.Lot)
+                     .filter(models.Lot.lot_id == data["lot_id"]).first())
         if row is None and bolo_only and not bolo_hit:
             skipped += 1
             continue
@@ -74,9 +94,10 @@ def save_lots(db: Session, auction: models.Auction, lots: list[dict], *,
                 setattr(row, k, data[k])
             updated += 1
         else:
-            row = models.Lot(auction_id=auction.id, **data)
-            db.add(row)
-            db.flush()
+            with _step(phase, "insert_lot"):
+                row = models.Lot(auction_id=auction.id, **data)
+                db.add(row)
+                db.flush()
             enrichment = models.Enrichment(lot_id=row.id, status="pending")
             # Record the match now rather than making enrichment redo it.
             # Also means bolo_only filters in the items view work on a
@@ -86,7 +107,8 @@ def save_lots(db: Session, auction: models.Auction, lots: list[dict], *,
             db.add(enrichment)
             created += 1
     auction.imported_at = datetime.now(timezone.utc)
-    db.commit()
+    with _step(phase, "final_commit"):
+        db.commit()
     if skipped:
         logger.info("Import (BOLO only): kept %d, skipped %d non-matching lots",
                     created, skipped)
@@ -153,13 +175,23 @@ def run_import_all(auction_ids: list[int], resume_job_id: str | None = None,
                             job, detail=f"{name} — {fetched}/{total} lots"),
                         should_cancel=lambda: jobs.is_cancelled(job))
 
-                lots = asyncio.run(_fetch())
+                with timed("import", "fetch", job_id=job,
+                           auction_id=auction_id, label=name) as ph:
+                    lots = asyncio.run(_fetch())
+                    ph.add(len(lots))
+                    ph.note(category_id=category_id, bolo_only=bolo_only)
             except Exception as exc:  # noqa: BLE001 — one bad auction must not stop the run
                 logger.warning("Import-all fetch failed for auction %s: %s",
                                auction_id, exc)
                 continue
-            c, u, _ = save_lots(db, auction, lots, bolo_only=bolo_only,
-                                should_cancel=lambda: jobs.is_cancelled(job))
+            with timed("import", "save", job_id=job, auction_id=auction_id,
+                       label=name) as ph:
+                c, u, _ = save_lots(db, auction, lots, bolo_only=bolo_only,
+                                    phase=ph,
+                                    should_cancel=lambda: jobs.is_cancelled(job))
+                ph.add(len(lots))
+                ph.note(created=c, updated=u, fetched=len(lots),
+                        bolo_only=bolo_only)
             created_total += c
             updated_total += u
             imported += 1
