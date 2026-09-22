@@ -145,21 +145,44 @@ function evidence(e) {
   const src = e.price_source || ''
   if (!e.est_resale) return null
   if (src.startsWith('retail $')) return 'retail'
+  if (src.startsWith('audit-corrected')) return 'audit'
+  if (/itemized/i.test(src)) return 'itemized'
   if (/AI-estimated/i.test(src)) return 'estimate'
-  if (/\bsold\b/i.test(src) && !/\bactive\b/i.test(src)) return 'sold'
-  if (/\bactive\b/i.test(src)) return 'asking'
+  if (/sold/i.test(src) && !/active/i.test(src)) {
+    // One or two agreeing sales is an anecdote, not a market.
+    return (e.comp_count || 0) >= 3 ? 'sold' : 'thin'
+  }
+  if (/active/i.test(src)) return 'asking'
   return null
+}
+
+// One word for how far to trust the number. The full trail - every
+// figure produced for this lot, including the ones that were rejected -
+// stays in Postgres and is readable at /prices/history/{lot_id}. None of
+// that belongs on a row being scanned at a glance.
+const EVIDENCE_LABEL = {
+  sold: 'sold comps',
+  retail: 'retail price',
+  audit: 'audited',
+  thin: 'thin comps',
+  itemized: 'itemised',
+  asking: 'asking only',
+  estimate: 'AI guess',
 }
 
 const EVIDENCE_NOTE = {
   asking: 'Asking prices only — no confirmed sales. Sellers list high and wait.',
   estimate: 'Includes AI-estimated prices with no real comps behind them.',
+  thin: 'Real sales, but only one or two agreeing. One sale is an anecdote.',
+  audit: 'The comp value was judged implausible and replaced by a second opinion.',
+  itemized: 'Summed from the items the vision pass could identify in the photo.',
   sold: 'Backed by completed sales.',
   retail: 'From the retail price printed in the lot title.',
 }
 
 // Gold, but resting on evidence weaker than real sales — rendered paler.
-const isPaleEvidence = (ev) => ev === 'asking' || ev === 'estimate'
+const isPaleEvidence = (ev) =>
+  ev === 'asking' || ev === 'estimate' || ev === 'thin'
 
 function roiTooltip(lot, e) {
   if (e.est_roi == null) return undefined
@@ -860,8 +883,13 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                   edited={edited.has('est_resale')}
                   onSave={(v) => handleCorrect(lot.lot_id, 'est_resale', v)}
                 />
-                {e.comp_count > 0 && (
-                  <span style={{ color: 'var(--muted)', fontSize: 12 }}> ({e.comp_count})</span>
+                {ev && (
+                  <div title={(EVIDENCE_NOTE[ev] || '')
+                    + (e.comp_count ? ` (${e.comp_count} comps)` : '')}
+                       style={{ color: isPaleEvidence(ev) ? '#e0a030' : 'var(--muted)',
+                                fontSize: 11, cursor: 'help' }}>
+                    {EVIDENCE_LABEL[ev] || ev}
+                  </div>
                 )}
                 {/* The audit rejected this number and had nothing to put in
                     its place. Showing it unmarked reads as a real estimate,
@@ -874,10 +902,6 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                                 cursor: 'help' }}>
                     rejected by audit
                   </div>
-                )}
-                {isPaleEvidence(ev) && (
-                  <span title={EVIDENCE_NOTE[ev]}
-                        style={{ color: 'var(--muted)', fontSize: 12, cursor: 'help' }}> ~</span>
                 )}
                 {houseEstimate(lot) && (
                   <div style={{ color: 'var(--muted)', fontSize: 11 }}

@@ -37,7 +37,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from ..database import SessionLocal
 from .. import models, config
-from ..services import financials, gemini, hibid, jobs, pricing
+from ..services import financials, gemini, hibid, jobs, price_log, pricing
 from ..services import settings as settings_store
 from ..services.bolo import BoloMatcher
 from ..services.hibid import classify_logistics
@@ -158,6 +158,10 @@ def _apply_estimate_cap(lot: models.Lot, e: models.Enrichment) -> None:
            else round(float(low) * ESTIMATE_REALIZATION, 2))
     if float(e.est_resale) <= cap:
         return
+    price_log.record(lot.id, float(e.est_resale), method="comps",
+                     price_source=src, comp_count=e.comp_count,
+                     chosen=False, rejected=True,
+                     note=f"above house cap ${cap:g}, capped")
     e.est_resale = cap
     e.price_source = (src + (f" → capped at house-high ${float(high):g}" if strong
                              else f" → capped at {ESTIMATE_REALIZATION:g}× "
@@ -491,12 +495,14 @@ def _enrich(lot: models.Lot, e: models.Enrichment, db: Session,
         # stale or inflated, and verified_title_price takes the lower of
         # claim and market when real money is at stake.
         _progress(db, e, "pricing from the title (checking big claims)…")
+        # Set before the branch: the retail-title path never assigns it, and
+        # the price log wants to know what was searched either way.
+        search_title = e.enriched_title or title
         titled = pricing.verified_title_price(title, e.enriched_title)
         if titled:
             comps = titled
         else:
             _progress(db, e, "searching eBay for comparable sales…")
-            search_title = e.enriched_title or title
             with _step(phase, "comps"):
                 comps = pricing.lookup_comps(search_title)
         mult = CONDITION_MULTIPLIER.get(e.verdict, 1.0)
@@ -508,6 +514,10 @@ def _enrich(lot: models.Lot, e: models.Enrichment, db: Session,
                         if comps["price_high"] else None)
         e.comp_count = comps["comp_count"]
         e.price_source = comps["price_source"]
+        if e.est_resale is not None:
+            price_log.record(lot.id, float(e.est_resale), method="comps",
+                             price_source=e.price_source,
+                             comp_count=e.comp_count, query=search_title)
         # .get: the retail-in-title path predates the comps key on some
         # builders — missing simply means no evidence rows to show.
         e.comps = comps.get("comps") or None
@@ -752,9 +762,25 @@ def _verify_gold(db: Session, lot: models.Lot, e: models.Enrichment, *,
             _apply_roi(lot, e)
     else:
         e.gold_check_note = reason or "resale value judged implausible"
+        if e.est_resale is not None:
+            price_log.record(lot.id, float(e.est_resale), method="comps",
+                             price_source=e.price_source,
+                             comp_count=e.comp_count, chosen=False,
+                             rejected=True,
+                             note=f"audit rejected: {reason}"[:400])
         corrected = _audit_correction(result, float(e.est_resale))
         if corrected is not None:
             e.gold_check = "corrected"
+            # Both numbers are worth keeping: the gap between what the
+            # comps claimed and what the auditor believed is the measure
+            # of how far the comp search drifted.
+            price_log.record(lot.id, float(e.est_resale), method="comps",
+                             price_source=e.price_source,
+                             comp_count=e.comp_count, chosen=False,
+                             rejected=True, note=f"audit: {reason}"[:400])
+            price_log.record(lot.id, corrected, method="audit",
+                             price_source="audit-corrected",
+                             note=reason or None)
             e.price_source = (f"audit-corrected "
                               f"(comps said ${float(e.est_resale):g})")
             e.est_resale = corrected
@@ -969,6 +995,10 @@ def _inspect(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
             _apply_roi(lot, e)     # price stays; bid/ship may have moved
         elif total > 0:
             e.est_resale = round(total, 2)
+            price_log.record(lot.id, round(total, 2), method="itemized",
+                             price_source="itemized vision",
+                             comp_count=priced,
+                             note=f"{len(items)} items, {filler} filler")
             e.price_low = None
             e.price_high = None
             e.comp_count = priced          # real comps only — AI guesses don't count
@@ -1300,6 +1330,11 @@ def run_reprice(lot_db_ids: list[int], resume_job_id: str | None = None) -> None
                                         if comps["price_high"] else None)
                         e.comp_count = comps["comp_count"]
                         e.price_source = comps["price_source"]
+                        if e.est_resale is not None:
+                            price_log.record(
+                                lot.id, float(e.est_resale), method="reprice",
+                                price_source=e.price_source,
+                                comp_count=e.comp_count, query=search_title)
                         e.comps = comps.get("comps") or None
                         if mult != 1.0 and comps["price_source"]:
                             e.price_source += f" ×{mult:g} condition"

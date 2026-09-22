@@ -327,3 +327,34 @@ class TaskTiming(Base):
     # Sub-step totals and anything else worth seeing beside the duration.
     detail = Column(JSONB)
     created_at = Column(DateTime, server_default=func.now())
+
+
+class PriceObservation(Base):
+    """One resale number the app produced for a lot, kept forever.
+
+    est_resale holds the current best figure and gets overwritten; these
+    rows are the trail behind it. They exist so the WRONG numbers survive -
+    a comp set that overshot tenfold is the only evidence that a filter is
+    missing, and overwriting in place threw that away every time.
+    """
+    __tablename__ = "price_observations"
+
+    id = Column(Integer, primary_key=True)
+    lot_id = Column(Integer, ForeignKey("lots.id"), index=True, nullable=False)
+    value = Column(Numeric)
+    # How it was produced: comps | itemized | retail | audit | ai | cap
+    method = Column(String, nullable=False)
+    price_source = Column(String)
+    comp_count = Column(Integer)
+    # Tier from services.price_log.EVIDENCE_RANK - what decides which
+    # number the app shows.
+    evidence = Column(String, index=True)
+    # Did this become the displayed figure, and was it explicitly thrown
+    # out (by the audit, or by a cap)?
+    chosen = Column(Boolean, default=True)
+    rejected = Column(Boolean, default=False)
+    note = Column(String)
+    # The comp query that produced it, when there was one - the field that
+    # says WHY a bad match happened.
+    query = Column(String)
+    created_at = Column(DateTime, server_default=func.now(), index=True)

@@ -56,6 +56,15 @@ _MIGRATIONS = [
     "created_at TIMESTAMP DEFAULT now())",
     "CREATE INDEX IF NOT EXISTS ix_task_timings_kind ON task_timings (kind)",
     "CREATE INDEX IF NOT EXISTS ix_task_timings_created ON task_timings (created_at)",
+    "CREATE TABLE IF NOT EXISTS price_observations ("
+    "id SERIAL PRIMARY KEY, lot_id INTEGER NOT NULL REFERENCES lots(id), "
+    "value NUMERIC, method VARCHAR NOT NULL, price_source VARCHAR, "
+    "comp_count INTEGER, evidence VARCHAR, chosen BOOLEAN DEFAULT TRUE, "
+    "rejected BOOLEAN DEFAULT FALSE, note VARCHAR, query VARCHAR, "
+    "created_at TIMESTAMP DEFAULT now())",
+    "CREATE INDEX IF NOT EXISTS ix_price_obs_lot ON price_observations (lot_id)",
+    "CREATE INDEX IF NOT EXISTS ix_price_obs_evidence ON price_observations (evidence)",
+    "CREATE INDEX IF NOT EXISTS ix_price_obs_created ON price_observations (created_at)",
     "CREATE INDEX IF NOT EXISTS ix_auctions_auctioneer_id ON auctions (auctioneer_id)",
     "ALTER TABLE enrichment ADD COLUMN IF NOT EXISTS gold_check VARCHAR",
     "ALTER TABLE enrichment ADD COLUMN IF NOT EXISTS gold_check_note VARCHAR",

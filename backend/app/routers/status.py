@@ -113,6 +113,107 @@ def get_timings(kind: str | None = None, hours: int = 24, limit: int = 200,
     }
 
 
+@router.get("/prices/history/{lot_id}")
+def price_history(lot_id: str, db: Session = Depends(get_db)):
+    """Every resale number this lot has been given, newest first."""
+    lot = db.query(models.Lot).filter(models.Lot.lot_id == lot_id).first()
+    if not lot:
+        raise HTTPException(status_code=404, detail="Lot not found")
+    rows = (db.query(models.PriceObservation)
+              .filter(models.PriceObservation.lot_id == lot.id)
+              .order_by(models.PriceObservation.created_at.desc()).all())
+    return {
+        "lot_id": lot_id,
+        "title": lot.title,
+        "current": float(lot.enrichment.est_resale)
+        if lot.enrichment and lot.enrichment.est_resale is not None else None,
+        "observations": [
+            {"value": float(r.value) if r.value is not None else None,
+             "method": r.method, "evidence": r.evidence,
+             "comp_count": r.comp_count, "chosen": r.chosen,
+             "rejected": r.rejected, "note": r.note, "query": r.query,
+             "price_source": r.price_source,
+             "at": r.created_at.isoformat() if r.created_at else None}
+            for r in rows
+        ],
+    }
+
+
+@router.get("/prices/disagreements")
+def price_disagreements(hours: int = 720, min_ratio: float = 2.0,
+                        limit: int = 100, db: Session = Depends(get_db)):
+    """Lots where two methods gave materially different numbers.
+
+    This is the point of keeping the rejected values. A lot that comps said
+    was worth $370 and the audit said was worth $80 is a 4.6x miss, and the
+    QUERY that produced it is the thing worth reading - that is where the
+    next filter comes from.
+    """
+    since = datetime.now(timezone.utc) - timedelta(hours=hours)
+    rows = (db.query(models.PriceObservation)
+              .filter(models.PriceObservation.created_at >= since,
+                      models.PriceObservation.value.isnot(None))
+              .order_by(models.PriceObservation.lot_id,
+                        models.PriceObservation.created_at).all())
+
+    by_lot: dict = {}
+    for r in rows:
+        by_lot.setdefault(r.lot_id, []).append(r)
+
+    out = []
+    for lot_id, obs in by_lot.items():
+        values = [float(o.value) for o in obs if o.value and float(o.value) > 0]
+        if len(values) < 2:
+            continue
+        lo, hi = min(values), max(values)
+        if lo <= 0 or hi / lo < min_ratio:
+            continue
+        lot = db.query(models.Lot).filter(models.Lot.id == lot_id).first()
+        out.append({
+            "lot_id": lot.lot_id if lot else None,
+            "title": (lot.title if lot else "")[:80],
+            "ratio": round(hi / lo, 1),
+            "low": lo, "high": hi,
+            "observations": [
+                {"value": float(o.value), "method": o.method,
+                 "evidence": o.evidence, "comp_count": o.comp_count,
+                 "rejected": o.rejected, "query": o.query,
+                 "note": (o.note or "")[:160]}
+                for o in obs
+            ],
+        })
+    out.sort(key=lambda r: -r["ratio"])
+    return {"window_hours": hours, "min_ratio": min_ratio,
+            "count": len(out), "lots": out[:limit]}
+
+
+@router.get("/prices/evidence-mix")
+def evidence_mix(hours: int = 720, db: Session = Depends(get_db)):
+    """How often each evidence tier is produced, and how often it is thrown
+    out. A tier that is usually rejected is one to stop trusting."""
+    since = datetime.now(timezone.utc) - timedelta(hours=hours)
+    rows = (db.query(models.PriceObservation.evidence,
+                     models.PriceObservation.rejected,
+                     func.count(models.PriceObservation.id),
+                     func.avg(models.PriceObservation.value))
+              .filter(models.PriceObservation.created_at >= since)
+              .group_by(models.PriceObservation.evidence,
+                        models.PriceObservation.rejected).all())
+    mix: dict = {}
+    for evidence, rejected, n, avg in rows:
+        slot = mix.setdefault(evidence or "unknown",
+                              {"produced": 0, "rejected": 0, "avg_value": None})
+        slot["produced"] += n
+        if rejected:
+            slot["rejected"] += n
+        if avg is not None and not rejected:
+            slot["avg_value"] = round(float(avg), 2)
+    for slot in mix.values():
+        slot["reject_rate"] = (round(slot["rejected"] / slot["produced"], 3)
+                               if slot["produced"] else None)
+    return {"window_hours": hours, "by_evidence": mix}
+
+
 @router.get("/settings")
 def get_settings():
     """The tunables the UI can edit. target_roi_pct is served as a percent.
