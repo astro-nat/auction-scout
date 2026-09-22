@@ -1,0 +1,603 @@
+{
+  "schema_version": "1.0",
+  "domain": "vintage_electronics",
+  "last_updated": "2026-09-22",
+  "summary": "Vintage and small consumer electronics: portable audio, CRT monitors, calculators, synthesizers, remotes, under-cabinet appliances, lab surplus and EV charging gear. Built from the sourcing research spreadsheet. The common thread is weight-to-value: most of these are under 1lb with two- to four-figure ceilings, which is the shape that survives the shipping maths. The heavy entries (CRTs, full-size synths, wall chargers) are flagged pickup-or-freight precisely because they do not.",
+  "field_workflow": [
+    "Model number first, always. These markets price by exact model and one digit can mean a 10x difference",
+    "Battery bays: leak corrosion is the most common value killer across every category here",
+    "Missing accessories (brackets, cases, styluses, power supplies) cut value harder than cosmetic wear does",
+    "Non-working is still worth listing for the high tiers; these have active repair communities",
+    "Anything over roughly 15lb: assume local pickup, because freight kills the deal"
+  ],
+  "skip_list": [
+    "Consumer CRT televisions with no RGB or component inputs, freight exceeds value",
+    "Generic no-name portable cassette players",
+    "Modern universal remotes still in production (GE, RCA blister-pack)",
+    "Floor-standing laboratory equipment, freight only",
+    "Calculators with cracked or delaminating LCDs",
+    "Organ and console furniture pieces, bulky and near-unsellable",
+    "Level 1 trickle charging cables, shipped free with every EV"
+  ],
+  "brands": [
+    {
+      "brand": "Sony Walkman",
+      "category": "portable_audio",
+      "tier": 1,
+      "models": [
+        "TPS-L2",
+        "WM-DD100",
+        "WM-DC2",
+        "WM-D6C",
+        "WM-F",
+        "WM-EX",
+        "Discman D-",
+        "Walkman Professional"
+      ],
+      "era_markers": [
+        "Model number on the rear label or inside the battery door",
+        "Blue/silver TPS-L2 is the 1979 original and the one collectors chase",
+        "DD and DC series use quartz-locked capstans, a tier above plastic EX models",
+        "Original case, belt clip and headphones lift the price substantially"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "TPS-L2 (original 1979)",
+          "low": 600,
+          "high": 2000
+        },
+        {
+          "item": "WM-D6C / DD100 / DC2 (enthusiast)",
+          "low": 150,
+          "high": 600
+        },
+        {
+          "item": "Common WM-EX / Discman",
+          "low": 15,
+          "high": 60
+        }
+      ],
+      "target_buy_usd": {
+        "low": 1,
+        "high": 20
+      },
+      "platform_primary": "eBay",
+      "platform_secondary": "Mercari",
+      "comp_query_template": "Sony Walkman {model} sold",
+      "ship_class": "small_box",
+      "notes": "Belts perish with age, so a unit that spins but chews tape is still worth listing as serviceable. Buyers rebuild these.",
+      "condition_critical": [
+        "Test the play AND fast-forward motors",
+        "Check the battery compartment for leak corrosion",
+        "Confirm the capstan spins; dried belts are the usual fault"
+      ]
+    },
+    {
+      "brand": "Sony Trinitron CRT",
+      "category": "vintage_television",
+      "tier": 1,
+      "models": [
+        "PVM",
+        "BVM",
+        "KV-",
+        "Trinitron",
+        "Profeel"
+      ],
+      "era_markers": [
+        "PVM and BVM broadcast monitors carry the premium, not consumer KV sets",
+        "RGB and component inputs on the rear are the value driver for retro gamers",
+        "Screen size sits in the model number (PVM-20L5 is a 20 inch)"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "PVM / BVM broadcast monitor",
+          "low": 799,
+          "high": 1900
+        },
+        {
+          "item": "Consumer KV Trinitron",
+          "low": 40,
+          "high": 200
+        }
+      ],
+      "target_buy_usd": {
+        "low": 0,
+        "high": 20
+      },
+      "platform_primary": "eBay",
+      "platform_secondary": "Mercari",
+      "comp_query_template": "Sony Trinitron CRT {model} sold",
+      "ship_class": "freight",
+      "notes": "Almost always a local-pickup play: a 20 inch PVM is 60lb of glass and freight eats the whole margin. Buy only if you can collect it.",
+      "condition_critical": [
+        "Verify tube brightness; a dim tube is worthless",
+        "Check for RGB or component inputs, not just composite",
+        "Look for burn-in on the phosphor"
+      ]
+    },
+    {
+      "brand": "HP scientific calculators",
+      "category": "calculators",
+      "tier": 1,
+      "models": [
+        "HP-35",
+        "HP-45",
+        "HP-55",
+        "HP-65",
+        "HP-70",
+        "HP-80",
+        "HP 12C",
+        "HP 15C",
+        "HP 16C",
+        "HP 19BII",
+        "HP 41C",
+        "HP 41CX",
+        "HP 71B",
+        "HP 42S",
+        "Voyager"
+      ],
+      "era_markers": [
+        "Red LED display means 1970s Classic series, the collector tier",
+        "Serial number sticker in the battery bay dates the unit",
+        "An HP-35 without Hewlett-Packard on the bezel is the rare first run",
+        "Original leather case, manuals and charger add materially"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "HP-35 first run / HP-71B",
+          "low": 400,
+          "high": 3200
+        },
+        {
+          "item": "HP 15C / 16C / 41CX",
+          "low": 120,
+          "high": 450
+        },
+        {
+          "item": "HP 12C business (still produced)",
+          "low": 25,
+          "high": 80
+        }
+      ],
+      "target_buy_usd": {
+        "low": 1,
+        "high": 15
+      },
+      "platform_primary": "eBay",
+      "platform_secondary": "Mercari",
+      "comp_query_template": "HP scientific calculators {model} sold",
+      "ship_class": "small_box",
+      "notes": "The best weight-to-value ratio in the whole sheet: under 1lb with a four-figure ceiling on the right model.",
+      "condition_critical": [
+        "Check the LCD for missing segments and bleed",
+        "Battery door present; missing doors tank the price",
+        "Test every key, membrane failure is common"
+      ]
+    },
+    {
+      "brand": "Texas Instruments calculators",
+      "category": "calculators",
+      "tier": 2,
+      "models": [
+        "TI-84 Plus",
+        "TI-84 Plus CE",
+        "TI-89 Titanium",
+        "TI-83 Plus",
+        "TI-Nspire",
+        "SR-50",
+        "Speak and Spell",
+        "Speak and Read",
+        "Speak and Math"
+      ],
+      "era_markers": [
+        "Speak and Spell with physical push buttons (1978-80) beats the later membrane versions",
+        "TI-84 Plus CE colour screen is the current school requirement, so demand is steady",
+        "Model and revision are on the back label"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "Speak and Spell, push-button era",
+          "low": 90,
+          "high": 211
+        },
+        {
+          "item": "TI-84 Plus CE",
+          "low": 45,
+          "high": 110
+        },
+        {
+          "item": "TI-89 / Nspire",
+          "low": 30,
+          "high": 90
+        }
+      ],
+      "target_buy_usd": {
+        "low": 1,
+        "high": 15
+      },
+      "platform_primary": "eBay",
+      "platform_secondary": "Mercari",
+      "comp_query_template": "Texas Instruments calculators {model} sold",
+      "ship_class": "small_box",
+      "notes": "Graphing calculators sell hardest in August and January. Bought off-season they are worth holding for the school run.",
+      "condition_critical": [
+        "Speak and Spell: test voice synthesis clarity",
+        "Check the battery bay for leak damage",
+        "Graphing units: verify the screen has no dead columns"
+      ]
+    },
+    {
+      "brand": "Curta mechanical calculator",
+      "category": "calculators",
+      "tier": 1,
+      "models": [
+        "Curta Type I",
+        "Curta Type II",
+        "Contina"
+      ],
+      "era_markers": [
+        "Serial number engraved on the base",
+        "Type II has 11 digits and the larger body",
+        "Original metal canister and case are expected at the top of the range"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "Curta Type I / II with canister",
+          "low": 1200,
+          "high": 3200
+        }
+      ],
+      "target_buy_usd": {
+        "low": 1,
+        "high": 200
+      },
+      "platform_primary": "eBay",
+      "platform_secondary": "Mercari",
+      "comp_query_template": "Curta mechanical calculator {model} sold",
+      "ship_class": "small_box",
+      "notes": "Rare enough that auction lots routinely misidentify it as a pepper grinder or a lens. Worth a second look at anything small, cylindrical and knurled.",
+      "condition_critical": [
+        "Turn the crank; it must move freely without grinding",
+        "Verify the canister is the matching original",
+        "Check digits advance cleanly across all registers"
+      ]
+    },
+    {
+      "brand": "Calculator watches",
+      "category": "calculators",
+      "tier": 2,
+      "models": [
+        "HP-01",
+        "Casio CA-53W",
+        "Casio Databank",
+        "Seiko C359",
+        "Pulsar Calculator"
+      ],
+      "era_markers": [
+        "HP-01 (1977) is the four-figure one: gold or steel case, tiny stylus",
+        "Casio CA-53W is the common Back to the Future model, modest value",
+        "Original bracelet and stylus matter more than case condition"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "HP-01",
+          "low": 600,
+          "high": 1150
+        },
+        {
+          "item": "Seiko / Pulsar calculator watches",
+          "low": 80,
+          "high": 350
+        },
+        {
+          "item": "Casio Databank / CA-53W",
+          "low": 25,
+          "high": 70
+        }
+      ],
+      "target_buy_usd": {
+        "low": 5,
+        "high": 20
+      },
+      "platform_primary": "eBay",
+      "platform_secondary": "Mercari",
+      "comp_query_template": "Calculator watches {model} sold",
+      "ship_class": "poly_mailer",
+      "notes": "Under 8oz, so shipping is almost free and even the low end clears a useful margin.",
+      "condition_critical": [
+        "Screen clarity; LCD rot kills the value",
+        "Test every button, calculator keys are the usual failure",
+        "Original band present?"
+      ]
+    },
+    {
+      "brand": "Personal organizers and PDAs",
+      "category": "vintage_computing",
+      "tier": 3,
+      "models": [
+        "Sharp Wizard",
+        "Sharp Organizer",
+        "Casio SF-",
+        "Casio Boss",
+        "Palm Pilot",
+        "Palm V",
+        "Psion Organiser",
+        "Rolodex Electronics"
+      ],
+      "era_markers": [
+        "Late 80s to late 90s, with a battery bay and IR port on the top edge",
+        "Original leather sleeve and manual add a little"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "Psion Organiser / early Sharp Wizard",
+          "low": 60,
+          "high": 180
+        },
+        {
+          "item": "Common Casio SF / Palm",
+          "low": 20,
+          "high": 45
+        }
+      ],
+      "target_buy_usd": {
+        "low": 0.25,
+        "high": 5
+      },
+      "platform_primary": "eBay",
+      "platform_secondary": "Mercari",
+      "comp_query_template": "Personal organizers and PDAs {model} sold",
+      "ship_class": "poly_mailer",
+      "notes": "Non-working units still sell for parts and for their accessories, and they are close to free in mixed lots.",
+      "condition_critical": [
+        "Does it power on at all?",
+        "Screen segments intact?",
+        "Battery leak damage in the bay"
+      ]
+    },
+    {
+      "brand": "Vintage synthesizers",
+      "category": "synthesizers",
+      "tier": 1,
+      "models": [
+        "Jupiter 4",
+        "Jupiter 6",
+        "Jupiter 8",
+        "Juno 106",
+        "Juno 60",
+        "SH-101",
+        "TR-808",
+        "TR-909",
+        "Casio CZ",
+        "Korg MS-20",
+        "Prophet"
+      ],
+      "era_markers": [
+        "A busy front panel with many sliders and dials signals the analogue era",
+        "Roland Jupiter and Juno badging sits on the top left",
+        "Serial plate on the rear near the power inlet"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "Roland Jupiter 6 / 8",
+          "low": 3000,
+          "high": 5000
+        },
+        {
+          "item": "Juno 106 / SH-101 / Korg MS-20",
+          "low": 700,
+          "high": 2000
+        },
+        {
+          "item": "Casio CZ and other budget digital",
+          "low": 375,
+          "high": 700
+        }
+      ],
+      "target_buy_usd": {
+        "low": 50,
+        "high": 300
+      },
+      "platform_primary": "Reverb",
+      "platform_secondary": "eBay",
+      "comp_query_template": "Vintage synthesizers {model} sold",
+      "ship_class": "large_box",
+      "notes": "The highest absolute ceiling in the sheet. Even non-working Junos sell well, because the voice chips alone are sought after.",
+      "condition_critical": [
+        "Test every key and every slider",
+        "Listen for dead voices; Juno 106 voice chips are a known fault",
+        "Confirm the power supply is original, or note that it is missing"
+      ]
+    },
+    {
+      "brand": "Universal and OEM remote controls",
+      "category": "remote_controls",
+      "tier": 2,
+      "models": [
+        "Logitech Harmony",
+        "Harmony Elite",
+        "Harmony 900",
+        "Kenwood RC-",
+        "Denon RC-",
+        "Home Theater Master",
+        "Sony RM-",
+        "Beo4"
+      ],
+      "era_markers": [
+        "OEM remotes carry a model number printed on the back",
+        "Harmony hubs and charging cradles included lift the price",
+        "The Harmony line is discontinued, so no replacements are being made"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "Logitech Harmony Elite / 900 with hub",
+          "low": 120,
+          "high": 300
+        },
+        {
+          "item": "OEM AV receiver remotes (Denon / Kenwood)",
+          "low": 25,
+          "high": 90
+        },
+        {
+          "item": "Common TV and cable OEM remotes",
+          "low": 12,
+          "high": 30
+        }
+      ],
+      "target_buy_usd": {
+        "low": 0.5,
+        "high": 5
+      },
+      "platform_primary": "eBay",
+      "platform_secondary": "Mercari",
+      "comp_query_template": "Universal and OEM remote controls {model} sold",
+      "ship_class": "poly_mailer",
+      "notes": "Routinely under a dollar in mixed lots, with an extreme margin. Check the model number on the back before writing any remote off.",
+      "condition_critical": [
+        "Test the IR emitter through a phone camera; it glows on video",
+        "Battery bay corrosion is the usual killer",
+        "Confirm the exact OEM model number"
+      ]
+    },
+    {
+      "brand": "GE Spacemaker under-cabinet appliances",
+      "category": "small_appliances",
+      "tier": 2,
+      "models": [
+        "Spacemaker",
+        "SpaceMaker Plus",
+        "Under Cabinet Can Opener",
+        "Under Cabinet Coffee",
+        "Under Cabinet Radio",
+        "Under Cabinet Toaster"
+      ],
+      "era_markers": [
+        "Under-cabinet mounting brackets and template are the value driver",
+        "Almond and white 80s and 90s colourways are the sought ones",
+        "Model number on the underside plate"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "Complete with brackets and hardware",
+          "low": 144,
+          "high": 499
+        },
+        {
+          "item": "Unit only, no mounting hardware",
+          "low": 30,
+          "high": 80
+        }
+      ],
+      "target_buy_usd": {
+        "low": 5,
+        "high": 15
+      },
+      "platform_primary": "eBay",
+      "platform_secondary": "Mercari",
+      "comp_query_template": "GE Spacemaker under-cabinet appliances {model} sold",
+      "ship_class": "medium_box",
+      "notes": "The brackets are most of the value: a complete kit is worth roughly three times a bare unit, so check the box for hardware before passing.",
+      "condition_critical": [
+        "Mounting brackets and screws present?",
+        "Heating element or motor runs?",
+        "Cord and plug undamaged"
+      ]
+    },
+    {
+      "brand": "Laboratory and scientific equipment",
+      "category": "lab_equipment",
+      "tier": 2,
+      "models": [
+        "lab freezer",
+        "scientific monitor",
+        "spectrophotometer",
+        "centrifuge",
+        "analytical balance",
+        "oscilloscope"
+      ],
+      "era_markers": [
+        "Asset tags from a university or hospital indicate a surplus lot",
+        "Model and serial plate on the rear or underside",
+        "Calibration stickers with dates suggest it was in service"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "Desktop analytical instruments",
+          "low": 120,
+          "high": 600
+        },
+        {
+          "item": "Benchtop freezers and centrifuges",
+          "low": 80,
+          "high": 300
+        }
+      ],
+      "target_buy_usd": {
+        "low": 10,
+        "high": 60
+      },
+      "platform_primary": "eBay",
+      "platform_secondary": "Mercari",
+      "comp_query_template": "Laboratory and scientific equipment {model} sold",
+      "ship_class": "large_box",
+      "notes": "Government and university surplus is the source. Stick to desktop units, because anything floor-standing is freight and the margin is gone.",
+      "condition_critical": [
+        "Seal integrity on cold storage",
+        "Compressor noise on start",
+        "Readout clarity, with all segments lit"
+      ]
+    },
+    {
+      "brand": "EV charging equipment",
+      "category": "ev_accessories",
+      "tier": 2,
+      "models": [
+        "ChargePoint Home Flex",
+        "Grizzl-E",
+        "JuiceBox",
+        "Tesla Mobile Connector",
+        "Tesla Wall Connector",
+        "NEMA 14-50 adapter",
+        "J1772",
+        "CCS adapter"
+      ],
+      "era_markers": [
+        "Level 2 units are the valuable ones; Level 1 trickle cables are near worthless",
+        "Amperage rating is printed on the unit and drives the price",
+        "Tesla adapters are small, high-margin and frequently loose in estate lots"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "Level 2 wall chargers (ChargePoint / Grizzl-E / JuiceBox)",
+          "low": 180,
+          "high": 330
+        },
+        {
+          "item": "Tesla adapters and mobile connectors",
+          "low": 50,
+          "high": 150
+        }
+      ],
+      "target_buy_usd": {
+        "low": 20,
+        "high": 180
+      },
+      "platform_primary": "eBay",
+      "platform_secondary": "Mercari",
+      "comp_query_template": "EV charging equipment {model} sold",
+      "ship_class": "medium_box",
+      "notes": "Adapters are under 1lb and carry most of the margin. The wall units are bulky enough that shipping matters, so check the auction ships before bidding.",
+      "condition_critical": [
+        "Verify Level 1 or Level 2 and the amperage",
+        "Check the cable for fraying and the plug for burn marks",
+        "Factory reset any smart or wifi features before listing"
+      ]
+    }
+  ],
+  "platform_notes": {
+    "eBay": "Dominant for all of these; buyers search exact model numbers.",
+    "Reverb": "Better than eBay for synthesizers and anything studio-adjacent.",
+    "local_pickup": "The only sane route for CRTs and full-size synths."
+  }
+}

@@ -73,6 +73,13 @@ DEFAULT_BOLO_PATHS: List[Path] = [
     # Brembo brakes).
     _DATA_DIR / "pop_culture_collectibles_bolo.json",
     _DATA_DIR / "clothing_brand_bolo.json",
+    # Vintage electronics loads BEFORE household_parts so "GE Spacemaker"
+    # routes to the under-cabinet entry ($144-499 complete with brackets)
+    # instead of the generic "GE Appliances" parts entry. The collision is
+    # the bare "GE". Everything else in this file is model-qualified, so it
+    # still sits AFTER the watch and console files by not competing for
+    # their bare brand words at all.
+    _DATA_DIR / "vintage_electronics_bolo.json",
     _DATA_DIR / "household_parts_bolo.json",
     _DATA_DIR / "fishing_tackle_bolo.json",
     # Fishing reels load BEFORE watch_accessories so "Zebco Omega Pro 3"
@@ -286,6 +293,70 @@ def _all_alias_hits_are_accessory_context(alias_pat, haystack: str) -> bool:
 
 _BRAND_ALIASES: Dict[str, List[str]] = {
     # JSON header → list of literal phrases to match in the haystack
+    # --- Vintage electronics (from the sourcing research sheet) ---------
+    # Every alias below is qualified. Bare "hp", "sony", "casio" or "sharp"
+    # would swallow printers, televisions, G-Shocks and microwaves, so the
+    # model number or a disambiguating word is always part of the pattern.
+    "Sony Walkman": [
+        "walkman", "tps-l2", "tps l2", "wm-dd100", "wm-dc2", "wm-d6c",
+        "wm-ex", "wm-fx", "discman", "sony d-", "cassette walkman",
+    ],
+    "Sony Trinitron CRT": [
+        "trinitron", "sony pvm", "sony bvm", "pvm-", "bvm-", "profeel",
+        "broadcast monitor",
+    ],
+    "HP scientific calculators": [
+        "hp-35", "hp 35 calculator", "hp-41", "hp 41c", "hp 41cx",
+        "hp-45", "hp-55", "hp-65", "hp-70", "hp-80",
+        "hp 12c", "hp-12c", "hp 15c", "hp-15c", "hp 16c", "hp-16c",
+        "hp 19bii", "hp-19bii", "hp 42s", "hp-42s", "hp 71b", "hp-71b",
+        "hewlett packard calculator", "hp voyager",
+    ],
+    "Texas Instruments calculators": [
+        "speak and spell", "speak & spell", "speak and read",
+        "speak and math", "speak & math",
+        "ti-84", "ti 84 plus", "ti-83", "ti-89", "ti-nspire", "ti nspire",
+        "texas instruments sr-50", "ti-30",
+    ],
+    "Curta mechanical calculator": [
+        "curta", "curta type i", "curta type ii", "contina curta",
+    ],
+    "Calculator watches": [
+        "hp-01", "hp 01 watch", "calculator watch", "casio databank",
+        "casio ca-53", "casio ca53", "pulsar calculator", "seiko c359",
+    ],
+    "Personal organizers and PDAs": [
+        "sharp wizard", "sharp organizer", "casio sf-", "casio boss",
+        "palm pilot", "palm v", "psion organiser", "psion organizer",
+        "rolodex electronics", "electronic organizer",
+    ],
+    "Vintage synthesizers": [
+        "jupiter 4", "jupiter-4", "jupiter 6", "jupiter-6", "jupiter 8",
+        "jupiter-8", "juno 106", "juno-106", "juno 60", "juno-60",
+        "sh-101", "tr-808", "tr-909", "korg ms-20", "casio cz-",
+        "prophet 5", "prophet-5", "analog synthesizer", "analogue synthesizer",
+    ],
+    "Universal and OEM remote controls": [
+        "logitech harmony", "harmony elite", "harmony 900", "harmony one",
+        "harmony hub", "home theater master", "kenwood rc-", "denon rc-",
+        "sony rm-", "beo4", "oem remote", "universal remote",
+    ],
+    "GE Spacemaker under-cabinet appliances": [
+        "spacemaker", "space maker", "under cabinet can opener",
+        "under cabinet coffee", "under cabinet radio", "under cabinet toaster",
+        "under-cabinet",
+    ],
+    "Laboratory and scientific equipment": [
+        "lab freezer", "laboratory freezer", "spectrophotometer",
+        "centrifuge", "analytical balance", "oscilloscope",
+        "laboratory equipment",
+    ],
+    "EV charging equipment": [
+        "chargepoint", "grizzl-e", "grizzle charger", "juicebox charger",
+        "juicebox 40", "tesla mobile connector", "tesla wall connector",
+        "nema 14-50 adapter", "j1772", "ccs adapter", "ev charger",
+        "level 2 charger",
+    ],
     "Loungefly":                              ["loungefly", "loungefy", "lounge fly", "stitch shoppe", "mickey main attraction", "main attraction series"],
     # Nostalgia collectibles — late-90s through 2010s items with
     # sustained millennial-collector resale. Aliases are narrow
