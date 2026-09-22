@@ -6,11 +6,37 @@ import LotTable from './components/LotTable'
 import StatusBar from './components/StatusBar'
 import useMediaQuery from './useMediaQuery'
 
+const VIEW_KEY = 'auctionscout.view'
+const VIEWS = ['auctions', 'items']
+
 export default function App() {
   const isMobile = useMediaQuery('(max-width: 768px)')
   // Two jobs, two screens: finding auctions vs working through what you've
   // imported. Mixing them on one page made both harder to read.
-  const [view, setView] = useState('auctions')
+  // Which tab you were on survives a refresh. Reloading in the middle of
+  // working through inventory and landing back on Auctions means finding
+  // your place again every time.
+  //
+  // The saved value is validated rather than trusted: a stale key from a
+  // renamed tab would render neither panel, leaving a blank page with no
+  // clue why. Every access is guarded because storage throws outright in
+  // some privacy modes rather than returning null.
+  const [view, setView] = useState(() => {
+    try {
+      const saved = window.localStorage.getItem(VIEW_KEY)
+      return VIEWS.includes(saved) ? saved : 'auctions'
+    } catch {
+      return 'auctions'
+    }
+  })
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(VIEW_KEY, view)
+    } catch {
+      // A preference that cannot be saved is not worth breaking a render.
+    }
+  }, [view])
   const [auctions, setAuctions] = useState([])
   // Which imported auctions the items view shows — an array, not one id,
   // so several can be ticked and read together. Empty = all of them.
