@@ -32,6 +32,11 @@ def _reset(monkeypatch):
     monkeypatch.setattr(pricing, "_consecutive_429", 0)
     monkeypatch.setattr(pricing, "_blocked_until", 0.0)
     monkeypatch.setattr(pricing, "_throttle", pricing._Throttle(0))
+    # These tests are about pacing, retry and the breaker - not the durable
+    # cache. Left live it answers from Postgres and the HTTP call under test
+    # never happens, so the assertions measure nothing.
+    monkeypatch.setattr(pricing, "_db_cache_get", lambda *a, **k: None)
+    monkeypatch.setattr(pricing, "_db_cache_put", lambda *a, **k: None)
     # Zero the BACKOFF rather than patching time.sleep: sleep is what the
     # throttle test is measuring, and stubbing it globally made that test
     # pass trivially against a throttle that wasn't working.

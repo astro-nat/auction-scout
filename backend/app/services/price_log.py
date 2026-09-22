@@ -72,6 +72,8 @@ def record(lot_id: int, value, *, method: str, price_source: str = None,
            query: str = None) -> None:
     """Write one observation. Never raises - losing a log row must not cost
     the work that produced it."""
+    if not lot_id:
+        return          # nothing to attach it to; not worth a failed INSERT
     db = None
     try:
         db = SessionLocal()

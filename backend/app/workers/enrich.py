@@ -842,6 +842,12 @@ MIN_ITEM_VALUE = float(os.environ.get("MIN_ITEM_VALUE", "20"))
 # not at all. 0 disables the credit entirely.
 FILLER_REALIZATION = float(os.environ.get("FILLER_REALIZATION", "0.2"))
 
+# How far below MIN_ITEM_VALUE the vision pass must put an item before its
+# comp lookup is skipped entirely. 1.5 means "confidently filler": a $20
+# floor skips lookups only for items guessed under $30, so anything near
+# the line still gets real market data.
+FILLER_SKIP_MARGIN = float(os.environ.get("FILLER_SKIP_MARGIN", "1.5"))
+
 
 def run_inspection(lot_db_id: int) -> None:
     """Itemized vision pass for mixed lots ("Lot of 10 CDs"): read the photo,
@@ -904,11 +910,39 @@ def _inspect(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
     priced = 0           # comp-priced KEEPERS — what the lot's value rests on
     ai_priced = 0
     filler = 0
+    skipped_lookups = 0
     for i, item in enumerate(items, 1):
         item_title = (item.get("title") or "").strip()
         if not item_title:
             continue
         _progress(db, e, f"pricing item {i}/{len(items)}: {item_title[:40]}…")
+        # Skip the comp lookup when the vision pass has already said this is
+        # filler. Anything under MIN_ITEM_VALUE gets swept into one bundled
+        # figure regardless, so comps bought here are paid for and thrown
+        # away - and a box lot can hold twelve of them, each walking up to
+        # four query variants.
+        #
+        # The guess has to be confidently low to skip: the threshold is
+        # MIN_ITEM_VALUE with headroom, so an item the model puts near the
+        # line still gets real comps. AI estimates skew optimistic, so a
+        # low guess is the safe direction to trust.
+        guess = _sane_estimate(item.get("est_value"))
+        # "Even allowing generous headroom on an optimistic guess, this is
+        # still filler." Comparing the raw guess to the floor would skip an
+        # item the model puts at $25 - which could comp at $40 and deserve
+        # its own listing. Discount it the way the no-comps path would,
+        # then give it the margin, and only skip what clears neither.
+        skip_ceiling = (guess * AI_ESTIMATE_REALIZATION * FILLER_SKIP_MARGIN
+                        if guess is not None else None)
+        if skip_ceiling is not None and skip_ceiling < MIN_ITEM_VALUE:
+            value = round(guess * AI_ESTIMATE_REALIZATION, 2)
+            filler_total += value
+            filler_max = max(filler_max, value)
+            filler += 1
+            skipped_lookups += 1
+            lines.append(f"{item_title} → ${value} (below the listing floor, "
+                         f"not comped) · filler")
+            continue
         comps = pricing.lookup_comps(item_title)
         if comps["est_resale"]:
             # Real market data always wins over the model's guess.
@@ -983,6 +1017,8 @@ def _inspect(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
                 f"{ai_priced} AI-estimated")
         if filler:
             head += f", {filler} filler under ${MIN_ITEM_VALUE:g}"
+        if skipped_lookups:
+            head += f" ({skipped_lookups} not comped)"
         e.notes = f"{head}{kept}] {summary}\n" + "\n".join(lines)
     e.ai_source = "vision-itemized"
     # Vision saw the whole lot — trust its ship-tier call over the title regex.

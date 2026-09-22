@@ -65,6 +65,12 @@ _MIGRATIONS = [
     "CREATE INDEX IF NOT EXISTS ix_price_obs_lot ON price_observations (lot_id)",
     "CREATE INDEX IF NOT EXISTS ix_price_obs_evidence ON price_observations (evidence)",
     "CREATE INDEX IF NOT EXISTS ix_price_obs_created ON price_observations (created_at)",
+    "CREATE TABLE IF NOT EXISTS comp_cache ("
+    "query VARCHAR NOT NULL, source VARCHAR NOT NULL, payload JSONB, "
+    "hits INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT now(), "
+    "PRIMARY KEY (query, source))",
+    "CREATE INDEX IF NOT EXISTS ix_comp_cache_created "
+    "ON comp_cache (created_at)",
     "CREATE INDEX IF NOT EXISTS ix_auctions_auctioneer_id ON auctions (auctioneer_id)",
     "ALTER TABLE enrichment ADD COLUMN IF NOT EXISTS gold_check VARCHAR",
     "ALTER TABLE enrichment ADD COLUMN IF NOT EXISTS gold_check_note VARCHAR",

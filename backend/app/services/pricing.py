@@ -21,6 +21,8 @@ import threading
 import time
 from typing import Optional
 
+from datetime import datetime, timedelta, timezone
+
 import httpx
 
 from . import ebay
@@ -617,6 +619,78 @@ def _retry_after_seconds(response, attempt: int) -> float:
     return min(2.0 ** attempt, 30.0)   # 1s, 2s, 4s…
 
 
+
+# --- durable cache -------------------------------------------------------
+# The in-process cache above is the first hop. This one survives restarts
+# and spans jobs, which is where the real saving is: a re-price of the whole
+# catalogue within the TTL costs almost no API calls at all.
+#
+# Seven days because the underlying data is a 90-day trailing window of
+# completed sales. It does not move in a week, and pretending otherwise is
+# what makes the quota the binding constraint.
+COMP_CACHE_DAYS = float(os.environ.get("COMP_CACHE_DAYS", "7"))
+# A cache, not an archive: enough rows to price against, not every result.
+_CACHE_MAX_ITEMS = 60
+_db_cache_stats = {"hit": 0, "miss": 0}
+
+
+def _db_cache_get(query: str, source: str):
+    """Cached answer, or None. Never raises - a cache that breaks the
+    pipeline is worse than no cache."""
+    from ..database import SessionLocal
+    from .. import models
+    db = None
+    try:
+        db = SessionLocal()
+        cutoff = datetime.now(timezone.utc) - timedelta(days=COMP_CACHE_DAYS)
+        row = (db.query(models.CompCache)
+                 .filter(models.CompCache.query == query,
+                         models.CompCache.source == source,
+                         models.CompCache.created_at >= cutoff).first())
+        if row is None:
+            _db_cache_stats["miss"] += 1
+            return None
+        row.hits = (row.hits or 0) + 1
+        db.commit()
+        _db_cache_stats["hit"] += 1
+        return [(float(p), t) for p, t in (row.payload or [])]
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Comp cache read failed for %r: %s", query, exc)
+        return None
+    finally:
+        if db is not None:
+            db.close()
+
+
+def _db_cache_put(query: str, source: str, comps: list) -> None:
+    from ..database import SessionLocal
+    from .. import models
+    db = None
+    try:
+        db = SessionLocal()
+        payload = [[float(p), (t or "")[:200]] for p, t in comps[:_CACHE_MAX_ITEMS]]
+        row = (db.query(models.CompCache)
+                 .filter(models.CompCache.query == query,
+                         models.CompCache.source == source).first())
+        if row is None:
+            db.add(models.CompCache(query=query, source=source, payload=payload))
+        else:
+            row.payload = payload
+            row.created_at = datetime.now(timezone.utc)
+        db.commit()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Comp cache write failed for %r: %s", query, exc)
+    finally:
+        if db is not None:
+            db.close()
+
+
+def cache_stats() -> dict:
+    total = _db_cache_stats["hit"] + _db_cache_stats["miss"]
+    return {**_db_cache_stats,
+            "hit_rate": round(_db_cache_stats["hit"] / total, 3) if total else None}
+
+
 def _soldcomps_lookup(query: str, count: int = 120) -> list[tuple[float, str]]:
     """SoldComps API — real sold prices over the last 90 days.
 
@@ -629,6 +703,12 @@ def _soldcomps_lookup(query: str, count: int = 120) -> list[tuple[float, str]]:
     key = f"{query}|{count}"
     cached = _cache_get(key)
     if cached is not None:
+        return cached
+    # Durable hop: survives restarts and spans jobs, so a re-price inside
+    # the TTL asks the API almost nothing.
+    cached = _db_cache_get(key, "soldcomps")
+    if cached is not None:
+        _cache_put(key, cached)
         return cached
     if _breaker_open():
         return []
@@ -693,6 +773,7 @@ def _soldcomps_lookup(query: str, count: int = 120) -> list[tuple[float, str]]:
         # Cached even when empty: "nothing sold matching this" is an answer,
         # and re-asking it per variant is what built the burst.
         _cache_put(key, out)
+        _db_cache_put(key, "soldcomps", out)
         return out
 
     logger.warning("SoldComps gave up on %r (last status %s)", query, last_status)

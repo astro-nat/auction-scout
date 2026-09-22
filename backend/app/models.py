@@ -358,3 +358,21 @@ class PriceObservation(Base):
     # says WHY a bad match happened.
     query = Column(String)
     created_at = Column(DateTime, server_default=func.now(), index=True)
+
+
+class CompCache(Base):
+    """Answers from the comp API, kept across restarts.
+
+    The in-process cache is still there as a first hop; this is the one
+    that survives a deploy and spans jobs. Empty answers are cached too -
+    "nothing sold matching this" is a real answer, and re-asking it once
+    per query variant is what burned the quota in the first place.
+    """
+    __tablename__ = "comp_cache"
+
+    query = Column(String, primary_key=True)
+    source = Column(String, primary_key=True)     # soldcomps | active
+    # [[price, title], ...] - capped, since a cache is not a store.
+    payload = Column(JSONB)
+    hits = Column(Integer, default=0)
+    created_at = Column(DateTime, server_default=func.now(), index=True)

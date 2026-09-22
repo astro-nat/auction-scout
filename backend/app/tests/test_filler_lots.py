@@ -25,8 +25,10 @@ def inspect_with(monkeypatch):
     """
     def run(items, comp_prices=None, title="Box of assorted items"):
         prices = comp_prices or {}
+        run.looked_up = []
 
         def fake_comps(title):
+            run.looked_up.append(title)
             if title in prices:
                 return {"est_resale": prices[title], "price_low": None,
                         "price_high": None, "comp_count": 4,
@@ -66,12 +68,17 @@ def test_a_crate_of_cheap_oddments_does_not_total_up(inspect_with):
 
 
 def test_one_real_item_beats_a_pile_of_filler(inspect_with):
+    """The filler here is valued from the vision guess, not from comps:
+    _filler() puts est_value at 13, comfortably under the skip threshold,
+    so those eight items never cost a lookup. 13 x AI_ESTIMATE_REALIZATION
+    each, then bundled."""
     items, prices = _filler(8, 10)
     items = [{"title": "Omega watch", "est_value": 400}] + items
     prices["Omega watch"] = 300.0
     e = inspect_with(items, prices)
+    filler_each = 13 * enrich.AI_ESTIMATE_REALIZATION
     assert float(e.est_resale) == pytest.approx(
-        300.0 + 80.0 * enrich.FILLER_REALIZATION)
+        300.0 + round(filler_each, 2) * 8 * enrich.FILLER_REALIZATION, abs=0.05)
     assert e.comp_count == 1            # the ROI rests on the one real item
 
 
@@ -130,3 +137,40 @@ def test_one_keeper_gets_no_partout_discount(inspect_with):
     prices["Omega watch"] = 300.0
     e = inspect_with(items, prices)
     assert "part-out" not in e.price_source
+
+
+def test_confident_filler_never_costs_a_comp_lookup(inspect_with):
+    """The saving this exists for. A box lot can hold twelve items, each
+    walking up to four query variants, and everything under the listing
+    floor is swept into one bundled figure anyway - so those lookups were
+    bought and thrown away."""
+    items = [{"title": "Omega watch", "est_value": 400}] + [
+        {"title": f"trinket {i}", "est_value": 6} for i in range(10)]
+    inspect_with(items, {"Omega watch": 300.0})
+    assert inspect_with.looked_up == ["Omega watch"], (
+        f"comped {len(inspect_with.looked_up)} items, only one was worth listing")
+
+
+def test_an_item_near_the_floor_still_gets_real_comps(inspect_with):
+    """The margin exists so a borderline guess is not trusted. AI estimates
+    skew optimistic, so only a confidently LOW one is safe to act on."""
+    # A guess that could still clear the floor once the headroom is
+    # allowed for: 25 x 0.8 x 1.5 = 30, comfortably over a $20 floor.
+    inspect_with([{"title": "borderline thing", "est_value": 25}],
+                 {"borderline thing": 45.0})
+    assert inspect_with.looked_up == ["borderline thing"]
+
+
+def test_the_notes_say_how_many_were_not_comped(inspect_with):
+    """A cheap total should be legible, not mysterious."""
+    items = [{"title": f"trinket {i}", "est_value": 5} for i in range(6)]
+    e = inspect_with(items, {})
+    assert "not comped" in (e.notes or "")
+
+
+def test_the_skip_allows_for_an_optimistic_guess():
+    """The model guesses high. Comparing its raw number to the floor would
+    skip items that comp well above it."""
+    guess = enrich.MIN_ITEM_VALUE * 1.25      # $25 against a $20 floor
+    ceiling = guess * enrich.AI_ESTIMATE_REALIZATION * enrich.FILLER_SKIP_MARGIN
+    assert ceiling >= enrich.MIN_ITEM_VALUE, "a $25 guess would be skipped"
