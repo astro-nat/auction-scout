@@ -293,12 +293,65 @@ def _all_alias_hits_are_accessory_context(alias_pat, haystack: str) -> bool:
 
 _BRAND_ALIASES: Dict[str, List[str]] = {
     # JSON header → list of literal phrases to match in the haystack
+    # --- Sheet 2 additions ----------------------------------------------
+    # Qualified the same way as the earlier blocks. "Erie" is a city,
+    # "philosophy" is a school subject and "eames" gets spelled four ways,
+    # so the patterns carry a product word wherever the brand alone is a
+    # common English term.
+    "Polaroid instant cameras": [
+        "polaroid sx-70", "polaroid sx70", "sx-70", "sx70 land camera",
+        "polaroid slr 680", "polaroid slr 690", "slr 690", "slr 680",
+        "polaroid macro 5", "polaroid spectra", "land camera 250",
+        "polaroid big shot", "polaroid land camera",
+        # common misspellings
+        "poloroid", "polariod", "polroid", "poleroid",
+    ],
+    "Mid-century and designer furniture": [
+        "herman miller", "aeron chair", "eames lounge", "eames shell",
+        "eames chair", "knoll barcelona", "noguchi table",
+        "broyhill brasilia", "lane acclaim", "danish teak credenza",
+        "milo baughman", "mid century credenza", "mcm credenza",
+        "teak sideboard",
+        # common misspellings
+        "eams chair", "ames lounge chair", "hermann miller", "herman millar",
+        "aeron chiar", "broyhil brasilia", "mid-centruy modern",
+    ],
+    "Collectible holiday ornaments": [
+        "hallmark keepsake", "keepsake ornament", "christopher radko",
+        "radko ornament", "department 56", "dept 56", "dept. 56",
+        "snow village", "dickens village",
+        # common misspellings
+        "hallmark keep sake", "christoper radko", "radco ornament",
+        "departmet 56", "deptartment 56",
+    ],
+    "Collectible cast iron": [
+        "griswold", "wagner ware", "wagnerware", "favorite piqua",
+        "birmingham stove", "griswold large block", "wapak",
+        "erie skillet", "erie cast iron",
+        # common misspellings
+        "griswald", "griswold skillett", "grisswold", "wagner were",
+    ],
+    "Discontinued skincare": [
+        "murad", "kiehl's", "kiehls", "philosophy skincare",
+        "clinique", "neutrogena", "estee lauder", "lancome",
+        "discontinued formula", "discontinued skincare",
+        # common misspellings
+        "kheils", "neutragena", "neutrogina", "clinque", "estee lauda",
+    ],
+    "Premium monitors": [
+        "dell ultrasharp", "ultrasharp", "lg ultrafine", "asus proart",
+        "benq pd", "eizo coloredge", "apple studio display",
+        # common misspellings
+        "ultra sharp monitor", "ultrafine monitor", "eizo color edge",
+    ],
     # --- Gap-fill from the sourcing research sheet ----------------------
     # Qualified the same way as the vintage-electronics block: a bare
     # "stanley" is a drinks tumbler in lightweight_collectibles, a bare
     # "surface" is a noun, and "magic" is in half the toy listings in any
     # catalogue. Each pattern carries a model or a qualifier.
     "Vintage hi-fi separates": [
+        # boom boxes
+        "boombox", "boom box", "ghettoblaster", "ghetto blaster", "cfs-w", "vintage boombox",
         # common misspellings and spacing variants
         "macintosh amplifier", "macintosh receiver", "macintosh tuner", "mac intosh amplifier", "mcintosh amp", "maranz", "marrantz", "sansue", "sanusi", "techniks sl", "technics sl 1200", "pioneer sx 1250", "vintage reciever", "silver faced receiver",
         "mcintosh mc", "mcintosh ma", "mcintosh amplifier", "mcintosh tuner",
@@ -316,6 +369,8 @@ _BRAND_ALIASES: Dict[str, List[str]] = {
         "stanley plane", "stanley sweetheart", "estwing",
     ],
     "Small replacement parts": [
+        # legacy Kenmore and HVAC spares from sheet 2
+        "kenmore part", "kenmore thermostat", "kenmore belt", "microwave magnetron", "dryer belt", "hvac thermostat",
         # common misspellings and spacing variants
         "vaccum attachment", "vacumm attachment", "vacuum attatchment", "pressure foot", "presser feet", "bobin case", "applicance knob", "stove knob", "oven knob",
         "appliance knob", "range knob", "dryer knob", "washer knob",
@@ -420,6 +475,8 @@ _BRAND_ALIASES: Dict[str, List[str]] = {
         "prophet 5", "prophet-5", "analog synthesizer", "analogue synthesizer",
     ],
     "Universal and OEM remote controls": [
+        # high-value OEM remotes called out in sheet 2
+        "oppo remote", "oppo bdp", "oppo blu-ray remote", "bose remote", "bose rc-", "yamaha rav", "onkyo rc-", "marantz rc-",
         # common misspellings and spacing variants
         "logitec harmony", "logitech harmoney", "harmony remote", "remote controll", "univeral remote",
         "logitech harmony", "harmony elite", "harmony 900", "harmony one",
@@ -1534,7 +1591,9 @@ _BRAND_ALIASES: Dict[str, List[str]] = {
     "Madewell":                               ["madewell"],
     "The North Face":                         ["the north face", "north face", " tnf "],
     "Arc'teryx":                              ["arc'teryx", "arcteryx", "arc teryx"],
-    "Carhartt":                               ["carhartt"],
+    "Carhartt":                               [
+        # Dickies workwear from sheet 2
+        "dickies", "dickies workwear", "dickies coverall", "dickeys work", "dickies duck jacket","carhartt"],
     "Columbia PFG":                           ["columbia pfg", " pfg "],
     "Filson":                                 ["filson"],
     "Levi's vintage":                         ["levi's", "levis ", "levi strauss"],
@@ -3217,6 +3276,8 @@ _BRAND_ALIASES: Dict[str, List[str]] = {
     # Canon: bare 'canon' is risky (printers, calculators, copiers).
     # Gate on EOS / RF / EF / specific body model number.
     "Canon Cameras + Lenses": [
+        # classic film SLR bodies (AE-1 and friends were unmatched)
+        "canon ae-1", "canon ae1", "canon a-1", "canon f-1", "canon av-1", "canon t70", "canon t90", "canonet", "canon ftb",
         "canon eos", "canon rf", "canon ef-",
         "canon r5", "canon r6", "canon r3", "canon r7",
         "canon r8", "canon r10", "canon r50", "canon r100",

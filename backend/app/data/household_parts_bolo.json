@@ -1793,6 +1793,57 @@
         "Check mounting tabs and splines for cracks",
         "Test connectors and clips actually latch"
       ]
+    },
+    {
+      "brand": "Collectible cast iron",
+      "category": "cast_iron",
+      "tier": 1,
+      "models": [
+        "Griswold",
+        "Wagner Ware",
+        "Erie",
+        "Favorite Piqua",
+        "Birmingham Stove",
+        "Griswold Large Block",
+        "Wapak"
+      ],
+      "era_markers": [
+        "Griswold large block logo predates the small block and is worth more",
+        "Erie markings without Griswold are the earliest and rarest",
+        "Heat ring on the base indicates a pre-1930s pour",
+        "Pan number is cast into the handle or the base"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "Griswold large block, sizes 8-12",
+          "low": 120,
+          "high": 400
+        },
+        {
+          "item": "Wagner Ware and common Griswold small block",
+          "low": 60,
+          "high": 180
+        },
+        {
+          "item": "Unmarked vintage skillets",
+          "low": 20,
+          "high": 60
+        }
+      ],
+      "target_buy_usd": {
+        "low": 5,
+        "high": 60
+      },
+      "platform_primary": "eBay",
+      "platform_secondary": "Mercari",
+      "comp_query_template": "Collectible cast iron {model} sold",
+      "ship_class": "medium_box",
+      "notes": "This file had Lodge, which is the one brand that is NOT collectible. Griswold and Wagner are the names that carry the premium, and they turn up constantly in kitchen box lots.",
+      "condition_critical": [
+        "Check for cracks by ringing the pan; a dull thud means cracked",
+        "Warping: it must sit flat on a level surface",
+        "Pitting through the cooking surface kills the value"
+      ]
     }
   ],
   "platform_notes": {

@@ -4340,6 +4340,55 @@
         "Check the screen for pressure marks and dead pixels",
         "Confirm the charger is included; proprietary barrels are costly"
       ]
+    },
+    {
+      "brand": "Premium monitors",
+      "category": "monitors",
+      "tier": 2,
+      "models": [
+        "Dell UltraSharp",
+        "LG UltraFine",
+        "ASUS ProArt",
+        "BenQ PD",
+        "EIZO ColorEdge",
+        "Apple Studio Display"
+      ],
+      "era_markers": [
+        "Model number on the rear panel or under the stand mount",
+        "Resolution and panel type drive price: 4K IPS beats 1080p TN",
+        "Original stand included matters; replacements are costly"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "EIZO ColorEdge / Apple Studio Display",
+          "low": 500,
+          "high": 1200
+        },
+        {
+          "item": "Dell UltraSharp 4K / LG UltraFine",
+          "low": 180,
+          "high": 450
+        },
+        {
+          "item": "Business 1080p panels",
+          "low": 40,
+          "high": 110
+        }
+      ],
+      "target_buy_usd": {
+        "low": 20,
+        "high": 180
+      },
+      "platform_primary": "eBay",
+      "platform_secondary": "Mercari",
+      "comp_query_template": "Premium monitors {model} sold",
+      "ship_class": "large_box",
+      "notes": "Corporate liquidations dump these in quantity. The panel is fragile and bulky, so confirm the auction ships before bidding.",
+      "condition_critical": [
+        "Power on and check for dead pixels and backlight bleed",
+        "Confirm the stand and the correct video cables are included",
+        "Scratches on an anti-glare coating cannot be polished out"
+      ]
     }
   ],
   "platform_notes": {

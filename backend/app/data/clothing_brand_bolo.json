@@ -1875,6 +1875,52 @@
         "Verify the batch code matches the box",
         "Glass must be undamaged; atomiser must spray"
       ]
+    },
+    {
+      "brand": "Discontinued skincare",
+      "category": "skincare",
+      "tier": 2,
+      "models": [
+        "Murad",
+        "Clinique",
+        "Kiehl's",
+        "Philosophy",
+        "Neutrogena",
+        "Estee Lauder",
+        "Lancome",
+        "discontinued formula"
+      ],
+      "era_markers": [
+        "Batch code and expiry printed on the base or crimp",
+        "Discontinued formulations sell far above original retail",
+        "Sealed and boxed is worth multiples of an opened jar"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "Discontinued cult formulas, sealed",
+          "low": 60,
+          "high": 120
+        },
+        {
+          "item": "Current-line sealed skincare",
+          "low": 28,
+          "high": 70
+        }
+      ],
+      "target_buy_usd": {
+        "low": 2,
+        "high": 20
+      },
+      "platform_primary": "eBay",
+      "platform_secondary": "Mercari",
+      "comp_query_template": "Discontinued skincare {model} sold",
+      "ship_class": "poly_mailer",
+      "notes": "Value is in the discontinued formulas specifically, not the brand. Check whether the exact SKU is still sold before buying.",
+      "condition_critical": [
+        "Seal intact and expiry date readable",
+        "No separation or discolouration in the product",
+        "Verify the batch code against the brand checker"
+      ]
     }
   ],
   "skip_list": [

@@ -1489,6 +1489,109 @@
       "ship_class": "small_box",
       "notes": "Enesco's Grand Jester Studios — sleek Disney busts / statues, often LE-numbered. Villains + Nightmare Before Christmas pieces are the strongest sellers.",
       "condition_critical": true
+    },
+    {
+      "brand": "Mid-century and designer furniture",
+      "category": "furniture",
+      "tier": 1,
+      "models": [
+        "Herman Miller Aeron",
+        "Eames Lounge",
+        "Eames Shell",
+        "Knoll Barcelona",
+        "Noguchi table",
+        "Broyhill Brasilia",
+        "Lane Acclaim",
+        "Danish teak credenza",
+        "Milo Baughman"
+      ],
+      "era_markers": [
+        "Manufacturer stamp or label under the seat or inside a drawer",
+        "Aeron size dot on the back of the chair: A, B or C",
+        "Authentic Eames carries a Herman Miller medallion",
+        "Brasilia has the distinctive pierced arch on drawer fronts"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "Eames Lounge Chair and Ottoman",
+          "low": 1800,
+          "high": 3500
+        },
+        {
+          "item": "Herman Miller Aeron (Remastered)",
+          "low": 400,
+          "high": 900
+        },
+        {
+          "item": "MCM credenzas and sideboards",
+          "low": 400,
+          "high": 1500
+        }
+      ],
+      "target_buy_usd": {
+        "low": 40,
+        "high": 400
+      },
+      "platform_primary": "eBay",
+      "platform_secondary": "Facebook Marketplace",
+      "comp_query_template": "Mid-century and designer furniture {model} sold",
+      "ship_class": "freight",
+      "notes": "Consistently the most mispriced thing at an estate auction: it reads as used office furniture. Local pickup only, so it is worth bidding on only where you can collect.",
+      "condition_critical": [
+        "Find the manufacturer stamp; unmarked means a reproduction",
+        "Aeron: check the mesh for sagging and all gas-lift function",
+        "Veneer lifting or water rings cut the value hard"
+      ]
+    },
+    {
+      "brand": "Collectible holiday ornaments",
+      "category": "ornaments",
+      "tier": 2,
+      "models": [
+        "Hallmark Keepsake",
+        "Christopher Radko",
+        "Department 56",
+        "Dept 56 Snow Village",
+        "Dept 56 Dickens Village",
+        "Radko Starlight",
+        "Keepsake Magic"
+      ],
+      "era_markers": [
+        "Hallmark Keepsake carries a year on the base and its own box",
+        "Radko ornaments are hand-blown glass with a signed silver cap",
+        "Dept 56 pieces have a numbered village series on the bottom"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "Complete Dept 56 village series",
+          "low": 150,
+          "high": 600
+        },
+        {
+          "item": "Christopher Radko blown glass",
+          "low": 40,
+          "high": 180
+        },
+        {
+          "item": "Hallmark Keepsake in original box",
+          "low": 15,
+          "high": 90
+        }
+      ],
+      "target_buy_usd": {
+        "low": 1,
+        "high": 25
+      },
+      "platform_primary": "eBay",
+      "platform_secondary": "Mercari",
+      "comp_query_template": "Collectible holiday ornaments {model} sold",
+      "ship_class": "medium_box",
+      "notes": "Worth far more as a completed series than as singles, so read the whole lot before valuing it. Buy after Christmas, sell before the next one.",
+      "condition_critical": [
+        "Original box is most of the value on Hallmark",
+        "Check glass for hairline cracks and cap separation",
+        "Series completeness matters more than individual condition"
+      ]
     }
   ],
   "platform_notes": {
