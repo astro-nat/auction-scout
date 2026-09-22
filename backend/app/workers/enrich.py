@@ -649,16 +649,42 @@ range), 0 if it has no meaningful resale value. Required when plausible is
 false: it replaces the claim you rejected."""
 
 
+# A dollar figure in prose: "$80-150", "$80 - $150", "around $90".
+_PROSE_VALUE_RE = re.compile(r"\$\s?(\d[\d,]*(?:\.\d{1,2})?)")
+
+
 def _audit_correction(result: dict, claimed: float) -> float | None:
     """The auditor's own value, when usable: a positive number meaningfully
     below the claim it just rejected. Zero means 'no real value' (plain
     demotion says that better), and anything at or above the claim is
-    incoherent with calling the claim implausible."""
+    incoherent with calling the claim implausible.
+
+    Falls back to reading the number out of the reason text. The model
+    regularly names a figure in prose and leaves realistic_value empty -
+    a Swarovski member gift was rejected with "typically sell for $80-150"
+    and still displayed the debunked $370, because the structured field
+    was missing and the code would not guess. It does not have to guess:
+    the number is right there in the sentence it just wrote.
+
+    The first figure below the claim wins, which is deliberately the LOW
+    end of a range. An auditor rejecting a value for being too high should
+    not have its correction rounded up, and the reason usually restates the
+    rejected figure too - excluded by the same below-the-claim rule.
+    """
     try:
         value = float(result.get("realistic_value"))
     except (TypeError, ValueError):
-        return None
-    if not 0 < value < claimed:
+        value = None
+    if value is None:
+        for match in _PROSE_VALUE_RE.finditer(str(result.get("reason") or "")):
+            try:
+                candidate = float(match.group(1).replace(",", ""))
+            except ValueError:
+                continue
+            if 0 < candidate < claimed:
+                value = candidate
+                break
+    if value is None or not 0 < value < claimed:
         return None
     return round(value, 2)
 

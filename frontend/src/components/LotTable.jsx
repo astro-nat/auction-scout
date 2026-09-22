@@ -602,7 +602,14 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                 </span>
                 <span>Bid {money(lot.current_bid)} / {money(lot.next_bid)}</span>
                 <span>Cost {money(lot.est_cost)}</span>
-                <span>Resale {money(e.est_resale)}{e.comp_count > 0 ? ` (${e.comp_count})` : ''}</span>
+                <span title={e.gold_check === 'demoted' ? e.gold_check_note : undefined}
+                      style={e.gold_check === 'demoted'
+                        ? { textDecoration: 'line-through', opacity: 0.6 } : undefined}>
+                  Resale {money(e.est_resale)}{e.comp_count > 0 ? ` (${e.comp_count})` : ''}
+                </span>
+                {e.gold_check === 'demoted' && (
+                  <span style={{ color: '#e05555', fontSize: 12 }}> rejected by audit</span>
+                )}
                 {houseEstimate(lot) && (
                   <span style={{ color: 'var(--muted)' }}
                         title={houseRatioTitle(lot.house_ratio, lot.house_ratio_n) || undefined}>
@@ -855,6 +862,18 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                 />
                 {e.comp_count > 0 && (
                   <span style={{ color: 'var(--muted)', fontSize: 12 }}> ({e.comp_count})</span>
+                )}
+                {/* The audit rejected this number and had nothing to put in
+                    its place. Showing it unmarked reads as a real estimate,
+                    which is how a debunked $370 stayed on screen next to the
+                    note explaining it was wrong. */}
+                {e.gold_check === 'demoted' && (
+                  <div title={e.gold_check_note
+                    || 'The second-opinion audit judged this value implausible'}
+                       style={{ color: '#e05555', fontSize: 11, fontWeight: 600,
+                                cursor: 'help' }}>
+                    rejected by audit
+                  </div>
                 )}
                 {isPaleEvidence(ev) && (
                   <span title={EVIDENCE_NOTE[ev]}
