@@ -2,21 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, scanGovDeals, importGovDeals, scanPublicSurplus, importPublicSurplus, scanVinted, importLots, importAllAuctions, enrichAll, enrichCategory, flushClosed, refreshBids, reinspectNoComps, fetchSettings, saveTargetRoi, savePacing, fetchWeekStats, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
 import { auctionClosed, clearsFloor, underFloor, goldBadge as pacingGoldBadge } from './lib/pacing'
 import { houseRatioLabel, houseRatioTitle } from './lib/calibration'
+import { initialView, saveView, viewFromHash, viewUrl } from './lib/view'
 import LotTable from './components/LotTable'
 import StatusBar from './components/StatusBar'
 import useMediaQuery from './useMediaQuery'
-
-const VIEW_KEY = 'auctionscout.view'
-const VIEWS = ['auctions', 'items']
-
-// The tab lives in the URL (#items), which makes it survive a refresh AND
-// gives back, forward and bookmarking for free. Validated on the way in:
-// anyone can type anything after the #, and an unrecognised value would
-// match neither panel and render a blank page.
-function viewFromHash() {
-  const raw = (window.location.hash || '').replace(/^#/, '')
-  return VIEWS.includes(raw) ? raw : null
-}
 
 export default function App() {
   const isMobile = useMediaQuery('(max-width: 768px)')
@@ -31,29 +20,17 @@ export default function App() {
   // bare URL with no hash - a bookmark to the root still returns you to
   // the tab you last used. Storage access is guarded throughout because it
   // throws outright in some privacy modes rather than returning null.
-  const [view, setView] = useState(() => {
-    const fromHash = viewFromHash()
-    if (fromHash) return fromHash
-    try {
-      const saved = window.localStorage.getItem(VIEW_KEY)
-      return VIEWS.includes(saved) ? saved : 'auctions'
-    } catch {
-      return 'auctions'
-    }
-  })
+  const [view, setView] = useState(
+    () => initialView(window.location.hash, window.localStorage))
 
   // First sync REPLACES the history entry; later ones push. Pushing on
   // mount would put the hash-less URL behind us, so the first Back press
   // would appear to do nothing instead of leaving the page.
   const viewSynced = useRef(false)
   useEffect(() => {
-    try {
-      window.localStorage.setItem(VIEW_KEY, view)
-    } catch {
-      // A preference that cannot be saved is not worth breaking a render.
-    }
-    if (viewFromHash() !== view) {
-      const url = `${window.location.pathname}${window.location.search}#${view}`
+    saveView(view, window.localStorage)
+    if (viewFromHash(window.location.hash) !== view) {
+      const url = viewUrl(view, window.location)
       if (viewSynced.current) window.history.pushState(null, '', url)
       else window.history.replaceState(null, '', url)
     }
@@ -63,7 +40,7 @@ export default function App() {
   // Back and forward change the hash without re-rendering us, so follow it.
   useEffect(() => {
     const follow = () => {
-      const next = viewFromHash()
+      const next = viewFromHash(window.location.hash)
       if (next) setView(next)
     }
     window.addEventListener('hashchange', follow)
