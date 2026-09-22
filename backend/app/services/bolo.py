@@ -48,6 +48,7 @@ ceiling next to current_bid.
 from __future__ import annotations
 
 import hashlib
+from functools import lru_cache
 import os
 import json
 import re
@@ -3887,6 +3888,88 @@ def _whole_word_pattern(literal: str, max_gap_words: int = 6) -> re.Pattern:
         rf"(?<![A-Za-z0-9]){inner}(?![A-Za-z0-9])",
         re.IGNORECASE,
     )
+
+
+
+# ---------------------------------------------------------------------
+# Category hints for box lots
+# ---------------------------------------------------------------------
+# A BOLO-only import keeps lots whose title names a brand. Box lots almost
+# never do: "Lot of Assorted Cameras" names no brand at all, yet it is the
+# lot worth opening when cameras are on your list.
+#
+# The tokens come from the category slugs already in the JSON (camera_canon,
+# cast_iron, fishing_reel), so the list follows the brand files rather than
+# drifting from them. What the slugs cannot supply is judgement about which
+# tokens are actually evidence, hence the stop list below.
+_CATEGORY_STOPWORDS = frozenset({
+    # Generic to the point of matching any junk box.
+    "accessories", "accessory", "consumable", "electronics", "equipment",
+    "gear", "parts", "replacement", "storage", "store", "supplies",
+    # Adjectives describing a tier, not a thing.
+    "budget", "contemporary", "designer", "heritage", "luxury", "mid",
+    "modern", "premium", "pro", "plus", "single", "size", "small",
+    "vintage", "virtual", "y2k", "boho", "nostalgia", "pop", "culture",
+    # Words whose everyday sense swamps the collectible one. "iron" is a
+    # laundry appliance far more often than it is a Griswold skillet, and
+    # the real signal there is the phrase, which is in _CATEGORY_PHRASES.
+    "iron", "case", "channel", "display", "board", "water", "metal",
+    "wear", "graphic", "oem", "multi", "protective", "pocket",
+})
+
+# Multi-word signals the single-token derivation cannot express.
+_CATEGORY_PHRASES = (
+    "cast iron", "trading cards", "sports cards", "costume jewelry",
+    "sterling silver", "vinyl records", "power tools", "hand tools",
+    "video games", "board games", "fountain pens", "pocket knives",
+    "fishing tackle", "fishing lures", "hot wheels", "model trains",
+)
+
+
+@lru_cache(maxsize=1)
+def _category_tokens() -> tuple:
+    """Every category token worth treating as evidence, from the JSON files.
+
+    Returned as a TUPLE ordered longest-first, not a set: the slugs yield
+    both "camera" and "cameras", and iterating a set meant the hint for the
+    same title changed between runs. Longest-first also means the more
+    specific token wins when several apply.
+
+    Cached for the process: the brand files change at deploy time, not
+    while a job is running.
+    """
+    tokens = set()
+    for path in DEFAULT_BOLO_PATHS:
+        if not path.exists():
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001 - a malformed file must not break import
+            continue
+        for brand in data.get("brands", []) or []:
+            for token in (brand.get("category") or "").split("_"):
+                token = token.strip().lower()
+                if len(token) >= 3 and token not in _CATEGORY_STOPWORDS:
+                    tokens.add(token)
+    return tuple(sorted(tokens, key=lambda t: (-len(t), t)))
+
+
+def category_hint(title: str) -> Optional[str]:
+    """The BOLO category a box lot appears to sit in, or None.
+
+    Whole-word only, so "cardboard" is not "cards" and "cameras" still
+    matches "camera". Phrases are checked first because they are the
+    stronger signal.
+    """
+    haystack = " " + re.sub(r"[^a-z0-9]+", " ", (title or "").lower()) + " "
+    for phrase in _CATEGORY_PHRASES:
+        if " " + phrase + " " in haystack:
+            return phrase
+    words = set(haystack.split())
+    for token in _category_tokens():
+        if token in words or token + "s" in words:
+            return token
+    return None
 
 
 class BoloMatcher:

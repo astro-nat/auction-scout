@@ -19,7 +19,8 @@ from sqlalchemy.orm import Session
 from ..database import SessionLocal
 from .. import models
 from ..services import hibid, jobs
-from .enrich import apply_bolo_match
+from .enrich import apply_bolo_match, looks_multi_item
+from ..services.bolo import category_hint
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,16 @@ def save_lots(db: Session, auction: models.Auction, lots: list[dict], *,
             probe = models.Enrichment(lot_id=0)
             bolo_hit = apply_bolo_match(
                 probe, data.get("title") or "", data.get("description") or "")
+
+        # A box lot rarely names a brand, so a brand-only filter drops the
+        # "Lot of Assorted Cameras" that is worth opening precisely because
+        # cameras are on the list. Keep multi-item lots whose title lands in
+        # a BOLO category; they are the ones the itemised vision pass exists
+        # for anyway.
+        if bolo_only and not bolo_hit:
+            title_text = data.get("title") or ""
+            if looks_multi_item(title_text):
+                bolo_hit = bool(category_hint(title_text))
 
         row = db.query(models.Lot).filter(models.Lot.lot_id == data["lot_id"]).first()
         if row is None and bolo_only and not bolo_hit:
