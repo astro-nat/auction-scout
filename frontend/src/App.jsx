@@ -9,19 +9,31 @@ import useMediaQuery from './useMediaQuery'
 const VIEW_KEY = 'auctionscout.view'
 const VIEWS = ['auctions', 'items']
 
+// The tab lives in the URL (#items), which makes it survive a refresh AND
+// gives back, forward and bookmarking for free. Validated on the way in:
+// anyone can type anything after the #, and an unrecognised value would
+// match neither panel and render a blank page.
+function viewFromHash() {
+  const raw = (window.location.hash || '').replace(/^#/, '')
+  return VIEWS.includes(raw) ? raw : null
+}
+
 export default function App() {
   const isMobile = useMediaQuery('(max-width: 768px)')
   // Two jobs, two screens: finding auctions vs working through what you've
   // imported. Mixing them on one page made both harder to read.
-  // Which tab you were on survives a refresh. Reloading in the middle of
-  // working through inventory and landing back on Auctions means finding
+  // Which tab you were on survives a refresh. Reloading mid-way through
+  // working an inventory list and landing back on Auctions means finding
   // your place again every time.
   //
-  // The saved value is validated rather than trusted: a stale key from a
-  // renamed tab would render neither panel, leaving a blank page with no
-  // clue why. Every access is guarded because storage throws outright in
-  // some privacy modes rather than returning null.
+  // The URL is the source of truth, so a link to #items opens there and
+  // back/forward move between tabs. localStorage is the fallback for the
+  // bare URL with no hash - a bookmark to the root still returns you to
+  // the tab you last used. Storage access is guarded throughout because it
+  // throws outright in some privacy modes rather than returning null.
   const [view, setView] = useState(() => {
+    const fromHash = viewFromHash()
+    if (fromHash) return fromHash
     try {
       const saved = window.localStorage.getItem(VIEW_KEY)
       return VIEWS.includes(saved) ? saved : 'auctions'
@@ -30,13 +42,37 @@ export default function App() {
     }
   })
 
+  // First sync REPLACES the history entry; later ones push. Pushing on
+  // mount would put the hash-less URL behind us, so the first Back press
+  // would appear to do nothing instead of leaving the page.
+  const viewSynced = useRef(false)
   useEffect(() => {
     try {
       window.localStorage.setItem(VIEW_KEY, view)
     } catch {
       // A preference that cannot be saved is not worth breaking a render.
     }
+    if (viewFromHash() !== view) {
+      const url = `${window.location.pathname}${window.location.search}#${view}`
+      if (viewSynced.current) window.history.pushState(null, '', url)
+      else window.history.replaceState(null, '', url)
+    }
+    viewSynced.current = true
   }, [view])
+
+  // Back and forward change the hash without re-rendering us, so follow it.
+  useEffect(() => {
+    const follow = () => {
+      const next = viewFromHash()
+      if (next) setView(next)
+    }
+    window.addEventListener('hashchange', follow)
+    window.addEventListener('popstate', follow)
+    return () => {
+      window.removeEventListener('hashchange', follow)
+      window.removeEventListener('popstate', follow)
+    }
+  }, [])
   const [auctions, setAuctions] = useState([])
   // Which imported auctions the items view shows — an array, not one id,
   // so several can be ticked and read together. Empty = all of them.

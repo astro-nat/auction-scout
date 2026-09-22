@@ -41,6 +41,7 @@ from ..services import financials, gemini, hibid, jobs, price_log, pricing
 from ..services import settings as settings_store
 from ..services.bolo import BoloMatcher
 from ..services.hibid import classify_logistics
+from ..services.timing import timed
 
 logger = logging.getLogger(__name__)
 
