@@ -201,10 +201,18 @@ export function importLots(auctionId, categoryId = -1) {
 }
 
 // One background job that imports every listed auction, in the order sent.
-export function importAllAuctions(auctionIds, categoryId = -1) {
+// Three shapes through one call: everything, one HiBid category, or only
+// lots whose title matches the BOLO brand list. The two filters compose.
+// The BOLO match runs at import and is free - regex over the title the
+// fetch already returned, no AI - so the filter costs nothing.
+export function importAllAuctions(auctionIds, categoryId = -1, boloOnly = false) {
   return request('/auctions/import-all', {
     method: 'POST',
-    body: JSON.stringify({ auction_ids: auctionIds, category_id: categoryId }),
+    body: JSON.stringify({
+      auction_ids: auctionIds,
+      category_id: categoryId,
+      bolo_only: boloOnly,
+    }),
   })
 }
 

@@ -52,7 +52,34 @@ def test_import_enqueues_a_bulk_of_one(auction_id, monkeypatch):
     assert r.json()["queued"] is True
     assert enqueued == [{"kind": "import-all",
                          "payload": {"auction_ids": [auction_id],
-                                     "category_id": 40252}}]
+                                     "category_id": 40252,
+                                     "bolo_only": False}}]
+
+
+def test_a_bolo_filtered_import_says_so_in_its_payload(auction_id, monkeypatch):
+    """The worker dispatches with only the auction list and the job id, so
+    anything else has to ride the payload or it resets to its default."""
+    enqueued = []
+    monkeypatch.setattr(auctions_router.jobs, "has_pending", lambda kind: False)
+    monkeypatch.setattr(auctions_router.jobs, "enqueue",
+                        lambda kind, label, total=None, payload=None:
+                        enqueued.append({"kind": kind, "payload": payload}))
+    r = client.post(f"/auctions/{auction_id}/import?bolo_only=true")
+    assert r.status_code == 202
+    assert enqueued[0]["payload"]["bolo_only"] is True
+
+
+def test_the_two_import_filters_compose(auction_id, monkeypatch):
+    """"Every BOLO match in the antiques category" is both at once."""
+    enqueued = []
+    monkeypatch.setattr(auctions_router.jobs, "has_pending", lambda kind: False)
+    monkeypatch.setattr(auctions_router.jobs, "enqueue",
+                        lambda kind, label, total=None, payload=None:
+                        enqueued.append({"kind": kind, "payload": payload}))
+    client.post(f"/auctions/{auction_id}/import?category_id=40252&bolo_only=true")
+    assert enqueued[0]["payload"] == {"auction_ids": [auction_id],
+                                      "category_id": 40252,
+                                      "bolo_only": True}
 
 
 def test_import_defers_to_a_running_bulk(auction_id, monkeypatch):

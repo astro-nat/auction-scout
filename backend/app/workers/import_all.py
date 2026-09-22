@@ -19,17 +19,19 @@ from sqlalchemy.orm import Session
 from ..database import SessionLocal
 from .. import models
 from ..services import hibid, jobs
+from .enrich import apply_bolo_match
 
 logger = logging.getLogger(__name__)
 
 
 def save_lots(db: Session, auction: models.Auction, lots: list[dict], *,
-              on_progress=None, should_cancel=None) -> tuple[int, int, bool]:
+              on_progress=None, should_cancel=None,
+              bolo_only: bool = False) -> tuple[int, int, bool]:
     """Idempotent upsert of fetched lot dicts into one auction.
 
     Bids/status/time-left always come fresh on rows we already have;
     analysis fields stay. Returns (created, updated, cancelled)."""
-    created = updated = 0
+    created = updated = skipped = 0
     cancelled = False
     for i, data in enumerate(lots, 1):
         if i % 10 == 0 or i == len(lots):
@@ -38,7 +40,21 @@ def save_lots(db: Session, auction: models.Auction, lots: list[dict], *,
                 break            # keep what's saved so far
             if on_progress:
                 on_progress(i, (data.get("title") or "")[:45])
+        # BOLO match up front, from the title and description the fetch
+        # already returned. Free regex, no AI, no network — which is why a
+        # BOLO-filtered import can decide what to keep before anything is
+        # spent. A lot already on file is always updated, filter or not:
+        # dropping its bids because the filter changed would be worse.
+        bolo_hit = None
+        if bolo_only:
+            probe = models.Enrichment(lot_id=0)
+            bolo_hit = apply_bolo_match(
+                probe, data.get("title") or "", data.get("description") or "")
+
         row = db.query(models.Lot).filter(models.Lot.lot_id == data["lot_id"]).first()
+        if row is None and bolo_only and not bolo_hit:
+            skipped += 1
+            continue
         if row:
             for k in ("current_bid", "next_bid", "bid_count", "est_cost",
                       "status", "time_left", "closes_at", "lot_number",
@@ -50,15 +66,24 @@ def save_lots(db: Session, auction: models.Auction, lots: list[dict], *,
             row = models.Lot(auction_id=auction.id, **data)
             db.add(row)
             db.flush()
-            db.add(models.Enrichment(lot_id=row.id, status="pending"))
+            enrichment = models.Enrichment(lot_id=row.id, status="pending")
+            # Record the match now rather than making enrichment redo it.
+            # Also means bolo_only filters in the items view work on a
+            # freshly imported auction before any AI has run.
+            apply_bolo_match(enrichment, data.get("title") or "",
+                             data.get("description") or "")
+            db.add(enrichment)
             created += 1
     auction.imported_at = datetime.now(timezone.utc)
     db.commit()
+    if skipped:
+        logger.info("Import (BOLO only): kept %d, skipped %d non-matching lots",
+                    created, skipped)
     return created, updated, cancelled
 
 
 def run_import_all(auction_ids: list[int], resume_job_id: str | None = None,
-                   category_id: int = -1) -> None:
+                   category_id: int = -1, bolo_only: bool = False) -> None:
     """Import every auction in the list, one at a time.
 
     category_id limits each import to one HiBid category (the "import all
@@ -71,12 +96,19 @@ def run_import_all(auction_ids: list[int], resume_job_id: str | None = None,
         row = jobs.get(job) or {}
         start_at = row.get("current") or 0
         category_id = (row.get("payload") or {}).get("category_id", category_id)
+        # Same reasoning as category_id: the worker dispatches with only the
+        # auction list and the job id, so anything else has to ride the
+        # payload or it silently resets to its default on every run.
+        bolo_only = (row.get("payload") or {}).get("bolo_only", bolo_only)
     else:
         job = jobs.start("import-all",
-                         f"Importing lots from {len(auction_ids)} auctions",
+                         ("Importing BOLO matches from "
+                          f"{len(auction_ids)} auctions" if bolo_only else
+                          f"Importing lots from {len(auction_ids)} auctions"),
                          total=len(auction_ids),
                          payload={"auction_ids": auction_ids,
-                                  "category_id": category_id})
+                                  "category_id": category_id,
+                                  "bolo_only": bolo_only})
         start_at = 0
     imported = created_total = updated_total = 0
     try:
@@ -115,7 +147,7 @@ def run_import_all(auction_ids: list[int], resume_job_id: str | None = None,
                 logger.warning("Import-all fetch failed for auction %s: %s",
                                auction_id, exc)
                 continue
-            c, u, _ = save_lots(db, auction, lots,
+            c, u, _ = save_lots(db, auction, lots, bolo_only=bolo_only,
                                 should_cancel=lambda: jobs.is_cancelled(job))
             created_total += c
             updated_total += u

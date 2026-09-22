@@ -144,10 +144,19 @@ class EnrichBatchRequest(BaseModel):
 
 
 class ImportAllRequest(BaseModel):
-    """Bulk import: which auctions, in display order, and (optionally) which
-    HiBid category to limit every one of them to (-1 = all lots)."""
+    """Bulk import: which auctions, in display order, and how much of each.
+
+    Three shapes, all through this one request:
+      - everything                  category_id = -1, bolo_only = False
+      - one HiBid category          category_id = <id>
+      - only BOLO brand matches     bolo_only = True
+
+    The two filters compose, so "every BOLO match in the antiques category"
+    is just both at once.
+    """
     auction_ids: list[int]
     category_id: int = -1
+    bolo_only: bool = False
 
 
 class ScanRequest(BaseModel):

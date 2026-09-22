@@ -542,19 +542,30 @@ Skipping ${hard} HARD-to-ship lots.`
     // endpoints — the HiBid bulk job would silently skip them anyway.
     && !a.external_id)
 
-  async function handleImportAll() {
+  async function handleImportAll(boloOnly = false) {
     const ids = importAllCandidates.map((a) => a.id)
     if (!ids.length) return
-    const what = scanCategoryId !== -1 && scanCategoryName
-      ? `only their "${scanCategoryName}" lots`
-      : 'all their open lots'
+    const inCategory = scanCategoryId !== -1 && scanCategoryName
+    // The two filters compose, so name whichever are actually active
+    // rather than pretending there are three fixed choices.
+    const what = boloOnly
+      ? (inCategory
+        ? `only their "${scanCategoryName}" lots that match your BOLO list`
+        : 'only lots matching your BOLO list')
+      : (inCategory ? `only their "${scanCategoryName}" lots`
+                    : 'all their open lots')
     const msg = `Import from all ${ids.length} listed auctions (${what})?\n\n`
+      + (boloOnly
+        ? `Lots that do not match a BOLO brand are skipped and never `
+          + `saved. The matching is free, so this costs the same as a `
+          + `full import and simply keeps fewer rows.` + String.fromCharCode(10, 10)
+        : '')
       + `Free — no AI calls. Runs in the background: progress shows in the `
       + `bar at the top, and imported lots appear under "My items" as each `
       + `auction finishes.`
     if (!window.confirm(msg)) return
     try {
-      const r = await importAllAuctions(ids, scanCategoryId)
+      const r = await importAllAuctions(ids, scanCategoryId, boloOnly)
       if (r.already_running) {
         alert('A bulk import is already running — check the bar at the top.')
         return
@@ -870,6 +881,15 @@ Skipping ${hard} HARD-to-ship lots.`
                     style={isMobile ? { flex: '1 1 100%', padding: 10, fontSize: 15 }
                                     : { padding: '8px 18px' }}>
               Import all ({importAllCandidates.length}
+              {scanCategoryId !== -1 && scanCategoryName ? ` · ${scanCategoryName}` : ''})
+            </button>
+          )}
+          {importAllCandidates.length > 1 && (
+            <button type="button" onClick={() => handleImportAll(true)} disabled={!!busy}
+                    title="Import only lots whose title matches your BOLO brand list. The match is free regex over the title the fetch already returned, so this costs the same as a full import and simply keeps fewer rows."
+                    style={isMobile ? { flex: '1 1 100%', padding: 10, fontSize: 15 }
+                                    : { padding: '8px 18px' }}>
+              Import BOLO matches ({importAllCandidates.length}
               {scanCategoryId !== -1 && scanCategoryName ? ` · ${scanCategoryName}` : ''})
             </button>
           )}

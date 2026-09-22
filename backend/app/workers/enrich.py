@@ -337,6 +337,47 @@ def run_enrichment(lot_db_id: int) -> None:
         db.close()
 
 
+
+def apply_bolo_match(e: models.Enrichment, title: str, description: str,
+                     protected=frozenset()) -> bool:
+    """Write the BOLO fields onto an enrichment row. True if a brand matched.
+
+    Pulled out of _enrich so IMPORT can call it too. The match is regex over
+    the title and description: free, deterministic, and it needs nothing the
+    import has not already fetched. That is what makes a BOLO-filtered
+    import possible at all — the decision can be made before a cent is spent
+    on the AI pass.
+
+    Idempotent, so enrichment re-running over an already-matched row just
+    writes the same values back.
+    """
+    match = bolo_matcher.match(title or "", description or "")
+    if not match or "bolo_brand" in protected:
+        return bool(match)
+    e.bolo_brand = match["brand"]
+    e.bolo_category = match["category"]
+    if "bolo_tier" not in protected:
+        e.bolo_tier = str(match["tier"]) if match["tier"] is not None else None
+    e.bolo_confidence = match["confidence"]
+    e.matched_model = match["matched_model"]
+    e.target_buy_price = match["target_buy_high"]
+    e.ship_class = match["ship_class"]
+    # Broader than the BOLO file's own flag (tier-3 only): ANY luxury or
+    # sneaker match needs authentication before its comps mean anything —
+    # a $45 "Hublot" is a replica until proven otherwise.
+    e.auth_required = bool(
+        match.get("auth_required")
+        or match.get("category") in {
+            "luxury", "luxury_mid", "luxury_watch", "sneakers",
+            "designer_eyewear", "premium_eyewear",
+            # 14K/sterling values hinge on the metal being real —
+            # the Watermark audit's top golds were unflagged jewelry.
+            "precious_metals", "gold", "silver", "jewelry",
+        }
+    )
+    return True
+
+
 def _enrich(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
     title = lot.title or ""
     description = lot.description or ""
@@ -366,29 +407,7 @@ def _enrich(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
 
     # --- 1. BOLO match (free, deterministic) ---
     _progress(db, e, "matching against BOLO brand list…")
-    match = bolo_matcher.match(title, description)
-    if match and "bolo_brand" not in protected:
-        e.bolo_brand = match["brand"]
-        e.bolo_category = match["category"]
-        if "bolo_tier" not in protected:
-            e.bolo_tier = str(match["tier"]) if match["tier"] is not None else None
-        e.bolo_confidence = match["confidence"]
-        e.matched_model = match["matched_model"]
-        e.target_buy_price = match["target_buy_high"]
-        e.ship_class = match["ship_class"]
-        # Broader than the BOLO file's own flag (tier-3 only): ANY luxury or
-        # sneaker match needs authentication before its comps mean anything —
-        # a $45 "Hublot" is a replica until proven otherwise.
-        e.auth_required = bool(
-            match.get("auth_required")
-            or match.get("category") in {
-                "luxury", "luxury_mid", "luxury_watch", "sneakers",
-                "designer_eyewear", "premium_eyewear",
-                # 14K/sterling values hinge on the metal being real —
-                # the Watermark audit's top golds were unflagged jewelry.
-                "precious_metals", "gold", "silver", "jewelry",
-            }
-        )
+    apply_bolo_match(e, title, description, protected)
 
     # --- 2. AI title + condition verdict ---
     # Unless the house already told us everything the model would: the retail

@@ -331,6 +331,7 @@ async def scan_auctions(payload: schemas.ScanRequest,
 
 @router.post("/{auction_id}/import", status_code=202)
 def import_lots(auction_id: int, category_id: int = -1,
+                bolo_only: bool = False,
                 db: Session = Depends(get_db)):
     """Queue one auction's lot import on the worker (idempotent upsert).
     category_id limits the import to one HiBid category server-side.
@@ -350,7 +351,9 @@ def import_lots(auction_id: int, category_id: int = -1,
         return {"auction_id": auction_id, "queued": False, "already_running": True}
     jobs.enqueue("import-all", f"Importing lots from {auction.name}",
                  total=1,
-                 payload={"auction_ids": [auction_id], "category_id": category_id})
+                 payload={"auction_ids": [auction_id],
+                          "category_id": category_id,
+                          "bolo_only": bolo_only})
     return {"auction_id": auction_id, "queued": True}
 
 
@@ -374,7 +377,8 @@ def import_all(payload: schemas.ImportAllRequest, db: Session = Depends(get_db))
     jobs.enqueue("import-all", f"Importing lots from {len(ids)} auctions",
                  total=len(ids),
                  payload={"auction_ids": ids,
-                          "category_id": payload.category_id})
+                          "category_id": payload.category_id,
+                          "bolo_only": payload.bolo_only})
     return {"auctions": len(ids), "queued": True}
 
 
