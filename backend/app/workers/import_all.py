@@ -48,64 +48,97 @@ def save_lots(db: Session, auction: models.Auction, lots: list[dict], *,
     """Idempotent upsert of fetched lot dicts into one auction.
 
     Bids/status/time-left always come fresh on rows we already have;
-    analysis fields stay. Returns (created, updated, cancelled)."""
+    analysis fields stay. Returns (created, updated, cancelled).
+
+    Batched, because this used to cost 227ms per lot in production against
+    2ms locally. The difference was entirely round trips: a SELECT per lot
+    to see whether it existed, then a flush per new lot to get its id back.
+    Against a database one hop away that is invisible; across a network it
+    is 110x and a 1,182-lot auction spent four and a half minutes here.
+
+    Now: one SELECT per chunk of ids, then one flush for all new lots and
+    one for their enrichment rows. Three statements instead of a few
+    thousand.
+    """
     created = updated = skipped = 0
     cancelled = False
-    for i, data in enumerate(lots, 1):
-        if i % 10 == 0 or i == len(lots):
+    total = len(lots)
+
+    # --- 1. which of these do we already have? one query, not one per lot
+    incoming = [d for d in lots if d.get("lot_id")]
+    existing: dict = {}
+    with _step(phase, "lookup_existing"):
+        ids = [d["lot_id"] for d in incoming]
+        # Chunked: a 3,000-element IN list is fine, a 30,000 one is not.
+        for i in range(0, len(ids), 1000):
+            for row in (db.query(models.Lot)
+                          .filter(models.Lot.lot_id.in_(ids[i:i + 1000])).all()):
+                existing[row.lot_id] = row
+
+    # --- 2. decide, in memory, what to update and what to create
+    FRESH = ("current_bid", "next_bid", "bid_count", "est_cost",
+             "status", "time_left", "closes_at", "lot_number",
+             "estimate_low", "estimate_high",
+             "thumbnail_url", "hd_thumbnail_url", "fullsize_url")
+    new_rows: list = []
+    new_data: list = []
+    for i, data in enumerate(incoming, 1):
+        if i % 200 == 0 or i == total:
             if should_cancel and should_cancel():
                 cancelled = True
-                break            # keep what's saved so far
+                break            # keep what's decided so far
             if on_progress:
                 on_progress(i, (data.get("title") or "")[:45])
-        # BOLO match up front, from the title and description the fetch
-        # already returned. Free regex, no AI, no network — which is why a
-        # BOLO-filtered import can decide what to keep before anything is
-        # spent. A lot already on file is always updated, filter or not:
-        # dropping its bids because the filter changed would be worse.
-        bolo_hit = None
-        if bolo_only:
-            probe = models.Enrichment(lot_id=0)
-            with _step(phase, "bolo_match"):
-                bolo_hit = apply_bolo_match(
-                    probe, data.get("title") or "", data.get("description") or "")
 
-        # A box lot rarely names a brand, so a brand-only filter drops the
-        # "Lot of Assorted Cameras" that is worth opening precisely because
-        # cameras are on the list. Keep multi-item lots whose title lands in
-        # a BOLO category; they are the ones the itemised vision pass exists
-        # for anyway.
-        if bolo_only and not bolo_hit:
-            title_text = data.get("title") or ""
-            if looks_multi_item(title_text):
-                bolo_hit = bool(category_hint(title_text))
-
-        with _step(phase, "lookup_existing"):
-            row = (db.query(models.Lot)
-                     .filter(models.Lot.lot_id == data["lot_id"]).first())
-        if row is None and bolo_only and not bolo_hit:
-            skipped += 1
-            continue
-        if row:
-            for k in ("current_bid", "next_bid", "bid_count", "est_cost",
-                      "status", "time_left", "closes_at", "lot_number",
-                      "estimate_low", "estimate_high",
-                      "thumbnail_url", "hd_thumbnail_url", "fullsize_url"):
+        row = existing.get(data["lot_id"])
+        if row is not None:
+            # Already on file: always refreshed, filter or not. Dropping a
+            # lot's live bids because the filter changed would lose real
+            # data over a display choice.
+            for k in FRESH:
                 setattr(row, k, data[k])
             updated += 1
-        else:
-            with _step(phase, "insert_lot"):
-                row = models.Lot(auction_id=auction.id, **data)
-                db.add(row)
-                db.flush()
-            enrichment = models.Enrichment(lot_id=row.id, status="pending")
-            # Record the match now rather than making enrichment redo it.
-            # Also means bolo_only filters in the items view work on a
-            # freshly imported auction before any AI has run.
-            apply_bolo_match(enrichment, data.get("title") or "",
-                             data.get("description") or "")
-            db.add(enrichment)
-            created += 1
+            continue
+
+        if bolo_only:
+            # Free regex over the title the fetch already returned - no AI,
+            # no network - which is what lets the filter decide before
+            # anything is spent.
+            probe = models.Enrichment(lot_id=0)
+            with _step(phase, "bolo_match"):
+                hit = apply_bolo_match(
+                    probe, data.get("title") or "", data.get("description") or "")
+            if not hit:
+                # A box lot rarely names a brand. "Lot of Assorted Cameras"
+                # is exactly what to open when cameras are on the list.
+                title_text = data.get("title") or ""
+                hit = bool(looks_multi_item(title_text)
+                           and category_hint(title_text))
+            if not hit:
+                skipped += 1
+                continue
+
+        new_rows.append(models.Lot(auction_id=auction.id, **data))
+        new_data.append(data)
+
+    # --- 3. one flush for every new lot, then one for their enrichments
+    if new_rows:
+        with _step(phase, "insert_lots"):
+            db.add_all(new_rows)
+            db.flush()          # populates row.id for the FK below
+        with _step(phase, "insert_enrichments"):
+            enrichments = []
+            for row, data in zip(new_rows, new_data):
+                e = models.Enrichment(lot_id=row.id, status="pending")
+                # Recorded now so enrichment does not redo it, and so the
+                # items view can filter by brand before any AI has run.
+                apply_bolo_match(e, data.get("title") or "",
+                                 data.get("description") or "")
+                enrichments.append(e)
+            db.add_all(enrichments)
+            db.flush()
+        created = len(new_rows)
+
     auction.imported_at = datetime.now(timezone.utc)
     with _step(phase, "final_commit"):
         db.commit()
@@ -186,9 +219,16 @@ def run_import_all(auction_ids: list[int], resume_job_id: str | None = None,
                 continue
             with timed("import", "save", job_id=job, auction_id=auction_id,
                        label=name) as ph:
-                c, u, _ = save_lots(db, auction, lots, bolo_only=bolo_only,
-                                    phase=ph,
-                                    should_cancel=lambda: jobs.is_cancelled(job))
+                # Report through the save as well as the fetch. Without
+                # this the bar sat at "1182/1182" for four minutes while
+                # the save ran, which reads as a hung job - and the job
+                # heartbeat stopped too, so a slow save could be reaped
+                # out from under itself.
+                c, u, _ = save_lots(
+                    db, auction, lots, bolo_only=bolo_only, phase=ph,
+                    on_progress=lambda n, title: jobs.update(
+                        job, detail=f"{name} - saving {n}/{len(lots)}"),
+                    should_cancel=lambda: jobs.is_cancelled(job))
                 ph.add(len(lots))
                 ph.note(created=c, updated=u, fetched=len(lots),
                         bolo_only=bolo_only)
