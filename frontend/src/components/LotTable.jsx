@@ -465,7 +465,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
     if (!enrichable.length || queuing) return
     const cost = (enrichable.length * 0.005).toFixed(2)
     const ok = window.confirm(
-      `Enrich all ${enrichable.length} lots matching your filters?
+      `Work out a value for all ${enrichable.length} lots matching your filters?
 
 ` +
       `Each one runs an AI pass and an eBay comp lookup — roughly $${cost} ` +
@@ -554,10 +554,10 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
           )}
           <button className="primary" onClick={handleEnrichMatching}
                   disabled={!enrichableCount || queuing}
-                  title="Enrich every lot matching the current filters — the whole result, not just the rows on screen. Asks for confirmation with the exact cost first."
+                  title="Work out a value for every lot matching the current filters — the whole result, not just the rows on screen. Asks for confirmation with the exact cost first."
                   style={{ flex: '1 1 100%', padding: 10, fontSize: 15 }}>
             {queuing ? <><span className="spinner" />Queuing {enrichableCount} lots…</>
-                     : `Enrich all ${enrichableCount}`}
+                     : `Price all ${enrichableCount}`}
           </button>
           {anyQueued && <span style={{ flexBasis: '100%' }}><span className="spinner" />{lots.filter((l) => l.enrichment?.status === 'queued').length} lots in the queue… auto-refreshing</span>}
           <div style={{ flexBasis: '100%' }}>{countLine}</div>
@@ -682,11 +682,11 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
               )}
               <div style={{ display: 'flex', gap: 8 }}>
                 <button style={{ flex: 1, padding: 8 }} disabled={isWorking(lot)}
-                        title="Enrich: match the lot against the BOLO brand list, have AI read the description (or the photo) to build a searchable title and judge condition, look up eBay comps, then compute max bid and ROI."
-                        onClick={() => handleEnrich(lot.lot_id)}>Enrich</button>
+                        title="Work out what this is worth: match it against your BOLO brand list, have AI read the description (or the photo) to identify it and judge condition, look up eBay comps, then compute your max bid and ROI."
+                        onClick={() => handleEnrich(lot.lot_id)}>Price it</button>
                 <button style={{ flex: 1, padding: 8 }} disabled={isWorking(lot)}
-                        title="Inspect: for mixed lots (a box of CDs, a tray of tools) — AI reads the full-size photo, lists each item it can identify, prices them individually, and totals them. Slower and costs more than Enrich."
-                        onClick={() => handleInspect(lot.lot_id)}>Inspect</button>
+                        title="For a box of many things (a crate of CDs, a tray of tools): AI reads the full-size photo, lists every item it can identify, prices them one by one and totals them. Slower and dearer than pricing the lot as a single item."
+                        onClick={() => handleInspect(lot.lot_id)}>Price each item</button>
               </div>
             </div>
           )
@@ -706,9 +706,9 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
     <div style={{ marginBottom: '0.5rem' }}>
       <button className="primary" onClick={handleEnrichMatching}
               disabled={!enrichableCount || queuing}
-              title="Enrich every lot matching the current filters — the whole result, not just the rows on screen. Asks for confirmation with the exact cost first.">
+              title="Work out a value for every lot matching the current filters — the whole result, not just the rows on screen. Asks for confirmation with the exact cost first.">
         {queuing ? <><span className="spinner" />Queuing {enrichableCount} lots…</>
-                 : `Enrich all ${enrichableCount}`}
+                 : `Price all ${enrichableCount}`}
       </button>
       {anyQueued && <span style={{ marginLeft: '0.75rem' }}><span className="spinner" />{lots.filter((l) => l.enrichment?.status === 'queued').length} lots in the queue… auto-refreshing</span>}
       <span style={{ marginLeft: '0.75rem' }}>{countLine}</span>
@@ -957,11 +957,11 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                 )}
               </td>
               <td style={{ ...cell, whiteSpace: 'nowrap' }}>
-                <button disabled={isWorking(lot)} title="Enrich: match the lot against the BOLO brand list, have AI read the description (or the photo) to build a searchable title and judge condition, look up eBay comps, then compute max bid and ROI."
-                        onClick={() => handleEnrich(lot.lot_id)}>Enrich</button>{' '}
-                <button disabled={isWorking(lot)} title="Inspect: for mixed lots (a box of CDs, a tray of tools) — AI reads the full-size photo, lists each item it can identify, prices them individually, and totals them. Slower and costs more than Enrich."
+                <button disabled={isWorking(lot)} title="Work out what this is worth: match it against your BOLO brand list, have AI read the description (or the photo) to identify it and judge condition, look up eBay comps, then compute your max bid and ROI."
+                        onClick={() => handleEnrich(lot.lot_id)}>Price it</button>{' '}
+                <button disabled={isWorking(lot)} title="For a box of many things (a crate of CDs, a tray of tools): AI reads the full-size photo, lists every item it can identify, prices them one by one and totals them. Slower and dearer than pricing the lot as a single item."
                         onClick={() => handleInspect(lot.lot_id)}>
-                  Inspect
+                  Price each item
                 </button>
               </td>
             </tr>

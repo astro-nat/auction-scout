@@ -304,7 +304,7 @@ export default function App() {
         setSelectedAuctions([auctionId])
         setView('items')
         alert(`Imported ${r.created + r.updated} lots `
-              + `(${r.created} new). Enrich them from the items view.`)
+              + `(${r.created} new). Price them from the inventory view.`)
         refreshAll()
       } catch (e) { alertOnce(e.message) }
       return
@@ -346,7 +346,7 @@ export default function App() {
       const peek = await reinspectNoComps(true)
       if (!peek.lots) { alert('Every enriched item in an open auction already has a value.'); return }
       const cost = (peek.lots * 0.01).toFixed(2)
-      const msg = `Inspect ${peek.lots} items that have no resale value yet?\n\n`
+      const msg = `Price ${peek.lots} items individually — the ones with no value yet?\n\n`
         + `AI reads each one's full-size photo, identifies the items, and prices `
         + `them (real comps first, its own estimate as fallback). Roughly $${cost} `
         + `of API usage. Progress shows in the bar at the top.`
@@ -398,7 +398,7 @@ export default function App() {
         return
       }
       const cost = (peek.lots * 0.005).toFixed(2)
-      let msg = `Enrich ${peek.lots} "${categoryFilter}" items across ALL imported auctions?\n\n`
+      let msg = `Price ${peek.lots} "${categoryFilter}" items across ALL imported auctions?\n\n`
               + `Roughly $${cost} of API usage. Progress shows in the bar at the top.`
       if (hideHardShip) msg += `\n\nSkipping HARD-to-ship items ("Hide HARD ship" is on).`
       if (!window.confirm(msg)) return
@@ -420,7 +420,7 @@ export default function App() {
 `
              + `Roughly $${cost} of API usage. Progress shows in the bar at the top.`
     if (hard > 0 && !hideHardShip) {
-      // Enriching a sofa costs the same as enriching a Rolex and almost never
+      // Pricing a sofa costs the same as pricing a Rolex and almost never
       // pays — make that explicit before the money is spent.
       msg = `Warning: ${hard} of these ${todo} lots are HARD to ship (furniture, `
           + `appliances, pickup-only). They cost the same to enrich and rarely `
@@ -430,7 +430,7 @@ export default function App() {
           + `Tick "Hide HARD ship" in My inventory first and they'll be skipped.
 
 `
-          + `Enrich all ${todo} anyway? Roughly $${cost} of API usage.`
+          + `Price all ${todo} anyway? Roughly $${cost} of API usage.`
     } else if (hard > 0 && hideHardShip) {
       msg += `
 
@@ -495,7 +495,7 @@ Skipping ${hard} HARD-to-ship lots.`
 
   function enrichAllLabel(a) {
     const todo = a.lots_pending + a.lots_failed
-    return todo ? `Enrich ${todo}` : 'All enriched'
+    return todo ? `Price ${todo}` : 'All priced'
   }
 
   // AI-read shipping estimate, as a compact row tag. Tooltip carries the
@@ -1226,10 +1226,10 @@ Skipping ${hard} HARD-to-ship lots.`
               <button
                 onClick={handleEnrichCategory}
                 disabled={!cat?.enrichable}
-                title="Queue AI enrichment for every not-yet-enriched item in this category, across ALL imported open auctions (asks first, shows cost)"
+                title="Work out a value for every unpriced item in this category, across ALL imported open auctions (asks first, shows cost)"
                 style={{ padding: 8, fontSize: 14 }}
               >
-                {cat?.enrichable ? `Enrich ${cat.enrichable} in category` : 'Category fully enriched'}
+                {cat?.enrichable ? `Price ${cat.enrichable} in category` : 'Category fully priced'}
               </button>
             )
           })()}
@@ -1242,8 +1242,8 @@ Skipping ${hard} HARD-to-ship lots.`
             </button>
             <button style={isMobile ? { flex: '1 1 45%', padding: 8 } : undefined}
                     onClick={handleInspectNoValue}
-                    title="Bulk-inspect every enriched item that still has no resale value — AI reads the photo and prices it (asks first, shows cost)">
-              Inspect no-value items
+                    title="For every item still showing no value: AI reads the photo, identifies what is in it and prices it (asks first, shows cost)">
+              Price the unpriced
             </button>
             <button className="danger"
                     style={isMobile ? { flex: '1 1 45%', padding: 8 } : undefined}
