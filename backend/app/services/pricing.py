@@ -440,6 +440,41 @@ def _audience_match(query: str, comp_title: str) -> bool:
     return True
 
 
+
+# Items that were never sold at retail: club gifts, loyalty premiums,
+# giveaways. They carry the brand and often the same shape as the real
+# product, so a keyword comp search lands squarely on the retail range -
+# which is how a Swarovski SCS renewal gift worth about $25 came back at
+# $370 off twenty genuine sold comps for actual crystal eggs.
+#
+# The asymmetry matters. A giveaway comped against retail is inflated by an
+# order of magnitude; a retail item comped against a giveaway is dragged
+# down, which is the safe direction. So the rule fires one way only: if the
+# LOT is a giveaway, its comps must be giveaways too.
+_PROMO_RE = re.compile(
+    r"\b(?:"
+    r"scs|crystal\s+society|"
+    r"member(?:ship)?\s+(?:gift|exclusive|piece)|"
+    r"renewal\s+gift|loyalty\s+gift|club\s+(?:gift|piece|exclusive)|"
+    r"gift\s+with\s+purchase|gwp|free\s+gift|"
+    r"not\s+for\s+resale|nfr|"
+    r"promotional\s+(?:item|giveaway)|giveaway|"
+    r"dealer\s+(?:gift|premium)|advertising\s+premium"
+    r")\b",
+    re.IGNORECASE)
+
+
+def _promo_match(query: str, comp_title: str) -> bool:
+    """False when a giveaway is being priced against retail stock.
+
+    One-directional on purpose - see _PROMO_RE. Only the lot being a
+    giveaway constrains what may comp it.
+    """
+    if not _PROMO_RE.search(query or ""):
+        return True
+    return bool(_PROMO_RE.search(comp_title or ""))
+
+
 def _iqr_filter(prices: list[float]) -> list[float]:
     if len(prices) < 4:
         return prices
@@ -704,7 +739,9 @@ def lookup_comps(title: str) -> dict:
             continue
         comps = [c for c in comps
                  if _relevant(query, c["title"]) and _quantity_match(title, c["title"])
-                 and _model_match(query, c["title"]) and _audience_match(title, c["title"])]
+                 and _model_match(query, c["title"])
+                 and _audience_match(title, c["title"])
+                 and _promo_match(title, c["title"])]
         kept = _iqr_records(comps)
         if len(kept) >= _MIN_FULL_COMPS:
             return _finalize(title, kept, source, result)
@@ -725,7 +762,9 @@ def lookup_comps(title: str) -> dict:
         comps = _active_lookup(query)
         comps = [c for c in comps
                  if _relevant(query, c["title"]) and _quantity_match(title, c["title"])
-                 and _model_match(title, c["title"]) and _audience_match(title, c["title"])]
+                 and _model_match(title, c["title"])
+                 and _audience_match(title, c["title"])
+                 and _promo_match(title, c["title"])]
         kept = _iqr_records(comps)
         if not kept:
             continue
