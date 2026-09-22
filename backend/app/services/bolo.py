@@ -299,6 +299,8 @@ _BRAND_ALIASES: Dict[str, List[str]] = {
     # "surface" is a noun, and "magic" is in half the toy listings in any
     # catalogue. Each pattern carries a model or a qualifier.
     "Vintage hi-fi separates": [
+        # common misspellings and spacing variants
+        "macintosh amplifier", "macintosh receiver", "macintosh tuner", "mac intosh amplifier", "mcintosh amp", "maranz", "marrantz", "sansue", "sanusi", "techniks sl", "technics sl 1200", "pioneer sx 1250", "vintage reciever", "silver faced receiver",
         "mcintosh mc", "mcintosh ma", "mcintosh amplifier", "mcintosh tuner",
         "mcintosh receiver", "marantz 22", "marantz 2270", "marantz 2275",
         "sansui au", "sansui 9090", "sansui g-", "pioneer sx-",
@@ -307,38 +309,52 @@ _BRAND_ALIASES: Dict[str, List[str]] = {
         "silver face receiver", "vintage stereo receiver",
     ],
     "Premium hand and power tools": [
+        # common misspellings and spacing variants
+        "mikita", "makkita", "makita drill", "fes tool", "festtool", "starret", "starett", "sterrett", "stanley baily", "bailey plane", "hand plane vintage",
         "makita", "festool", "starrett", "lie-nielsen", "veritas plane",
         "stanley bailey", "stanley no. 4", "stanley no. 5", "stanley no 4",
         "stanley plane", "stanley sweetheart", "estwing",
     ],
     "Small replacement parts": [
+        # common misspellings and spacing variants
+        "vaccum attachment", "vacumm attachment", "vacuum attatchment", "pressure foot", "presser feet", "bobin case", "applicance knob", "stove knob", "oven knob",
         "appliance knob", "range knob", "dryer knob", "washer knob",
         "vacuum attachment", "vacuum hose attachment",
         "sewing machine foot", "sewing machine feet", "bobbin case",
         "presser foot", "oem replacement part",
     ],
     "Modern gaming consoles": [
+        # common misspellings and spacing variants
+        "play station 5", "playstaion 5", "playstation5", "ps 5 console", "xbox series-x", "x box series x", "xbox seris x", "nintendo swich", "switch o led", "steamdeck",
         "ps5", "playstation 5", "xbox series x", "xbox series s",
         "switch oled", "nintendo switch oled", "switch lite",
         "ps4 pro", "playstation 4 pro", "steam deck",
     ],
     "Magic: The Gathering (vintage)": [
+        # common misspellings and spacing variants
+        "magic the gathring", "magic the gatherig", "magic gathering", "magic cards lot", "m.t.g.", "mtg cards",
         "magic the gathering", "magic: the gathering", "mtg alpha",
         "mtg beta", "mtg unlimited", "mtg revised", "mtg legends",
         "arabian nights mtg", "antiquities mtg", "mtg dual land",
         "power nine", "mtg booster", "mtg collection",
     ],
     "Business and premium laptops": [
+        # common misspellings and spacing variants
+        "think pad", "thinkpad x-1", "elite book", "dell lattitude", "surface pro 7", "surface pro 8", "lenovo thinkpad",
         "thinkpad x1", "thinkpad t14", "thinkpad t480", "thinkpad p1",
         "thinkpad carbon", "surface laptop", "surface pro", "surface book",
         "elitebook", "hp zbook", "dell latitude", "dell precision",
     ],
     "Niche and luxury fragrances": [
+        # common misspellings and spacing variants
+        "creed aventis", "creed avantus", "creed aventus edp", "parfum de marly", "maison francis kurkdijan", "baccarat rouge 540", "niche perfume", "designer perfume lot",
         "creed aventus", "creed cologne", "tom ford private blend",
         "le labo", "byredo", "maison francis kurkdjian", "baccarat rouge",
         "xerjoff", "parfums de marly", "amouage", "niche fragrance",
     ],
     "Specialty books and manuals": [
+        # common misspellings and spacing variants
+        "chiltons manual", "haynes repair manual", "hayes manual", "machinery handbook", "machinist handbook", "repair manual", "owners manual vintage", "first edtion",
         "shop manual", "service manual", "factory service manual",
         "haynes manual", "chilton manual", "first edition signed",
         "signed first edition", "machinery's handbook", "machinerys handbook",
@@ -349,14 +365,20 @@ _BRAND_ALIASES: Dict[str, List[str]] = {
     # would swallow printers, televisions, G-Shocks and microwaves, so the
     # model number or a disambiguating word is always part of the pattern.
     "Sony Walkman": [
+        # common misspellings and spacing variants
+        "walk man", "wallkman", "walkmam", "walman", "disc man", "diskman",
         "walkman", "tps-l2", "tps l2", "wm-dd100", "wm-dc2", "wm-d6c",
         "wm-ex", "wm-fx", "discman", "sony d-", "cassette walkman",
     ],
     "Sony Trinitron CRT": [
+        # common misspellings and spacing variants
+        "trinatron", "trintron", "trinnitron", "trinitorn", "sony pvm-",
         "trinitron", "sony pvm", "sony bvm", "pvm-", "bvm-", "profeel",
         "broadcast monitor",
     ],
     "HP scientific calculators": [
+        # common misspellings and spacing variants
+        "hewlitt packard", "hewlet packard", "hewlett-packard calculator", "hp calculater", "hp caluclator", "hp35", "hp41", "hp12c", "hp15c",
         "hp-35", "hp 35 calculator", "hp-41", "hp 41c", "hp 41cx",
         "hp-45", "hp-55", "hp-65", "hp-70", "hp-80",
         "hp 12c", "hp-12c", "hp 15c", "hp-15c", "hp 16c", "hp-16c",
@@ -364,45 +386,63 @@ _BRAND_ALIASES: Dict[str, List[str]] = {
         "hewlett packard calculator", "hp voyager",
     ],
     "Texas Instruments calculators": [
+        # common misspellings and spacing variants
+        "speak n spell", "speak-n-spell", "speak and spel", "speak and speak", "ti84", "ti83", "ti89", "texas instrument calculator", "texas instruments calculater",
         "speak and spell", "speak & spell", "speak and read",
         "speak and math", "speak & math",
         "ti-84", "ti 84 plus", "ti-83", "ti-89", "ti-nspire", "ti nspire",
         "texas instruments sr-50", "ti-30",
     ],
     "Curta mechanical calculator": [
+        # common misspellings and spacing variants
+        "curta type 1", "curta type 2", "curta calculater",
         "curta", "curta type i", "curta type ii", "contina curta",
     ],
     "Calculator watches": [
+        # common misspellings and spacing variants
+        "calculater watch", "calculator wrist watch", "data bank watch", "casio data bank", "hp01",
         "hp-01", "hp 01 watch", "calculator watch", "casio databank",
         "casio ca-53", "casio ca53", "pulsar calculator", "seiko c359",
     ],
     "Personal organizers and PDAs": [
+        # common misspellings and spacing variants
+        "palmpilot", "palm pilate", "electronic organiser", "sharp organiser", "psion organsier", "pocket organizer",
         "sharp wizard", "sharp organizer", "casio sf-", "casio boss",
         "palm pilot", "palm v", "psion organiser", "psion organizer",
         "rolodex electronics", "electronic organizer",
     ],
     "Vintage synthesizers": [
+        # common misspellings and spacing variants
+        "jupitor 8", "jupitor 6", "juno106", "juno60", "sh101", "tr808", "tr909", "ms20", "analog synthesiser", "analogue synthesiser", "vintage synth", "synthesiser keyboard",
         "jupiter 4", "jupiter-4", "jupiter 6", "jupiter-6", "jupiter 8",
         "jupiter-8", "juno 106", "juno-106", "juno 60", "juno-60",
         "sh-101", "tr-808", "tr-909", "korg ms-20", "casio cz-",
         "prophet 5", "prophet-5", "analog synthesizer", "analogue synthesizer",
     ],
     "Universal and OEM remote controls": [
+        # common misspellings and spacing variants
+        "logitec harmony", "logitech harmoney", "harmony remote", "remote controll", "univeral remote",
         "logitech harmony", "harmony elite", "harmony 900", "harmony one",
         "harmony hub", "home theater master", "kenwood rc-", "denon rc-",
         "sony rm-", "beo4", "oem remote", "universal remote",
     ],
     "GE Spacemaker under-cabinet appliances": [
+        # common misspellings and spacing variants
+        "spacemaster", "space-maker", "spacemakr", "undercabinet",
         "spacemaker", "space maker", "under cabinet can opener",
         "under cabinet coffee", "under cabinet radio", "under cabinet toaster",
         "under-cabinet",
     ],
     "Laboratory and scientific equipment": [
+        # common misspellings and spacing variants
+        "labratory equipment", "laboratory freezor", "centrafuge", "oscilloscpe", "spectrophotometre",
         "lab freezer", "laboratory freezer", "spectrophotometer",
         "centrifuge", "analytical balance", "oscilloscope",
         "laboratory equipment",
     ],
     "EV charging equipment": [
+        # common misspellings and spacing variants
+        "charge point charger", "juice box charger", "grizzle charger", "tesla charger", "ev charging station", "level two charger",
         "chargepoint", "grizzl-e", "grizzle charger", "juicebox charger",
         "juicebox 40", "tesla mobile connector", "tesla wall connector",
         "nema 14-50 adapter", "j1772", "ccs adapter", "ev charger",
@@ -1603,6 +1643,8 @@ _BRAND_ALIASES: Dict[str, List[str]] = {
     # numbers, so Michael Jordan trading cards / coins / signed jerseys
     # don't false-match.
     "Sneakers (Air Jordan/Yeezy/Nike SB/New Balance)": [
+        # common misspellings and spacing variants
+        "addidas", "adiddas", "adidas sambas", "jordans retro", "air jordans", "new balence", "newbalance",
         "adidas samba", "adidas gazelle", "adidas campus",
         "adidas spezial", "adidas ultraboost", "adidas forum",
         "adidas handball spezial", "adidas originals",
