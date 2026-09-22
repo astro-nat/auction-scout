@@ -427,7 +427,7 @@ export default function App() {
           + `clear your ROI bar.
 
 `
-          + `Tick "Hide HARD ship" in My items first and they'll be skipped.
+          + `Tick "Hide HARD ship" in My inventory first and they'll be skipped.
 
 `
           + `Enrich all ${todo} anyway? Roughly $${cost} of API usage.`
@@ -561,7 +561,7 @@ Skipping ${hard} HARD-to-ship lots.`
           + `full import and simply keeps fewer rows.` + String.fromCharCode(10, 10)
         : '')
       + `Free — no AI calls. Runs in the background: progress shows in the `
-      + `bar at the top, and imported lots appear under "My items" as each `
+      + `bar at the top, and imported lots appear under "My inventory" as each `
       + `auction finishes.`
     if (!window.confirm(msg)) return
     try {
@@ -629,7 +629,7 @@ Skipping ${hard} HARD-to-ship lots.`
     if (auction.lots_imported > 0) {
       const msg = `Forget "${auction.name}"?\n\n`
         + `It won't appear in future scans. Your ${auction.lots_imported} `
-        + `imported lots stay in My items — only the auction card goes away.\n\n`
+        + `imported lots stay in My inventory — only the auction card goes away.\n\n`
         + `Undo it any time from "Forgotten" under the scan button.`
       if (!window.confirm(msg)) return
     }
@@ -737,7 +737,7 @@ Skipping ${hard} HARD-to-ship lots.`
                     marginBottom: '1rem' }}>
         {[
           { key: 'auctions', label: `Auctions (${auctions.length})` },
-          { key: 'items', label: `My items (${lotTotal || lots.length})` },
+          { key: 'items', label: `My inventory (${lotTotal || lots.length})` },
         ].map((t) => (
           <button
             key={t.key}

@@ -21,7 +21,7 @@ from ..database import SessionLocal
 from .. import models
 from ..services import hibid, jobs
 from ..services.timing import timed
-from .enrich import apply_bolo_match, looks_multi_item
+from .enrich import _apply_roi, apply_bolo_match, looks_multi_item
 from ..services.bolo import category_hint
 
 logger = logging.getLogger(__name__)
@@ -95,8 +95,16 @@ def save_lots(db: Session, auction: models.Auction, lots: list[dict], *,
             # Already on file: always refreshed, filter or not. Dropping a
             # lot's live bids because the filter changed would lose real
             # data over a display choice.
+            bid_before = row.current_bid
             for k in FRESH:
                 setattr(row, k, data[k])
+            # The bid moved, so the verdict computed against the old one is
+            # no longer true. refresh.py has always done this; import never
+            # did, which left lots badged GOLD MINE at a bid several times
+            # their own max - one sat at $37 against a $10.58 ceiling.
+            # Pure arithmetic over stored values: no comps, no AI, no network.
+            if row.current_bid != bid_before and row.enrichment is not None:
+                _apply_roi(row, row.enrichment)
             updated += 1
             continue
 
