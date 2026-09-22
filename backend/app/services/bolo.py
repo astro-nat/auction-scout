@@ -293,6 +293,57 @@ def _all_alias_hits_are_accessory_context(alias_pat, haystack: str) -> bool:
 
 _BRAND_ALIASES: Dict[str, List[str]] = {
     # JSON header → list of literal phrases to match in the haystack
+    # --- Gap-fill from the sourcing research sheet ----------------------
+    # Qualified the same way as the vintage-electronics block: a bare
+    # "stanley" is a drinks tumbler in lightweight_collectibles, a bare
+    # "surface" is a noun, and "magic" is in half the toy listings in any
+    # catalogue. Each pattern carries a model or a qualifier.
+    "Vintage hi-fi separates": [
+        "mcintosh mc", "mcintosh ma", "mcintosh amplifier", "mcintosh tuner",
+        "mcintosh receiver", "marantz 22", "marantz 2270", "marantz 2275",
+        "sansui au", "sansui 9090", "sansui g-", "pioneer sx-",
+        "technics sl-1200", "technics sl1200", "technics su-",
+        "akai gx-", "luxman", "teac reel", "reel to reel deck",
+        "silver face receiver", "vintage stereo receiver",
+    ],
+    "Premium hand and power tools": [
+        "makita", "festool", "starrett", "lie-nielsen", "veritas plane",
+        "stanley bailey", "stanley no. 4", "stanley no. 5", "stanley no 4",
+        "stanley plane", "stanley sweetheart", "estwing",
+    ],
+    "Small replacement parts": [
+        "appliance knob", "range knob", "dryer knob", "washer knob",
+        "vacuum attachment", "vacuum hose attachment",
+        "sewing machine foot", "sewing machine feet", "bobbin case",
+        "presser foot", "oem replacement part",
+    ],
+    "Modern gaming consoles": [
+        "ps5", "playstation 5", "xbox series x", "xbox series s",
+        "switch oled", "nintendo switch oled", "switch lite",
+        "ps4 pro", "playstation 4 pro", "steam deck",
+    ],
+    "Magic: The Gathering (vintage)": [
+        "magic the gathering", "magic: the gathering", "mtg alpha",
+        "mtg beta", "mtg unlimited", "mtg revised", "mtg legends",
+        "arabian nights mtg", "antiquities mtg", "mtg dual land",
+        "power nine", "mtg booster", "mtg collection",
+    ],
+    "Business and premium laptops": [
+        "thinkpad x1", "thinkpad t14", "thinkpad t480", "thinkpad p1",
+        "thinkpad carbon", "surface laptop", "surface pro", "surface book",
+        "elitebook", "hp zbook", "dell latitude", "dell precision",
+    ],
+    "Niche and luxury fragrances": [
+        "creed aventus", "creed cologne", "tom ford private blend",
+        "le labo", "byredo", "maison francis kurkdjian", "baccarat rouge",
+        "xerjoff", "parfums de marly", "amouage", "niche fragrance",
+    ],
+    "Specialty books and manuals": [
+        "shop manual", "service manual", "factory service manual",
+        "haynes manual", "chilton manual", "first edition signed",
+        "signed first edition", "machinery's handbook", "machinerys handbook",
+        "medical textbook", "engineering handbook",
+    ],
     # --- Vintage electronics (from the sourcing research sheet) ---------
     # Every alias below is qualified. Bare "hp", "sony", "casio" or "sharp"
     # would swallow printers, televisions, G-Shocks and microwaves, so the
@@ -1552,6 +1603,9 @@ _BRAND_ALIASES: Dict[str, List[str]] = {
     # numbers, so Michael Jordan trading cards / coins / signed jerseys
     # don't false-match.
     "Sneakers (Air Jordan/Yeezy/Nike SB/New Balance)": [
+        "adidas samba", "adidas gazelle", "adidas campus",
+        "adidas spezial", "adidas ultraboost", "adidas forum",
+        "adidas handball spezial", "adidas originals",
         "air jordan",
         "jordan retro", "jordan 1 retro", "jordan 1 high",
         "jordan 1 low", "jordan 1 mid",

@@ -962,6 +962,58 @@
       "ship_class": "small_box",
       "notes": "Hydro Flask resale premium is in limited / discontinued colors + collabs (Disney, National Parks); standard colors near retail. Accessory-only listings filtered.",
       "condition_critical": true
+    },
+    {
+      "brand": "Specialty books and manuals",
+      "category": "books",
+      "tier": 2,
+      "models": [
+        "shop manual",
+        "service manual",
+        "Haynes",
+        "Chilton",
+        "first edition",
+        "signed first edition",
+        "medical textbook",
+        "engineering handbook",
+        "Machinery's Handbook"
+      ],
+      "era_markers": [
+        "Printing line on the copyright page identifies a first edition",
+        "Signed copies need the signature verified against known examples",
+        "Factory service manuals beat aftermarket Haynes and Chilton"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "Signed or true first editions",
+          "low": 60,
+          "high": 400
+        },
+        {
+          "item": "Factory service and shop manuals",
+          "low": 30,
+          "high": 120
+        },
+        {
+          "item": "Medical and engineering texts",
+          "low": 9,
+          "high": 75
+        }
+      ],
+      "target_buy_usd": {
+        "low": 1,
+        "high": 15
+      },
+      "platform_primary": "eBay",
+      "platform_secondary": "Mercari",
+      "comp_query_template": "Specialty books and manuals {model} sold",
+      "ship_class": "small_box",
+      "notes": "Ships Media Mail regardless of weight, which is why heavy technical books still work. Nothing else in the catalogue has that shipping advantage.",
+      "condition_critical": [
+        "Check the ISBN and the printing line",
+        "No water damage or mould smell",
+        "Verify no missing plates or pages in technical volumes"
+      ]
     }
   ],
   "platform_notes": {

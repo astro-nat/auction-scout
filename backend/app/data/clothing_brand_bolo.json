@@ -9,9 +9,18 @@
     "single_item_threshold_multiple": 3.0
   },
   "sell_through_by_tier": {
-    "tier_1": {"window_days": 60, "rate": 0.70},
-    "tier_2": {"window_days": 90, "rate": 0.50},
-    "tier_3": {"window_days": 120, "rate": 0.40}
+    "tier_1": {
+      "window_days": 60,
+      "rate": 0.7
+    },
+    "tier_2": {
+      "window_days": 90,
+      "rate": 0.5
+    },
+    "tier_3": {
+      "window_days": 120,
+      "rate": 0.4
+    }
   },
   "ship_class_estimates_usd": {
     "poly_mailer": 5,
@@ -24,16 +33,55 @@
       "brand": "Lululemon",
       "category": "athleisure",
       "tier": 1,
-      "models": ["Align", "Scuba", "Define", "Wunder Under", "Wunder Train", "Energy", "Swiftly Tech", "Everywhere Belt Bag", "ABC Pant", "City Sweat", "Metal Vent Tech"],
-      "era_markers": ["rip tag size dot inside waistband or hem", "5-digit style number on care tag", "reversible 'made with love' tag indicates older/desirable"],
-      "comp_ranges_usd": [
-        {"item": "leggings", "low": 45, "high": 85},
-        {"item": "Scuba hoodie", "low": 55, "high": 110},
-        {"item": "Define jacket", "low": 60, "high": 130},
-        {"item": "belt bag", "low": 35, "high": 60},
-        {"item": "ABC pant (men's)", "low": 50, "high": 90}
+      "models": [
+        "Align",
+        "Scuba",
+        "Define",
+        "Wunder Under",
+        "Wunder Train",
+        "Energy",
+        "Swiftly Tech",
+        "Everywhere Belt Bag",
+        "ABC Pant",
+        "City Sweat",
+        "Metal Vent Tech"
       ],
-      "target_buy_usd": {"low": 5, "high": 15},
+      "era_markers": [
+        "rip tag size dot inside waistband or hem",
+        "5-digit style number on care tag",
+        "reversible 'made with love' tag indicates older/desirable"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "leggings",
+          "low": 45,
+          "high": 85
+        },
+        {
+          "item": "Scuba hoodie",
+          "low": 55,
+          "high": 110
+        },
+        {
+          "item": "Define jacket",
+          "low": 60,
+          "high": 130
+        },
+        {
+          "item": "belt bag",
+          "low": 35,
+          "high": 60
+        },
+        {
+          "item": "ABC pant (men's)",
+          "low": 50,
+          "high": 90
+        }
+      ],
+      "target_buy_usd": {
+        "low": 5,
+        "high": 15
+      },
       "platform_primary": "Poshmark",
       "platform_secondary": "eBay",
       "comp_query_template": "lululemon {model} {size} -new -nwt",
@@ -44,14 +92,39 @@
       "brand": "Alo Yoga",
       "category": "athleisure",
       "tier": 1,
-      "models": ["Airbrush legging", "Airlift legging", "High-Waist Moto", "Accolade hoodie", "Soho hoodie", "Bomber jacket"],
-      "era_markers": ["Alo logo on hip or back", "Made in Vietnam or Made in USA tags"],
-      "comp_ranges_usd": [
-        {"item": "leggings", "low": 40, "high": 75},
-        {"item": "hoodies", "low": 50, "high": 95},
-        {"item": "jackets", "low": 60, "high": 130}
+      "models": [
+        "Airbrush legging",
+        "Airlift legging",
+        "High-Waist Moto",
+        "Accolade hoodie",
+        "Soho hoodie",
+        "Bomber jacket"
       ],
-      "target_buy_usd": {"low": 4, "high": 12},
+      "era_markers": [
+        "Alo logo on hip or back",
+        "Made in Vietnam or Made in USA tags"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "leggings",
+          "low": 40,
+          "high": 75
+        },
+        {
+          "item": "hoodies",
+          "low": 50,
+          "high": 95
+        },
+        {
+          "item": "jackets",
+          "low": 60,
+          "high": 130
+        }
+      ],
+      "target_buy_usd": {
+        "low": 4,
+        "high": 12
+      },
       "platform_primary": "Poshmark",
       "platform_secondary": "Depop",
       "comp_query_template": "alo yoga {model} -new",
@@ -62,14 +135,40 @@
       "brand": "Athleta",
       "category": "athleisure",
       "tier": 1,
-      "models": ["Salutation tight", "Brooklyn pant", "Elation tight", "Powervita", "Coaster Luxe", "Rincon", "Conscious Crop"],
-      "era_markers": ["Athleta logo", "style code on tag"],
-      "comp_ranges_usd": [
-        {"item": "leggings", "low": 25, "high": 55},
-        {"item": "jackets", "low": 35, "high": 80},
-        {"item": "dresses", "low": 25, "high": 50}
+      "models": [
+        "Salutation tight",
+        "Brooklyn pant",
+        "Elation tight",
+        "Powervita",
+        "Coaster Luxe",
+        "Rincon",
+        "Conscious Crop"
       ],
-      "target_buy_usd": {"low": 3, "high": 10},
+      "era_markers": [
+        "Athleta logo",
+        "style code on tag"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "leggings",
+          "low": 25,
+          "high": 55
+        },
+        {
+          "item": "jackets",
+          "low": 35,
+          "high": 80
+        },
+        {
+          "item": "dresses",
+          "low": 25,
+          "high": 50
+        }
+      ],
+      "target_buy_usd": {
+        "low": 3,
+        "high": 10
+      },
       "platform_primary": "Poshmark",
       "platform_secondary": null,
       "comp_query_template": "athleta {model} {size}",
@@ -80,16 +179,57 @@
       "brand": "Patagonia",
       "category": "outdoor",
       "tier": 1,
-      "models": ["Snap-T pullover", "Synchilla", "Retro-X jacket", "Retro Pile", "Better Sweater", "Nano Puff", "Down Sweater", "R1", "R2", "Houdini", "Torrentshell", "Baggies"],
-      "era_markers": ["Older oval logo (pre-2000) is premium over current logo", "Made in USA tag", "Bold 90s colorways (purple, teal, pink) sell faster than neutrals", "Deep Pile/Retro Pile fleece patterns"],
-      "comp_ranges_usd": [
-        {"item": "Snap-T", "low": 50, "high": 130},
-        {"item": "Retro-X", "low": 80, "high": 200},
-        {"item": "Nano Puff", "low": 60, "high": 110},
-        {"item": "Better Sweater", "low": 35, "high": 75},
-        {"item": "vests", "low": 35, "high": 90}
+      "models": [
+        "Snap-T pullover",
+        "Synchilla",
+        "Retro-X jacket",
+        "Retro Pile",
+        "Better Sweater",
+        "Nano Puff",
+        "Down Sweater",
+        "R1",
+        "R2",
+        "Houdini",
+        "Torrentshell",
+        "Baggies"
       ],
-      "target_buy_usd": {"low": 8, "high": 25},
+      "era_markers": [
+        "Older oval logo (pre-2000) is premium over current logo",
+        "Made in USA tag",
+        "Bold 90s colorways (purple, teal, pink) sell faster than neutrals",
+        "Deep Pile/Retro Pile fleece patterns"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "Snap-T",
+          "low": 50,
+          "high": 130
+        },
+        {
+          "item": "Retro-X",
+          "low": 80,
+          "high": 200
+        },
+        {
+          "item": "Nano Puff",
+          "low": 60,
+          "high": 110
+        },
+        {
+          "item": "Better Sweater",
+          "low": 35,
+          "high": 75
+        },
+        {
+          "item": "vests",
+          "low": 35,
+          "high": 90
+        }
+      ],
+      "target_buy_usd": {
+        "low": 8,
+        "high": 25
+      },
       "platform_primary": "eBay",
       "platform_secondary": "Poshmark",
       "comp_query_template": "patagonia {model} {size} {color} sold",
@@ -100,13 +240,32 @@
       "brand": "Vuori",
       "category": "athleisure",
       "tier": 1,
-      "models": ["Sunday Performance Jogger", "Ponto pant", "Kore short", "DreamKnit"],
-      "era_markers": ["Vuori logo", "made with recycled tags"],
-      "comp_ranges_usd": [
-        {"item": "joggers", "low": 40, "high": 70},
-        {"item": "shorts", "low": 25, "high": 45}
+      "models": [
+        "Sunday Performance Jogger",
+        "Ponto pant",
+        "Kore short",
+        "DreamKnit"
       ],
-      "target_buy_usd": {"low": 4, "high": 10},
+      "era_markers": [
+        "Vuori logo",
+        "made with recycled tags"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "joggers",
+          "low": 40,
+          "high": 70
+        },
+        {
+          "item": "shorts",
+          "low": 25,
+          "high": 45
+        }
+      ],
+      "target_buy_usd": {
+        "low": 4,
+        "high": 10
+      },
       "platform_primary": "Poshmark",
       "platform_secondary": null,
       "comp_query_template": "vuori {model}",
@@ -117,12 +276,25 @@
       "brand": "Gymshark",
       "category": "athleisure",
       "tier": 1,
-      "models": ["Vital Seamless", "Adapt", "Apex", "Critical", "Flex"],
+      "models": [
+        "Vital Seamless",
+        "Adapt",
+        "Apex",
+        "Critical",
+        "Flex"
+      ],
       "era_markers": [],
       "comp_ranges_usd": [
-        {"item": "general", "low": 20, "high": 45}
+        {
+          "item": "general",
+          "low": 20,
+          "high": 45
+        }
       ],
-      "target_buy_usd": {"low": 3, "high": 8},
+      "target_buy_usd": {
+        "low": 3,
+        "high": 8
+      },
       "platform_primary": "Poshmark",
       "platform_secondary": "Depop",
       "comp_query_template": "gymshark {model} {size}",
@@ -133,15 +305,47 @@
       "brand": "Free People",
       "category": "boho_contemporary",
       "tier": 1,
-      "models": ["Movement", "We The Free", "Endless Summer", "FP Beach", "Intimately Free People", "Adella", "Tuscan Dreams", "Audrey"],
-      "era_markers": ["Free People label", "Made in [country] tag", "We The Free sub-label premium"],
-      "comp_ranges_usd": [
-        {"item": "dresses", "low": 40, "high": 110},
-        {"item": "tops", "low": 25, "high": 65},
-        {"item": "FP Movement leggings", "low": 40, "high": 75},
-        {"item": "Intimately bralettes", "low": 20, "high": 45}
+      "models": [
+        "Movement",
+        "We The Free",
+        "Endless Summer",
+        "FP Beach",
+        "Intimately Free People",
+        "Adella",
+        "Tuscan Dreams",
+        "Audrey"
       ],
-      "target_buy_usd": {"low": 5, "high": 15},
+      "era_markers": [
+        "Free People label",
+        "Made in [country] tag",
+        "We The Free sub-label premium"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "dresses",
+          "low": 40,
+          "high": 110
+        },
+        {
+          "item": "tops",
+          "low": 25,
+          "high": 65
+        },
+        {
+          "item": "FP Movement leggings",
+          "low": 40,
+          "high": 75
+        },
+        {
+          "item": "Intimately bralettes",
+          "low": 20,
+          "high": 45
+        }
+      ],
+      "target_buy_usd": {
+        "low": 5,
+        "high": 15
+      },
       "platform_primary": "Poshmark",
       "platform_secondary": null,
       "comp_query_template": "free people {item_type} {color} {size} -new",
@@ -152,14 +356,41 @@
       "brand": "Anthropologie",
       "category": "boho_contemporary",
       "tier": 1,
-      "models": ["Maeve", "Pilcro", "Saturday/Sunday", "Daily Practice", "Tiny", "Postmark", "Akemi + Kin", "t.la", "By Anthropologie"],
-      "era_markers": ["House brand label specifically — Anthropologie also resells third-party brands at higher tier"],
-      "comp_ranges_usd": [
-        {"item": "dresses", "low": 35, "high": 95},
-        {"item": "tops", "low": 20, "high": 55},
-        {"item": "Pilcro denim", "low": 30, "high": 70}
+      "models": [
+        "Maeve",
+        "Pilcro",
+        "Saturday/Sunday",
+        "Daily Practice",
+        "Tiny",
+        "Postmark",
+        "Akemi + Kin",
+        "t.la",
+        "By Anthropologie"
       ],
-      "target_buy_usd": {"low": 4, "high": 12},
+      "era_markers": [
+        "House brand label specifically — Anthropologie also resells third-party brands at higher tier"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "dresses",
+          "low": 35,
+          "high": 95
+        },
+        {
+          "item": "tops",
+          "low": 20,
+          "high": 55
+        },
+        {
+          "item": "Pilcro denim",
+          "low": 30,
+          "high": 70
+        }
+      ],
+      "target_buy_usd": {
+        "low": 4,
+        "high": 12
+      },
       "platform_primary": "Poshmark",
       "platform_secondary": null,
       "comp_query_template": "anthropologie {sublabel} {item} {size}",
@@ -170,13 +401,33 @@
       "brand": "Reformation",
       "category": "boho_contemporary",
       "tier": 1,
-      "models": ["Juliette", "Wellfleet", "Cynthia", "Kourtney"],
-      "era_markers": ["Ref tag", "Made in LA or Made in [country] tag", "sustainability tag"],
-      "comp_ranges_usd": [
-        {"item": "dresses", "low": 60, "high": 180},
-        {"item": "jumpsuits", "low": 70, "high": 160}
+      "models": [
+        "Juliette",
+        "Wellfleet",
+        "Cynthia",
+        "Kourtney"
       ],
-      "target_buy_usd": {"low": 10, "high": 30},
+      "era_markers": [
+        "Ref tag",
+        "Made in LA or Made in [country] tag",
+        "sustainability tag"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "dresses",
+          "low": 60,
+          "high": 180
+        },
+        {
+          "item": "jumpsuits",
+          "low": 70,
+          "high": 160
+        }
+      ],
+      "target_buy_usd": {
+        "low": 10,
+        "high": 30
+      },
       "platform_primary": "Poshmark",
       "platform_secondary": "Depop",
       "comp_query_template": "reformation {dress_name} -new",
@@ -187,14 +438,37 @@
       "brand": "Madewell",
       "category": "boho_contemporary",
       "tier": 1,
-      "models": ["The Perfect Vintage Jean", "The Curvy", "Transport Tote", "Medium Transport", "Whisper Cotton tee"],
-      "era_markers": ["Madewell tag with style number"],
-      "comp_ranges_usd": [
-        {"item": "denim", "low": 35, "high": 75},
-        {"item": "Transport tote", "low": 50, "high": 130},
-        {"item": "tops", "low": 15, "high": 35}
+      "models": [
+        "The Perfect Vintage Jean",
+        "The Curvy",
+        "Transport Tote",
+        "Medium Transport",
+        "Whisper Cotton tee"
       ],
-      "target_buy_usd": {"low": 4, "high": 12},
+      "era_markers": [
+        "Madewell tag with style number"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "denim",
+          "low": 35,
+          "high": 75
+        },
+        {
+          "item": "Transport tote",
+          "low": 50,
+          "high": 130
+        },
+        {
+          "item": "tops",
+          "low": 15,
+          "high": 35
+        }
+      ],
+      "target_buy_usd": {
+        "low": 4,
+        "high": 12
+      },
       "platform_primary": "Poshmark",
       "platform_secondary": null,
       "comp_query_template": "madewell {style} {size_or_color}",
@@ -205,15 +479,50 @@
       "brand": "The North Face",
       "category": "outdoor",
       "tier": 1,
-      "models": ["Nuptse 700", "Denali", "McMurdo", "Himalayan", "Steep Tech", "Mountain Light", "Mountain Jacket", "1996 Retro Nuptse", "Apex Bionic"],
-      "era_markers": ["Brown label = 1970s (most collectible)", "Older TNF block logo", "Steep Tech with Scot Schmidt signature", "Summit Series line", "Made in USA tags pre-2000s"],
-      "comp_ranges_usd": [
-        {"item": "Nuptse", "low": 80, "high": 220},
-        {"item": "Denali fleece", "low": 50, "high": 130},
-        {"item": "Steep Tech", "low": 150, "high": 500},
-        {"item": "vintage 90s shells", "low": 80, "high": 250}
+      "models": [
+        "Nuptse 700",
+        "Denali",
+        "McMurdo",
+        "Himalayan",
+        "Steep Tech",
+        "Mountain Light",
+        "Mountain Jacket",
+        "1996 Retro Nuptse",
+        "Apex Bionic"
       ],
-      "target_buy_usd": {"low": 10, "high": 80},
+      "era_markers": [
+        "Brown label = 1970s (most collectible)",
+        "Older TNF block logo",
+        "Steep Tech with Scot Schmidt signature",
+        "Summit Series line",
+        "Made in USA tags pre-2000s"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "Nuptse",
+          "low": 80,
+          "high": 220
+        },
+        {
+          "item": "Denali fleece",
+          "low": 50,
+          "high": 130
+        },
+        {
+          "item": "Steep Tech",
+          "low": 150,
+          "high": 500
+        },
+        {
+          "item": "vintage 90s shells",
+          "low": 80,
+          "high": 250
+        }
+      ],
+      "target_buy_usd": {
+        "low": 10,
+        "high": 80
+      },
       "platform_primary": "eBay",
       "platform_secondary": null,
       "comp_query_template": "north face {model} {color} {size} vintage",
@@ -224,14 +533,41 @@
       "brand": "Arc'teryx",
       "category": "outdoor",
       "tier": 1,
-      "models": ["Beta AR", "Beta LT", "Alpha SV", "Atom LT", "Atom AR", "Cerium LT", "Gamma MX"],
-      "era_markers": ["Bird logo on chest", "GORE-TEX Pro tag", "Made in Canada premium over Made in Vietnam"],
-      "comp_ranges_usd": [
-        {"item": "Beta/Alpha", "low": 200, "high": 500},
-        {"item": "Atom", "low": 100, "high": 250},
-        {"item": "Cerium", "low": 130, "high": 260}
+      "models": [
+        "Beta AR",
+        "Beta LT",
+        "Alpha SV",
+        "Atom LT",
+        "Atom AR",
+        "Cerium LT",
+        "Gamma MX"
       ],
-      "target_buy_usd": {"low": 30, "high": 100},
+      "era_markers": [
+        "Bird logo on chest",
+        "GORE-TEX Pro tag",
+        "Made in Canada premium over Made in Vietnam"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "Beta/Alpha",
+          "low": 200,
+          "high": 500
+        },
+        {
+          "item": "Atom",
+          "low": 100,
+          "high": 250
+        },
+        {
+          "item": "Cerium",
+          "low": 130,
+          "high": 260
+        }
+      ],
+      "target_buy_usd": {
+        "low": 30,
+        "high": 100
+      },
       "platform_primary": "eBay",
       "platform_secondary": null,
       "comp_query_template": "arcteryx {model} {size} {color}",
@@ -242,15 +578,46 @@
       "brand": "Carhartt",
       "category": "workwear",
       "tier": 1,
-      "models": ["Detroit jacket", "Chore coat", "J140 Active jacket", "Active Jac", "Duck Bib overall", "Sandstone"],
-      "era_markers": ["Carhartt union-made tag", "Made in USA pre-2000s", "Faded duck canvas with patina", "Stitched-on label premium over printed"],
-      "comp_ranges_usd": [
-        {"item": "vintage Detroit", "low": 70, "high": 200},
-        {"item": "modern Detroit", "low": 40, "high": 90},
-        {"item": "Chore coats", "low": 50, "high": 180},
-        {"item": "bibs", "low": 40, "high": 120}
+      "models": [
+        "Detroit jacket",
+        "Chore coat",
+        "J140 Active jacket",
+        "Active Jac",
+        "Duck Bib overall",
+        "Sandstone"
       ],
-      "target_buy_usd": {"low": 8, "high": 30},
+      "era_markers": [
+        "Carhartt union-made tag",
+        "Made in USA pre-2000s",
+        "Faded duck canvas with patina",
+        "Stitched-on label premium over printed"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "vintage Detroit",
+          "low": 70,
+          "high": 200
+        },
+        {
+          "item": "modern Detroit",
+          "low": 40,
+          "high": 90
+        },
+        {
+          "item": "Chore coats",
+          "low": 50,
+          "high": 180
+        },
+        {
+          "item": "bibs",
+          "low": 40,
+          "high": 120
+        }
+      ],
+      "target_buy_usd": {
+        "low": 8,
+        "high": 30
+      },
       "platform_primary": "eBay",
       "platform_secondary": null,
       "comp_query_template": "carhartt {model} vintage {size}",
@@ -261,12 +628,29 @@
       "brand": "Columbia PFG",
       "category": "outdoor",
       "tier": 1,
-      "models": ["Bonehead", "Tamiami", "Bahama", "Tuna Jacket", "Slack Tide"],
-      "era_markers": ["PFG (Performance Fishing Gear) logo", "fish-print interior", "vented back"],
-      "comp_ranges_usd": [
-        {"item": "general", "low": 25, "high": 55}
+      "models": [
+        "Bonehead",
+        "Tamiami",
+        "Bahama",
+        "Tuna Jacket",
+        "Slack Tide"
       ],
-      "target_buy_usd": {"low": 4, "high": 10},
+      "era_markers": [
+        "PFG (Performance Fishing Gear) logo",
+        "fish-print interior",
+        "vented back"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "general",
+          "low": 25,
+          "high": 55
+        }
+      ],
+      "target_buy_usd": {
+        "low": 4,
+        "high": 10
+      },
       "platform_primary": "eBay",
       "platform_secondary": null,
       "comp_query_template": "columbia pfg {model} {size}",
@@ -277,14 +661,39 @@
       "brand": "Filson",
       "category": "outdoor",
       "tier": 1,
-      "models": ["Mackinaw Cruiser", "Tin Cloth jacket", "Field Coat", "Bridle Leather bag", "Original Briefcase"],
-      "era_markers": ["Made in USA Seattle tag (pre-2016 = premium)", "oil-finish patina", "vintage union label"],
-      "comp_ranges_usd": [
-        {"item": "Mackinaw", "low": 150, "high": 400},
-        {"item": "Tin Cloth", "low": 120, "high": 300},
-        {"item": "bags", "low": 150, "high": 500}
+      "models": [
+        "Mackinaw Cruiser",
+        "Tin Cloth jacket",
+        "Field Coat",
+        "Bridle Leather bag",
+        "Original Briefcase"
       ],
-      "target_buy_usd": {"low": 30, "high": 90},
+      "era_markers": [
+        "Made in USA Seattle tag (pre-2016 = premium)",
+        "oil-finish patina",
+        "vintage union label"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "Mackinaw",
+          "low": 150,
+          "high": 400
+        },
+        {
+          "item": "Tin Cloth",
+          "low": 120,
+          "high": 300
+        },
+        {
+          "item": "bags",
+          "low": 150,
+          "high": 500
+        }
+      ],
+      "target_buy_usd": {
+        "low": 30,
+        "high": 90
+      },
       "platform_primary": "eBay",
       "platform_secondary": null,
       "comp_query_template": "filson {model} vintage made in usa",
@@ -295,15 +704,51 @@
       "brand": "Levi's vintage",
       "category": "vintage_denim",
       "tier": 2,
-      "models": ["501", "505", "517", "519", "550", "Trucker Type I", "Trucker Type II", "Trucker Type III", "70505 trucker"],
-      "era_markers": ["Big E red tab (capital E in LEVI'S) = pre-1971, premium", "Single-stitch hem on 501s = pre-1986, premium", "Made in USA tag", "Care tag with S prefix style number = pre-1980s", "Selvedge denim (red line on outseam when cuffed) = premium", "Hidden rivets, leather patch (not paper)"],
-      "comp_ranges_usd": [
-        {"item": "501 Big E", "low": 200, "high": 800},
-        {"item": "501 single-stitch USA", "low": 80, "high": 250},
-        {"item": "modern 501", "low": 25, "high": 50},
-        {"item": "vintage Trucker jackets", "low": 80, "high": 300}
+      "models": [
+        "501",
+        "505",
+        "517",
+        "519",
+        "550",
+        "Trucker Type I",
+        "Trucker Type II",
+        "Trucker Type III",
+        "70505 trucker"
       ],
-      "target_buy_usd": {"low": 5, "high": 30},
+      "era_markers": [
+        "Big E red tab (capital E in LEVI'S) = pre-1971, premium",
+        "Single-stitch hem on 501s = pre-1986, premium",
+        "Made in USA tag",
+        "Care tag with S prefix style number = pre-1980s",
+        "Selvedge denim (red line on outseam when cuffed) = premium",
+        "Hidden rivets, leather patch (not paper)"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "501 Big E",
+          "low": 200,
+          "high": 800
+        },
+        {
+          "item": "501 single-stitch USA",
+          "low": 80,
+          "high": 250
+        },
+        {
+          "item": "modern 501",
+          "low": 25,
+          "high": 50
+        },
+        {
+          "item": "vintage Trucker jackets",
+          "low": 80,
+          "high": 300
+        }
+      ],
+      "target_buy_usd": {
+        "low": 5,
+        "high": 30
+      },
       "platform_primary": "eBay",
       "platform_secondary": "Depop",
       "comp_query_template": "levis 501 big e {size}",
@@ -314,13 +759,34 @@
       "brand": "Wrangler / Lee vintage",
       "category": "vintage_denim",
       "tier": 2,
-      "models": ["Wrangler 13MWZ", "Lee Storm Rider jacket", "Lee 101", "Lee Riders"],
-      "era_markers": ["Sanforized tag", "union label", "Made in USA", "Lee Storm Rider blanket-lined"],
-      "comp_ranges_usd": [
-        {"item": "vintage", "low": 40, "high": 150},
-        {"item": "modern", "low": 15, "high": 30}
+      "models": [
+        "Wrangler 13MWZ",
+        "Lee Storm Rider jacket",
+        "Lee 101",
+        "Lee Riders"
       ],
-      "target_buy_usd": {"low": 4, "high": 15},
+      "era_markers": [
+        "Sanforized tag",
+        "union label",
+        "Made in USA",
+        "Lee Storm Rider blanket-lined"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "vintage",
+          "low": 40,
+          "high": 150
+        },
+        {
+          "item": "modern",
+          "low": 15,
+          "high": 30
+        }
+      ],
+      "target_buy_usd": {
+        "low": 4,
+        "high": 15
+      },
       "platform_primary": "eBay",
       "platform_secondary": null,
       "comp_query_template": "vintage wrangler 13mwz",
@@ -331,14 +797,39 @@
       "brand": "Pendleton",
       "category": "vintage_heritage",
       "tier": 2,
-      "models": ["Board Shirt", "Topster", "Lodge Shirt", "blanket coats", "wool blankets"],
-      "era_markers": ["Made in USA Portland Oregon tag", "virgin wool tag", "older script logo"],
-      "comp_ranges_usd": [
-        {"item": "Board shirts", "low": 35, "high": 90},
-        {"item": "blanket coats", "low": 80, "high": 250},
-        {"item": "wool blankets", "low": 80, "high": 300}
+      "models": [
+        "Board Shirt",
+        "Topster",
+        "Lodge Shirt",
+        "blanket coats",
+        "wool blankets"
       ],
-      "target_buy_usd": {"low": 6, "high": 25},
+      "era_markers": [
+        "Made in USA Portland Oregon tag",
+        "virgin wool tag",
+        "older script logo"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "Board shirts",
+          "low": 35,
+          "high": 90
+        },
+        {
+          "item": "blanket coats",
+          "low": 80,
+          "high": 250
+        },
+        {
+          "item": "wool blankets",
+          "low": 80,
+          "high": 300
+        }
+      ],
+      "target_buy_usd": {
+        "low": 6,
+        "high": 25
+      },
       "platform_primary": "eBay",
       "platform_secondary": "Etsy",
       "comp_query_template": "pendleton board shirt {size} usa",
@@ -349,12 +840,26 @@
       "brand": "Woolrich vintage",
       "category": "vintage_heritage",
       "tier": 2,
-      "models": ["Buffalo check shirt", "Mackinaw", "Arctic Parka"],
-      "era_markers": ["Made in USA Pennsylvania tag", "vintage script logo"],
-      "comp_ranges_usd": [
-        {"item": "general", "low": 40, "high": 180}
+      "models": [
+        "Buffalo check shirt",
+        "Mackinaw",
+        "Arctic Parka"
       ],
-      "target_buy_usd": {"low": 5, "high": 20},
+      "era_markers": [
+        "Made in USA Pennsylvania tag",
+        "vintage script logo"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "general",
+          "low": 40,
+          "high": 180
+        }
+      ],
+      "target_buy_usd": {
+        "low": 5,
+        "high": 20
+      },
       "platform_primary": "eBay",
       "platform_secondary": null,
       "comp_query_template": "vintage woolrich {item} usa",
@@ -365,16 +870,54 @@
       "brand": "Polo Ralph Lauren premium sublines",
       "category": "vintage_heritage",
       "tier": 2,
-      "models": ["Polo Country", "Rugby", "Polo Sport", "Polo Stadium", "Polo Snow Beach", "P-Wing", "Polo Bear sweaters", "Hi-Tech", "RL2000", "RRL Double RL"],
-      "era_markers": ["Specific subline labels (above)", "Vintage made-in-USA Polo crest tag", "SKIP plain Polo polo shirts and mall-tier"],
-      "comp_ranges_usd": [
-        {"item": "Snow Beach pieces", "low": 300, "high": 2000},
-        {"item": "Stadium", "low": 200, "high": 800},
-        {"item": "Polo Bear sweaters", "low": 100, "high": 400},
-        {"item": "RRL denim", "low": 150, "high": 400},
-        {"item": "generic vintage Polo", "low": 25, "high": 60}
+      "models": [
+        "Polo Country",
+        "Rugby",
+        "Polo Sport",
+        "Polo Stadium",
+        "Polo Snow Beach",
+        "P-Wing",
+        "Polo Bear sweaters",
+        "Hi-Tech",
+        "RL2000",
+        "RRL Double RL"
       ],
-      "target_buy_usd": {"low": 5, "high": 100},
+      "era_markers": [
+        "Specific subline labels (above)",
+        "Vintage made-in-USA Polo crest tag",
+        "SKIP plain Polo polo shirts and mall-tier"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "Snow Beach pieces",
+          "low": 300,
+          "high": 2000
+        },
+        {
+          "item": "Stadium",
+          "low": 200,
+          "high": 800
+        },
+        {
+          "item": "Polo Bear sweaters",
+          "low": 100,
+          "high": 400
+        },
+        {
+          "item": "RRL denim",
+          "low": 150,
+          "high": 400
+        },
+        {
+          "item": "generic vintage Polo",
+          "low": 25,
+          "high": 60
+        }
+      ],
+      "target_buy_usd": {
+        "low": 5,
+        "high": 100
+      },
       "platform_primary": "eBay",
       "platform_secondary": "Grailed",
       "comp_query_template": "polo ralph lauren {subline}",
@@ -385,13 +928,34 @@
       "brand": "Tommy Hilfiger vintage 90s",
       "category": "vintage_heritage",
       "tier": 2,
-      "models": ["bold flag/sailing logo pieces", "Lotus", "color-block", "big-logo windbreakers"],
-      "era_markers": ["Crest tag", "sailing flag", "90s color-block", "SKIP modern minimal logo"],
-      "comp_ranges_usd": [
-        {"item": "vintage", "low": 40, "high": 200},
-        {"item": "modern", "low": 10, "high": 25}
+      "models": [
+        "bold flag/sailing logo pieces",
+        "Lotus",
+        "color-block",
+        "big-logo windbreakers"
       ],
-      "target_buy_usd": {"low": 5, "high": 20},
+      "era_markers": [
+        "Crest tag",
+        "sailing flag",
+        "90s color-block",
+        "SKIP modern minimal logo"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "vintage",
+          "low": 40,
+          "high": 200
+        },
+        {
+          "item": "modern",
+          "low": 10,
+          "high": 25
+        }
+      ],
+      "target_buy_usd": {
+        "low": 5,
+        "high": 20
+      },
       "platform_primary": "eBay",
       "platform_secondary": "Depop",
       "comp_query_template": "vintage tommy hilfiger sailing",
@@ -402,14 +966,36 @@
       "brand": "Theory",
       "category": "premium_contemporary",
       "tier": 2,
-      "models": ["Treeca pant", "Max blazer", "cashmere sweaters"],
-      "era_markers": ["Theory label", "made in Italy/USA premium"],
-      "comp_ranges_usd": [
-        {"item": "blazers", "low": 40, "high": 120},
-        {"item": "pants", "low": 30, "high": 70},
-        {"item": "cashmere", "low": 40, "high": 95}
+      "models": [
+        "Treeca pant",
+        "Max blazer",
+        "cashmere sweaters"
       ],
-      "target_buy_usd": {"low": 5, "high": 15},
+      "era_markers": [
+        "Theory label",
+        "made in Italy/USA premium"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "blazers",
+          "low": 40,
+          "high": 120
+        },
+        {
+          "item": "pants",
+          "low": 30,
+          "high": 70
+        },
+        {
+          "item": "cashmere",
+          "low": 40,
+          "high": 95
+        }
+      ],
+      "target_buy_usd": {
+        "low": 5,
+        "high": 15
+      },
       "platform_primary": "Poshmark",
       "platform_secondary": null,
       "comp_query_template": "theory {item} {size}",
@@ -420,14 +1006,36 @@
       "brand": "Vince",
       "category": "premium_contemporary",
       "tier": 2,
-      "models": ["cashmere sweaters", "leather jackets", "silk blouses"],
-      "era_markers": ["Vince label", "cashmere/silk/leather material check"],
-      "comp_ranges_usd": [
-        {"item": "cashmere", "low": 50, "high": 130},
-        {"item": "silk", "low": 40, "high": 90},
-        {"item": "leather", "low": 80, "high": 250}
+      "models": [
+        "cashmere sweaters",
+        "leather jackets",
+        "silk blouses"
       ],
-      "target_buy_usd": {"low": 6, "high": 25},
+      "era_markers": [
+        "Vince label",
+        "cashmere/silk/leather material check"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "cashmere",
+          "low": 50,
+          "high": 130
+        },
+        {
+          "item": "silk",
+          "low": 40,
+          "high": 90
+        },
+        {
+          "item": "leather",
+          "low": 80,
+          "high": 250
+        }
+      ],
+      "target_buy_usd": {
+        "low": 6,
+        "high": 25
+      },
       "platform_primary": "Poshmark",
       "platform_secondary": null,
       "comp_query_template": "vince {fabric} {size}",
@@ -438,12 +1046,27 @@
       "brand": "Eileen Fisher",
       "category": "premium_contemporary",
       "tier": 2,
-      "models": ["linen pieces", "silk tanks", "merino wool", "organic cotton"],
-      "era_markers": ["EF label", "fabric content labels (linen/silk/merino key)"],
-      "comp_ranges_usd": [
-        {"item": "general", "low": 30, "high": 95}
+      "models": [
+        "linen pieces",
+        "silk tanks",
+        "merino wool",
+        "organic cotton"
       ],
-      "target_buy_usd": {"low": 4, "high": 15},
+      "era_markers": [
+        "EF label",
+        "fabric content labels (linen/silk/merino key)"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "general",
+          "low": 30,
+          "high": 95
+        }
+      ],
+      "target_buy_usd": {
+        "low": 4,
+        "high": 15
+      },
       "platform_primary": "Poshmark",
       "platform_secondary": "eBay",
       "comp_query_template": "eileen fisher {fabric} {size}",
@@ -454,12 +1077,26 @@
       "brand": "J.Crew Collection",
       "category": "premium_contemporary",
       "tier": 2,
-      "models": ["Cashmere", "Italian wool", "Collection cocktail pieces", "Point Sur"],
-      "era_markers": ["'Collection' specifically on tag — regular J.Crew is mall-tier"],
-      "comp_ranges_usd": [
-        {"item": "general", "low": 40, "high": 150}
+      "models": [
+        "Cashmere",
+        "Italian wool",
+        "Collection cocktail pieces",
+        "Point Sur"
       ],
-      "target_buy_usd": {"low": 5, "high": 15},
+      "era_markers": [
+        "'Collection' specifically on tag — regular J.Crew is mall-tier"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "general",
+          "low": 40,
+          "high": 150
+        }
+      ],
+      "target_buy_usd": {
+        "low": 5,
+        "high": 15
+      },
       "platform_primary": "Poshmark",
       "platform_secondary": null,
       "comp_query_template": "jcrew collection {item}",
@@ -470,13 +1107,31 @@
       "brand": "Torrid",
       "category": "premium_contemporary",
       "tier": 2,
-      "models": ["Studio knit", "plaid smocked dress", "fit-and-flare dresses"],
-      "era_markers": ["Torrid label", "plus-size sizing (00, 0, 1, 2, 3, 4, 5, 6)"],
-      "comp_ranges_usd": [
-        {"item": "dresses", "low": 30, "high": 65},
-        {"item": "tops", "low": 15, "high": 40}
+      "models": [
+        "Studio knit",
+        "plaid smocked dress",
+        "fit-and-flare dresses"
       ],
-      "target_buy_usd": {"low": 3, "high": 10},
+      "era_markers": [
+        "Torrid label",
+        "plus-size sizing (00, 0, 1, 2, 3, 4, 5, 6)"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "dresses",
+          "low": 30,
+          "high": 65
+        },
+        {
+          "item": "tops",
+          "low": 15,
+          "high": 40
+        }
+      ],
+      "target_buy_usd": {
+        "low": 3,
+        "high": 10
+      },
       "platform_primary": "Poshmark",
       "platform_secondary": null,
       "comp_query_template": "torrid {item} size {0_to_6}",
@@ -487,14 +1142,42 @@
       "brand": "Coach vintage",
       "category": "luxury",
       "tier": 3,
-      "models": ["Court bag", "Willis", "Station", "Rambler's Legacy", "Bonnie Cashin pieces", "Madison"],
-      "era_markers": ["Made in USA / Made in NYC tag (post-2000 made-in-China = much lower value)", "brass turnlock hardware", "glove-tanned leather", "creed stamp inside", "serial number format (letter-letter-number sequences pre-1994)"],
-      "comp_ranges_usd": [
-        {"item": "vintage USA Coach", "low": 80, "high": 350},
-        {"item": "Bonnie Cashin era", "low": 200, "high": 1000},
-        {"item": "modern outlet Coach", "low": 20, "high": 50}
+      "models": [
+        "Court bag",
+        "Willis",
+        "Station",
+        "Rambler's Legacy",
+        "Bonnie Cashin pieces",
+        "Madison"
       ],
-      "target_buy_usd": {"low": 10, "high": 40},
+      "era_markers": [
+        "Made in USA / Made in NYC tag (post-2000 made-in-China = much lower value)",
+        "brass turnlock hardware",
+        "glove-tanned leather",
+        "creed stamp inside",
+        "serial number format (letter-letter-number sequences pre-1994)"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "vintage USA Coach",
+          "low": 80,
+          "high": 350
+        },
+        {
+          "item": "Bonnie Cashin era",
+          "low": 200,
+          "high": 1000
+        },
+        {
+          "item": "modern outlet Coach",
+          "low": 20,
+          "high": 50
+        }
+      ],
+      "target_buy_usd": {
+        "low": 10,
+        "high": 40
+      },
       "platform_primary": "eBay",
       "platform_secondary": "Poshmark",
       "comp_query_template": "vintage coach {model} made in usa",
@@ -505,13 +1188,32 @@
       "brand": "Burberry vintage",
       "category": "luxury",
       "tier": 3,
-      "models": ["Heritage trench coats", "Nova check scarves", "Haymarket pieces"],
-      "era_markers": ["'Burberrys'' with apostrophe-s = pre-1999 (premium)", "'Burberry' without apostrophe = post-1999", "check label, lining buttons"],
-      "comp_ranges_usd": [
-        {"item": "trenches", "low": 200, "high": 800},
-        {"item": "scarves", "low": 100, "high": 400}
+      "models": [
+        "Heritage trench coats",
+        "Nova check scarves",
+        "Haymarket pieces"
       ],
-      "target_buy_usd": {"low": 20, "high": 80},
+      "era_markers": [
+        "'Burberrys'' with apostrophe-s = pre-1999 (premium)",
+        "'Burberry' without apostrophe = post-1999",
+        "check label, lining buttons"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "trenches",
+          "low": 200,
+          "high": 800
+        },
+        {
+          "item": "scarves",
+          "low": 100,
+          "high": 400
+        }
+      ],
+      "target_buy_usd": {
+        "low": 20,
+        "high": 80
+      },
       "platform_primary": "eBay",
       "platform_secondary": null,
       "comp_query_template": "burberrys vintage trench",
@@ -522,14 +1224,43 @@
       "brand": "Louis Vuitton",
       "category": "luxury",
       "tier": 3,
-      "models": ["Speedy", "Neverfull", "Alma", "Pochette Accessoires", "Keepall", "Pochette Métis", "Bumbag"],
-      "era_markers": ["Date code stamp (location + 4-digit code, pre-March 2021)", "heat-stamped LV monogram alignment", "YKK or LV-stamped zippers", "vachetta leather patina", "Made in France/Italy/Spain/USA"],
-      "comp_ranges_usd": [
-        {"item": "Speedy", "low": 400, "high": 1200},
-        {"item": "Neverfull", "low": 700, "high": 1800},
-        {"item": "Pochette", "low": 300, "high": 700}
+      "models": [
+        "Speedy",
+        "Neverfull",
+        "Alma",
+        "Pochette Accessoires",
+        "Keepall",
+        "Pochette Métis",
+        "Bumbag"
       ],
-      "target_buy_usd": {"low": 80, "high": 300},
+      "era_markers": [
+        "Date code stamp (location + 4-digit code, pre-March 2021)",
+        "heat-stamped LV monogram alignment",
+        "YKK or LV-stamped zippers",
+        "vachetta leather patina",
+        "Made in France/Italy/Spain/USA"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "Speedy",
+          "low": 400,
+          "high": 1200
+        },
+        {
+          "item": "Neverfull",
+          "low": 700,
+          "high": 1800
+        },
+        {
+          "item": "Pochette",
+          "low": 300,
+          "high": 700
+        }
+      ],
+      "target_buy_usd": {
+        "low": 80,
+        "high": 300
+      },
       "platform_primary": "eBay",
       "platform_secondary": "The RealReal / Fashionphile",
       "comp_query_template": "louis vuitton {model} authentic",
@@ -540,12 +1271,34 @@
       "brand": "Designer luxury (Gucci/Chanel/Prada/Hermes/YSL/Fendi/Dior/Bottega)",
       "category": "luxury",
       "tier": 3,
-      "models": ["Chanel Classic Flap", "Gucci Marmont", "Prada Galleria", "Hermès Birkin", "Hermès Kelly", "YSL LouLou", "Fendi Baguette", "Dior Saddle", "Bottega Cassette"],
-      "era_markers": ["serial numbers", "country-of-origin tags", "hardware quality", "dust bag and box add value"],
-      "comp_ranges_usd": [
-        {"item": "general", "low": 300, "high": 30000}
+      "models": [
+        "Chanel Classic Flap",
+        "Gucci Marmont",
+        "Prada Galleria",
+        "Hermès Birkin",
+        "Hermès Kelly",
+        "YSL LouLou",
+        "Fendi Baguette",
+        "Dior Saddle",
+        "Bottega Cassette"
       ],
-      "target_buy_usd": {"low": null, "high": null},
+      "era_markers": [
+        "serial numbers",
+        "country-of-origin tags",
+        "hardware quality",
+        "dust bag and box add value"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "general",
+          "low": 300,
+          "high": 30000
+        }
+      ],
+      "target_buy_usd": {
+        "low": null,
+        "high": null
+      },
       "platform_primary": "The RealReal",
       "platform_secondary": "Fashionphile / eBay Authenticity Guarantee",
       "comp_query_template": "{brand} {model} authentic",
@@ -556,12 +1309,28 @@
       "brand": "Tory Burch / Kate Spade / Michael Kors",
       "category": "luxury_mid",
       "tier": 3,
-      "models": ["Tory Burch Robinson tote", "Tory Burch Miller sandals", "Kate Spade specific bag names", "Michael Kors Jet Set"],
-      "era_markers": ["brand-stamped hardware", "dust bag", "current-season styles"],
-      "comp_ranges_usd": [
-        {"item": "general", "low": 40, "high": 150}
+      "models": [
+        "Tory Burch Robinson tote",
+        "Tory Burch Miller sandals",
+        "Kate Spade specific bag names",
+        "Michael Kors Jet Set"
       ],
-      "target_buy_usd": {"low": 5, "high": 25},
+      "era_markers": [
+        "brand-stamped hardware",
+        "dust bag",
+        "current-season styles"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "general",
+          "low": 40,
+          "high": 150
+        }
+      ],
+      "target_buy_usd": {
+        "low": 5,
+        "high": 25
+      },
       "platform_primary": "Poshmark",
       "platform_secondary": "eBay",
       "comp_query_template": "{brand} {model} authentic",
@@ -572,14 +1341,41 @@
       "brand": "Frye / Dr. Martens / Allen Edmonds / Ariat",
       "category": "boots",
       "tier": 3,
-      "models": ["Frye Harness", "Frye Campus", "Dr. Martens 1460", "Dr. Martens 1461", "Allen Edmonds Strand", "Allen Edmonds Park Avenue", "Ariat western"],
-      "era_markers": ["Made in USA Frye/Allen Edmonds", "England-made Docs (pre-2003)", "leather quality"],
-      "comp_ranges_usd": [
-        {"item": "vintage USA Frye", "low": 80, "high": 250},
-        {"item": "Allen Edmonds", "low": 80, "high": 200},
-        {"item": "Made in England Docs", "low": 100, "high": 300}
+      "models": [
+        "Frye Harness",
+        "Frye Campus",
+        "Dr. Martens 1460",
+        "Dr. Martens 1461",
+        "Allen Edmonds Strand",
+        "Allen Edmonds Park Avenue",
+        "Ariat western"
       ],
-      "target_buy_usd": {"low": 10, "high": 50},
+      "era_markers": [
+        "Made in USA Frye/Allen Edmonds",
+        "England-made Docs (pre-2003)",
+        "leather quality"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "vintage USA Frye",
+          "low": 80,
+          "high": 250
+        },
+        {
+          "item": "Allen Edmonds",
+          "low": 80,
+          "high": 200
+        },
+        {
+          "item": "Made in England Docs",
+          "low": 100,
+          "high": 300
+        }
+      ],
+      "target_buy_usd": {
+        "low": 10,
+        "high": 50
+      },
       "platform_primary": "eBay",
       "platform_secondary": null,
       "comp_query_template": "frye harness boots made in usa {size}",
@@ -590,12 +1386,39 @@
       "brand": "Vintage band tees (high-value music)",
       "category": "vintage_graphic",
       "tier": 3,
-      "models": ["Metallica", "Iron Maiden", "Megadeth", "Pink Floyd", "Led Zeppelin", "AC/DC", "Nirvana", "Tupac", "Biggie", "Wu-Tang", "Grateful Dead", "Rolling Stones", "Beatles", "Run DMC"],
-      "era_markers": ["Single-stitch hem and sleeves (pre-2000)", "tag fonts (Hanes BEEFY-T, Brockum, Giant, Anvil)", "faded screen print", "no front-and-back graphic on modern reprints"],
-      "comp_ranges_usd": [
-        {"item": "general", "low": 80, "high": 3000}
+      "models": [
+        "Metallica",
+        "Iron Maiden",
+        "Megadeth",
+        "Pink Floyd",
+        "Led Zeppelin",
+        "AC/DC",
+        "Nirvana",
+        "Tupac",
+        "Biggie",
+        "Wu-Tang",
+        "Grateful Dead",
+        "Rolling Stones",
+        "Beatles",
+        "Run DMC"
       ],
-      "target_buy_usd": {"low": 8, "high": 50},
+      "era_markers": [
+        "Single-stitch hem and sleeves (pre-2000)",
+        "tag fonts (Hanes BEEFY-T, Brockum, Giant, Anvil)",
+        "faded screen print",
+        "no front-and-back graphic on modern reprints"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "general",
+          "low": 80,
+          "high": 3000
+        }
+      ],
+      "target_buy_usd": {
+        "low": 8,
+        "high": 50
+      },
       "platform_primary": "eBay",
       "platform_secondary": "Depop / Grailed",
       "comp_query_template": "vintage {band} tour shirt {year} single stitch",
@@ -606,12 +1429,32 @@
       "brand": "Vintage movie/TV/brand promo tees",
       "category": "vintage_graphic",
       "tier": 3,
-      "models": ["Disney vintage Mickey", "90s movie promos", "Star Wars original trilogy", "Marvel pre-2000", "Coca-Cola", "Harley-Davidson 3D Emblem", "Hard Rock Cafe (closed locations)"],
-      "era_markers": ["single-stitch", "copyright date on tag", "faded print", "made in USA tag"],
-      "comp_ranges_usd": [
-        {"item": "general", "low": 30, "high": 500}
+      "models": [
+        "Disney vintage Mickey",
+        "90s movie promos",
+        "Star Wars original trilogy",
+        "Marvel pre-2000",
+        "Coca-Cola",
+        "Harley-Davidson 3D Emblem",
+        "Hard Rock Cafe (closed locations)"
       ],
-      "target_buy_usd": {"low": 5, "high": 30},
+      "era_markers": [
+        "single-stitch",
+        "copyright date on tag",
+        "faded print",
+        "made in USA tag"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "general",
+          "low": 30,
+          "high": 500
+        }
+      ],
+      "target_buy_usd": {
+        "low": 5,
+        "high": 30
+      },
       "platform_primary": "eBay",
       "platform_secondary": "Depop",
       "comp_query_template": "vintage {property} tee single stitch",
@@ -622,15 +1465,46 @@
       "brand": "Vintage sports/college (Champion/Nike/Starter/Salem)",
       "category": "vintage_graphic",
       "tier": 2,
-      "models": ["Champion reverse weave (stitched logo)", "Nike gray tag (pre-1990s)", "Salem Sportswear", "Starter satin jackets", "Mitchell & Ness throwbacks", "Russell Athletic"],
-      "era_markers": ["stitched logo NOT screen-printed (Champion)", "gray tag (Nike)", "single-stitch", "made in USA"],
-      "comp_ranges_usd": [
-        {"item": "Champion reverse weave", "low": 40, "high": 180},
-        {"item": "Nike gray tag", "low": 80, "high": 400},
-        {"item": "Starter satin jackets", "low": 60, "high": 300},
-        {"item": "Salem", "low": 50, "high": 250}
+      "models": [
+        "Champion reverse weave (stitched logo)",
+        "Nike gray tag (pre-1990s)",
+        "Salem Sportswear",
+        "Starter satin jackets",
+        "Mitchell & Ness throwbacks",
+        "Russell Athletic"
       ],
-      "target_buy_usd": {"low": 5, "high": 25},
+      "era_markers": [
+        "stitched logo NOT screen-printed (Champion)",
+        "gray tag (Nike)",
+        "single-stitch",
+        "made in USA"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "Champion reverse weave",
+          "low": 40,
+          "high": 180
+        },
+        {
+          "item": "Nike gray tag",
+          "low": 80,
+          "high": 400
+        },
+        {
+          "item": "Starter satin jackets",
+          "low": 60,
+          "high": 300
+        },
+        {
+          "item": "Salem",
+          "low": 50,
+          "high": 250
+        }
+      ],
+      "target_buy_usd": {
+        "low": 5,
+        "high": 25
+      },
       "platform_primary": "eBay",
       "platform_secondary": null,
       "comp_query_template": "champion reverse weave {team_or_college} vintage",
@@ -641,12 +1515,41 @@
       "brand": "Sneakers (Air Jordan/Yeezy/Nike SB/New Balance)",
       "category": "sneakers",
       "tier": 3,
-      "models": ["Air Jordan 1-39 retros", "Yeezy 350", "Yeezy 500", "Yeezy 700", "Yeezy 750", "Nike SB Dunk Low", "Nike Air Max 1", "Nike Air Max 95", "Nike Air Max 97", "New Balance 990", "New Balance 991", "New Balance 992", "New Balance 993", "New Balance 2002R", "New Balance 9060", "New Balance 550"],
-      "era_markers": ["box label matches shoe (style code, size, colorway name)", "original box adds 20-40%", "sock liner cleanliness", "sole yellowing"],
-      "comp_ranges_usd": [
-        {"item": "general", "low": 80, "high": 2000}
+      "models": [
+        "Air Jordan 1-39 retros",
+        "Yeezy 350",
+        "Yeezy 500",
+        "Yeezy 700",
+        "Yeezy 750",
+        "Nike SB Dunk Low",
+        "Nike Air Max 1",
+        "Nike Air Max 95",
+        "Nike Air Max 97",
+        "New Balance 990",
+        "New Balance 991",
+        "New Balance 992",
+        "New Balance 993",
+        "New Balance 2002R",
+        "New Balance 9060",
+        "New Balance 550"
       ],
-      "target_buy_usd": {"low": 20, "high": 200},
+      "era_markers": [
+        "box label matches shoe (style code, size, colorway name)",
+        "original box adds 20-40%",
+        "sock liner cleanliness",
+        "sole yellowing"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "general",
+          "low": 80,
+          "high": 2000
+        }
+      ],
+      "target_buy_usd": {
+        "low": 20,
+        "high": 200
+      },
       "platform_primary": "eBay",
       "platform_secondary": "StockX / GOAT",
       "comp_query_template": "{model} {colorway} {size}",
@@ -658,11 +1561,22 @@
       "category": "y2k",
       "tier": 2,
       "models": [
-        "Ed Hardy rhinestone tee", "Ed Hardy hoodie", "Von Dutch trucker hat",
-        "JNCO jeans", "Juicy Couture velour tracksuit", "True Religion jeans",
-        "Baby Phat jacket", "Apple Bottoms jeans", "Miss Sixty jeans",
-        "Affliction tee", "Christian Audigier", "Phat Farm", "FUBU jersey",
-        "Rocawear", "Sean John velour", "Bebe rhinestone top"
+        "Ed Hardy rhinestone tee",
+        "Ed Hardy hoodie",
+        "Von Dutch trucker hat",
+        "JNCO jeans",
+        "Juicy Couture velour tracksuit",
+        "True Religion jeans",
+        "Baby Phat jacket",
+        "Apple Bottoms jeans",
+        "Miss Sixty jeans",
+        "Affliction tee",
+        "Christian Audigier",
+        "Phat Farm",
+        "FUBU jersey",
+        "Rocawear",
+        "Sean John velour",
+        "Bebe rhinestone top"
       ],
       "era_markers": [
         "2000s-era tags and logos (rhinestones, foil prints, heavy embroidery)",
@@ -672,14 +1586,41 @@
         "'Y2K' as an eBay/Depop search term is the demand signal itself"
       ],
       "comp_ranges_usd": [
-        {"item": "JNCO jeans (wide-leg)", "low": 100, "high": 400},
-        {"item": "Von Dutch trucker hat", "low": 40, "high": 150},
-        {"item": "Juicy Couture velour set", "low": 40, "high": 120},
-        {"item": "Ed Hardy / Affliction tees & hoodies", "low": 25, "high": 90},
-        {"item": "True Religion / Miss Sixty / Apple Bottoms denim", "low": 30, "high": 90},
-        {"item": "Baby Phat / FUBU / Phat Farm / Rocawear", "low": 25, "high": 80}
+        {
+          "item": "JNCO jeans (wide-leg)",
+          "low": 100,
+          "high": 400
+        },
+        {
+          "item": "Von Dutch trucker hat",
+          "low": 40,
+          "high": 150
+        },
+        {
+          "item": "Juicy Couture velour set",
+          "low": 40,
+          "high": 120
+        },
+        {
+          "item": "Ed Hardy / Affliction tees & hoodies",
+          "low": 25,
+          "high": 90
+        },
+        {
+          "item": "True Religion / Miss Sixty / Apple Bottoms denim",
+          "low": 30,
+          "high": 90
+        },
+        {
+          "item": "Baby Phat / FUBU / Phat Farm / Rocawear",
+          "low": 25,
+          "high": 80
+        }
       ],
-      "target_buy_usd": {"low": 3, "high": 25},
+      "target_buy_usd": {
+        "low": 3,
+        "high": 25
+      },
       "platform_primary": "Depop",
       "platform_secondary": "eBay",
       "comp_query_template": "y2k {brand} {item} {size}",
@@ -691,9 +1632,14 @@
       "category": "graphic_tees",
       "tier": 2,
       "models": [
-        "single stitch tee", "tour shirt", "band tee",
-        "movie promo tee", "anime tee", "nascar tee",
-        "harley tee", "big print tee"
+        "single stitch tee",
+        "tour shirt",
+        "band tee",
+        "movie promo tee",
+        "anime tee",
+        "nascar tee",
+        "harley tee",
+        "big print tee"
       ],
       "era_markers": [
         "Single-stitch hem/sleeves = pre-2000 (instant flip signal even unsorted)",
@@ -702,11 +1648,26 @@
         "Front-AND-back graphics on modern reprints; originals often front-only"
       ],
       "comp_ranges_usd": [
-        {"item": "single-stitch vintage (unsorted find)", "low": 30, "high": 300},
-        {"item": "nascar / harley / anime graphic tees", "low": 20, "high": 120},
-        {"item": "modern graphic tees (branded)", "low": 10, "high": 40}
+        {
+          "item": "single-stitch vintage (unsorted find)",
+          "low": 30,
+          "high": 300
+        },
+        {
+          "item": "nascar / harley / anime graphic tees",
+          "low": 20,
+          "high": 120
+        },
+        {
+          "item": "modern graphic tees (branded)",
+          "low": 10,
+          "high": 40
+        }
       ],
-      "target_buy_usd": {"low": 2, "high": 20},
+      "target_buy_usd": {
+        "low": 2,
+        "high": 20
+      },
       "platform_primary": "eBay",
       "platform_secondary": "Depop",
       "comp_query_template": "vintage {graphic} t shirt {size} single stitch",
@@ -718,8 +1679,12 @@
       "category": "plus_size",
       "tier": 2,
       "models": [
-        "Eloquii dress", "City Chic dress", "Universal Standard",
-        "Ashley Stewart", "Lane Bryant", "Cacique bra",
+        "Eloquii dress",
+        "City Chic dress",
+        "Universal Standard",
+        "Ashley Stewart",
+        "Lane Bryant",
+        "Cacique bra",
         "Her Universe fandom apparel"
       ],
       "era_markers": [
@@ -728,12 +1693,31 @@
         "Her Universe = licensed fandom (Disney/Star Wars collabs command a premium)"
       ],
       "comp_ranges_usd": [
-        {"item": "Eloquii / City Chic / Universal Standard dresses", "low": 25, "high": 70},
-        {"item": "Her Universe licensed pieces", "low": 25, "high": 80},
-        {"item": "Lane Bryant / Ashley Stewart", "low": 15, "high": 40},
-        {"item": "Cacique bras & sets (NWT)", "low": 15, "high": 40}
+        {
+          "item": "Eloquii / City Chic / Universal Standard dresses",
+          "low": 25,
+          "high": 70
+        },
+        {
+          "item": "Her Universe licensed pieces",
+          "low": 25,
+          "high": 80
+        },
+        {
+          "item": "Lane Bryant / Ashley Stewart",
+          "low": 15,
+          "high": 40
+        },
+        {
+          "item": "Cacique bras & sets (NWT)",
+          "low": 15,
+          "high": 40
+        }
       ],
-      "target_buy_usd": {"low": 2, "high": 12},
+      "target_buy_usd": {
+        "low": 2,
+        "high": 12
+      },
       "platform_primary": "Poshmark",
       "platform_secondary": "eBay",
       "comp_query_template": "{brand} {item} plus size {size}",
@@ -745,9 +1729,14 @@
       "category": "luxury",
       "tier": 3,
       "models": [
-        "Moncler puffer", "Canada Goose parka", "Stone Island badge knit",
-        "Off-White", "Balenciaga", "Golden Goose sneakers",
-        "Rick Owens", "Amiri jeans"
+        "Moncler puffer",
+        "Canada Goose parka",
+        "Stone Island badge knit",
+        "Off-White",
+        "Balenciaga",
+        "Golden Goose sneakers",
+        "Rick Owens",
+        "Amiri jeans"
       ],
       "era_markers": [
         "Moncler: QR/NFC certilogo tag inside (scannable) — no tag, assume fake",
@@ -757,12 +1746,31 @@
         "All of these are heavily replicated — authenticate before pricing"
       ],
       "comp_ranges_usd": [
-        {"item": "Moncler / Canada Goose outerwear", "low": 200, "high": 900},
-        {"item": "Balenciaga / Off-White / Rick Owens pieces", "low": 100, "high": 600},
-        {"item": "Stone Island knits & jackets", "low": 80, "high": 400},
-        {"item": "Golden Goose sneakers", "low": 80, "high": 300}
+        {
+          "item": "Moncler / Canada Goose outerwear",
+          "low": 200,
+          "high": 900
+        },
+        {
+          "item": "Balenciaga / Off-White / Rick Owens pieces",
+          "low": 100,
+          "high": 600
+        },
+        {
+          "item": "Stone Island knits & jackets",
+          "low": 80,
+          "high": 400
+        },
+        {
+          "item": "Golden Goose sneakers",
+          "low": 80,
+          "high": 300
+        }
       ],
-      "target_buy_usd": {"low": 15, "high": 120},
+      "target_buy_usd": {
+        "low": 15,
+        "high": 120
+      },
       "platform_primary": "eBay",
       "platform_secondary": "Grailed",
       "comp_query_template": "{brand} {item} {size}",
@@ -774,9 +1782,14 @@
       "category": "premium_contemporary",
       "tier": 2,
       "models": [
-        "Ganni dress", "Zimmermann dress", "Johnny Was embroidered",
-        "Farm Rio print dress", "Veronica Beard blazer",
-        "Ulla Johnson", "Sezane", "Staud bag"
+        "Ganni dress",
+        "Zimmermann dress",
+        "Johnny Was embroidered",
+        "Farm Rio print dress",
+        "Veronica Beard blazer",
+        "Ulla Johnson",
+        "Sezane",
+        "Staud bag"
       ],
       "era_markers": [
         "Johnny Was: signature all-over embroidery on rayon/silk",
@@ -785,17 +1798,83 @@
         "Veronica Beard: dickey-compatible blazer buttons"
       ],
       "comp_ranges_usd": [
-        {"item": "Zimmermann dresses", "low": 80, "high": 350},
-        {"item": "Veronica Beard blazers", "low": 60, "high": 200},
-        {"item": "Ganni / Ulla Johnson / Sezane", "low": 40, "high": 150},
-        {"item": "Johnny Was / Farm Rio / Staud", "low": 35, "high": 130}
+        {
+          "item": "Zimmermann dresses",
+          "low": 80,
+          "high": 350
+        },
+        {
+          "item": "Veronica Beard blazers",
+          "low": 60,
+          "high": 200
+        },
+        {
+          "item": "Ganni / Ulla Johnson / Sezane",
+          "low": 40,
+          "high": 150
+        },
+        {
+          "item": "Johnny Was / Farm Rio / Staud",
+          "low": 35,
+          "high": 130
+        }
       ],
-      "target_buy_usd": {"low": 5, "high": 40},
+      "target_buy_usd": {
+        "low": 5,
+        "high": 40
+      },
       "platform_primary": "Poshmark",
       "platform_secondary": "eBay",
       "comp_query_template": "{brand} {item} {size}",
       "ship_class": "poly_mailer",
       "notes": "The 'quiet expensive' brands estate auctions misprice constantly — a Zimmermann dress reads as a generic floral dress to auctioneers."
+    },
+    {
+      "brand": "Niche and luxury fragrances",
+      "category": "fragrance",
+      "tier": 2,
+      "models": [
+        "Creed Aventus",
+        "Tom Ford Private Blend",
+        "Le Labo",
+        "Byredo",
+        "Maison Francis Kurkdjian",
+        "Baccarat Rouge",
+        "Xerjoff",
+        "Parfums de Marly",
+        "Amouage"
+      ],
+      "era_markers": [
+        "Batch code printed on the bottom of the box and bottle",
+        "Fill level is visible through the glass and is priced on",
+        "Discontinued formulations sell far above current retail"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "Niche houses, full or near-full",
+          "low": 90,
+          "high": 400
+        },
+        {
+          "item": "Partial bottles and decants",
+          "low": 25,
+          "high": 90
+        }
+      ],
+      "target_buy_usd": {
+        "low": 5,
+        "high": 20
+      },
+      "platform_primary": "eBay",
+      "platform_secondary": "Mercari",
+      "comp_query_template": "Niche and luxury fragrances {model} sold",
+      "ship_class": "small_box",
+      "notes": "Sells on fill level and batch code rather than condition. Liquids need ground shipping, so check the auction allows it.",
+      "condition_critical": [
+        "Seal intact, or note the fill level precisely",
+        "Verify the batch code matches the box",
+        "Glass must be undamaged; atomiser must spray"
+      ]
     }
   ],
   "skip_list": [

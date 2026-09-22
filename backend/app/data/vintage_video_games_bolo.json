@@ -28,21 +28,31 @@
       "category": "vintage_video_game",
       "tier": 1,
       "models": [
-        "Stadium Events NES", "Stadium Events Nintendo",
-        "Nintendo World Championships", "NWC 1990",
+        "Stadium Events NES",
+        "Stadium Events Nintendo",
+        "Nintendo World Championships",
+        "NWC 1990",
         "Nintendo Campus Challenge",
-        "Cheetahmen II", "Cheetahmen 2",
-        "Bubble Bath Babes", "Hot Slots NES",
-        "Little Samson", "Bonk's Adventure",
-        "Snow Brothers NES", "Power Blade 2 NES",
+        "Cheetahmen II",
+        "Cheetahmen 2",
+        "Bubble Bath Babes",
+        "Hot Slots NES",
+        "Little Samson",
+        "Bonk's Adventure",
+        "Snow Brothers NES",
+        "Power Blade 2 NES",
         "Panic Restaurant",
-        "Dragon Fighter NES", "Bucky O'Hare",
+        "Dragon Fighter NES",
+        "Bucky O'Hare",
         "The Flintstones Surprise at Dinosaur Peak",
         "Mr. Gimmick NES",
         "Earthbound Beginnings",
-        "Mike Tyson's Punch-Out", "Mike Tyson Punch Out NES",
-        "NES sealed", "NES factory sealed",
-        "NES CIB", "NES Complete in Box",
+        "Mike Tyson's Punch-Out",
+        "Mike Tyson Punch Out NES",
+        "NES sealed",
+        "NES factory sealed",
+        "NES CIB",
+        "NES Complete in Box",
         "NES black box",
         "NES test cartridge"
       ],
@@ -54,16 +64,51 @@
         "Cart label condition (no fading, peeling, sticker residue)"
       ],
       "comp_ranges_usd": [
-        {"item": "Stadium Events sealed WATA-graded", "low": 30000, "high": 100000},
-        {"item": "Stadium Events CIB authenticated", "low": 8000, "high": 25000},
-        {"item": "Stadium Events loose cartridge", "low": 2000, "high": 6000},
-        {"item": "Nintendo World Championships 1990 gray", "low": 20000, "high": 80000},
-        {"item": "Cheetahmen II loose cartridge", "low": 800, "high": 2500},
-        {"item": "Little Samson CIB", "low": 1500, "high": 5000},
-        {"item": "Mike Tyson's Punch-Out CIB", "low": 200, "high": 600},
-        {"item": "Black-box launch titles CIB", "low": 200, "high": 800}
+        {
+          "item": "Stadium Events sealed WATA-graded",
+          "low": 30000,
+          "high": 100000
+        },
+        {
+          "item": "Stadium Events CIB authenticated",
+          "low": 8000,
+          "high": 25000
+        },
+        {
+          "item": "Stadium Events loose cartridge",
+          "low": 2000,
+          "high": 6000
+        },
+        {
+          "item": "Nintendo World Championships 1990 gray",
+          "low": 20000,
+          "high": 80000
+        },
+        {
+          "item": "Cheetahmen II loose cartridge",
+          "low": 800,
+          "high": 2500
+        },
+        {
+          "item": "Little Samson CIB",
+          "low": 1500,
+          "high": 5000
+        },
+        {
+          "item": "Mike Tyson's Punch-Out CIB",
+          "low": 200,
+          "high": 600
+        },
+        {
+          "item": "Black-box launch titles CIB",
+          "low": 200,
+          "high": 800
+        }
       ],
-      "target_buy_usd": {"low": 30, "high": 500},
+      "target_buy_usd": {
+        "low": 30,
+        "high": 500
+      },
       "platform_primary": "eBay",
       "platform_secondary": "Heritage Auctions",
       "comp_query_template": "{game} NES {condition}",
@@ -75,17 +120,24 @@
       "category": "vintage_video_game",
       "tier": 1,
       "models": [
-        "Earthbound SNES", "Earthbound Super Nintendo",
-        "Earthbound CIB", "Earthbound complete",
+        "Earthbound SNES",
+        "Earthbound Super Nintendo",
+        "Earthbound CIB",
+        "Earthbound complete",
         "Earthbound big box",
         "Earthbound strategy guide",
-        "Chrono Trigger SNES", "Chrono Trigger CIB",
-        "Final Fantasy III SNES", "Final Fantasy 3 SNES",
+        "Chrono Trigger SNES",
+        "Chrono Trigger CIB",
+        "Final Fantasy III SNES",
+        "Final Fantasy 3 SNES",
         "Final Fantasy III big box",
-        "Mega Man X SNES CIB", "Mega Man X3 SNES",
+        "Mega Man X SNES CIB",
+        "Mega Man X3 SNES",
         "Mega Man 7 SNES CIB",
-        "Hagane SNES", "Hagane Super Nintendo",
-        "Wild Guns SNES", "Wild Guns CIB",
+        "Hagane SNES",
+        "Hagane Super Nintendo",
+        "Wild Guns SNES",
+        "Wild Guns CIB",
         "Pocky and Rocky SNES",
         "Demon's Crest SNES",
         "Harvest Moon SNES",
@@ -95,8 +147,10 @@
         "Super Bomberman 5",
         "Rendering Ranger R2",
         "DraculaX Rondo of Blood",
-        "SNES sealed", "Super Nintendo sealed",
-        "SNES CIB", "SNES Complete in Box"
+        "SNES sealed",
+        "Super Nintendo sealed",
+        "SNES CIB",
+        "SNES Complete in Box"
       ],
       "era_markers": [
         "Big box construction (most SNES games shipped in cardboard big-box, not plastic case)",
@@ -105,17 +159,56 @@
         "NTSC-U (US) vs PAL (Europe) vs NTSC-J (Japan) regional pricing"
       ],
       "comp_ranges_usd": [
-        {"item": "Earthbound CIB with strategy guide complete", "low": 600, "high": 2500},
-        {"item": "Earthbound loose cartridge", "low": 200, "high": 500},
-        {"item": "Chrono Trigger CIB original", "low": 400, "high": 1200},
-        {"item": "Chrono Trigger loose cartridge", "low": 130, "high": 280},
-        {"item": "Hagane / Wild Guns / Pocky CIB", "low": 400, "high": 1500},
-        {"item": "Donkey Kong Country Competition", "low": 5000, "high": 15000},
-        {"item": "Super Mario RPG CIB", "low": 200, "high": 500},
-        {"item": "Final Fantasy III CIB", "low": 250, "high": 700},
-        {"item": "Mega Man X CIB (low edition)", "low": 200, "high": 600}
+        {
+          "item": "Earthbound CIB with strategy guide complete",
+          "low": 600,
+          "high": 2500
+        },
+        {
+          "item": "Earthbound loose cartridge",
+          "low": 200,
+          "high": 500
+        },
+        {
+          "item": "Chrono Trigger CIB original",
+          "low": 400,
+          "high": 1200
+        },
+        {
+          "item": "Chrono Trigger loose cartridge",
+          "low": 130,
+          "high": 280
+        },
+        {
+          "item": "Hagane / Wild Guns / Pocky CIB",
+          "low": 400,
+          "high": 1500
+        },
+        {
+          "item": "Donkey Kong Country Competition",
+          "low": 5000,
+          "high": 15000
+        },
+        {
+          "item": "Super Mario RPG CIB",
+          "low": 200,
+          "high": 500
+        },
+        {
+          "item": "Final Fantasy III CIB",
+          "low": 250,
+          "high": 700
+        },
+        {
+          "item": "Mega Man X CIB (low edition)",
+          "low": 200,
+          "high": 600
+        }
       ],
-      "target_buy_usd": {"low": 30, "high": 400},
+      "target_buy_usd": {
+        "low": 30,
+        "high": 400
+      },
       "platform_primary": "eBay",
       "platform_secondary": "Heritage Auctions",
       "comp_query_template": "{game} SNES CIB",
@@ -129,13 +222,18 @@
       "models": [
         "Conker's Bad Fur Day N64",
         "Conker's Bad Fur Day CIB",
-        "Pokemon Snap N64", "Pokemon Snap CIB",
+        "Pokemon Snap N64",
+        "Pokemon Snap CIB",
         "Pokemon Stadium 2 N64",
         "Pokemon Puzzle League N64",
-        "Goldeneye 007 N64", "Goldeneye 007 CIB",
-        "Banjo-Tooie N64", "Banjo-Kazooie N64",
-        "Mario Party N64 CIB", "Mario Party 1 N64",
-        "Donkey Kong 64", "Donkey Kong 64 CIB",
+        "Goldeneye 007 N64",
+        "Goldeneye 007 CIB",
+        "Banjo-Tooie N64",
+        "Banjo-Kazooie N64",
+        "Mario Party N64 CIB",
+        "Mario Party 1 N64",
+        "Donkey Kong 64",
+        "Donkey Kong 64 CIB",
         "Paper Mario N64 CIB",
         "Ogre Battle 64",
         "Sin and Punishment N64",
@@ -150,8 +248,10 @@
         "Zelda Ocarina Time Master Quest",
         "Majora's Mask Collector's Edition",
         "Majora's Mask Hologram",
-        "N64 sealed", "Nintendo 64 sealed",
-        "N64 CIB", "N64 Complete in Box"
+        "N64 sealed",
+        "Nintendo 64 sealed",
+        "N64 CIB",
+        "N64 Complete in Box"
       ],
       "era_markers": [
         "Cartridge label colors: gray (standard), gold (Zelda OoT/Majora special), translucent",
@@ -160,17 +260,56 @@
         "Insert / poster / map included = +30%"
       ],
       "comp_ranges_usd": [
-        {"item": "Conker's Bad Fur Day CIB", "low": 200, "high": 500},
-        {"item": "ClayFighter 63 1/3 Sculptor's Cut", "low": 800, "high": 2500},
-        {"item": "Pokemon Snap CIB original", "low": 80, "high": 180},
-        {"item": "Goldeneye 007 CIB original", "low": 130, "high": 280},
-        {"item": "Banjo-Tooie CIB", "low": 130, "high": 280},
-        {"item": "Donkey Kong 64 CIB w/ Expansion Pak", "low": 100, "high": 250},
-        {"item": "Ocarina of Time gold cart CIB", "low": 200, "high": 500},
-        {"item": "Sin and Punishment Japan import", "low": 200, "high": 600},
-        {"item": "Ogre Battle 64 CIB", "low": 280, "high": 700}
+        {
+          "item": "Conker's Bad Fur Day CIB",
+          "low": 200,
+          "high": 500
+        },
+        {
+          "item": "ClayFighter 63 1/3 Sculptor's Cut",
+          "low": 800,
+          "high": 2500
+        },
+        {
+          "item": "Pokemon Snap CIB original",
+          "low": 80,
+          "high": 180
+        },
+        {
+          "item": "Goldeneye 007 CIB original",
+          "low": 130,
+          "high": 280
+        },
+        {
+          "item": "Banjo-Tooie CIB",
+          "low": 130,
+          "high": 280
+        },
+        {
+          "item": "Donkey Kong 64 CIB w/ Expansion Pak",
+          "low": 100,
+          "high": 250
+        },
+        {
+          "item": "Ocarina of Time gold cart CIB",
+          "low": 200,
+          "high": 500
+        },
+        {
+          "item": "Sin and Punishment Japan import",
+          "low": 200,
+          "high": 600
+        },
+        {
+          "item": "Ogre Battle 64 CIB",
+          "low": 280,
+          "high": 700
+        }
       ],
-      "target_buy_usd": {"low": 15, "high": 200},
+      "target_buy_usd": {
+        "low": 15,
+        "high": 200
+      },
       "platform_primary": "eBay",
       "platform_secondary": "Heritage Auctions",
       "comp_query_template": "{game} N64 CIB",
@@ -182,15 +321,21 @@
       "category": "vintage_video_game",
       "tier": 1,
       "models": [
-        "Pokemon Red Game Boy", "Pokemon Blue Game Boy",
+        "Pokemon Red Game Boy",
+        "Pokemon Blue Game Boy",
         "Pokemon Yellow Game Boy",
-        "Pokemon Gold Game Boy", "Pokemon Silver Game Boy",
+        "Pokemon Gold Game Boy",
+        "Pokemon Silver Game Boy",
         "Pokemon Crystal Game Boy",
-        "Pokemon FireRed", "Pokemon LeafGreen",
-        "Pokemon Emerald", "Pokemon Sapphire",
+        "Pokemon FireRed",
+        "Pokemon LeafGreen",
+        "Pokemon Emerald",
+        "Pokemon Sapphire",
         "Pokemon Ruby",
-        "Pokemon Red CIB", "Pokemon Blue CIB",
-        "Pokemon Yellow CIB", "Pokemon Crystal CIB",
+        "Pokemon Red CIB",
+        "Pokemon Blue CIB",
+        "Pokemon Yellow CIB",
+        "Pokemon Crystal CIB",
         "Pokemon Box Ruby Sapphire",
         "Game Boy Camera",
         "Mother 3 Game Boy Advance",
@@ -206,8 +351,10 @@
         "Metroid Zero Mission GBA",
         "Mario Kart Super Circuit GBA",
         "Boktai GBA",
-        "Game Boy sealed", "Game Boy CIB",
-        "GBA sealed", "GBA CIB"
+        "Game Boy sealed",
+        "Game Boy CIB",
+        "GBA sealed",
+        "GBA CIB"
       ],
       "era_markers": [
         "Cartridge translucent vs solid colors identify subline (Pokemon Crystal = clear, Yellow = yellow)",
@@ -216,15 +363,46 @@
         "Save battery condition critical on RPGs (Pokemon, Mother, Castlevania)"
       ],
       "comp_ranges_usd": [
-        {"item": "Pokemon Red/Blue/Yellow CIB sealed-original", "low": 600, "high": 2500},
-        {"item": "Pokemon Crystal CIB original", "low": 380, "high": 900},
-        {"item": "Pokemon Red/Blue cart loose authenticated", "low": 50, "high": 130},
-        {"item": "Mother 3 GBA Japan CIB", "low": 130, "high": 300},
-        {"item": "Boktai GBA solar sensor cart CIB", "low": 100, "high": 250},
-        {"item": "Drill Dozer GBA CIB rare", "low": 150, "high": 350},
-        {"item": "Castlevania Circle of the Moon CIB", "low": 80, "high": 200}
+        {
+          "item": "Pokemon Red/Blue/Yellow CIB sealed-original",
+          "low": 600,
+          "high": 2500
+        },
+        {
+          "item": "Pokemon Crystal CIB original",
+          "low": 380,
+          "high": 900
+        },
+        {
+          "item": "Pokemon Red/Blue cart loose authenticated",
+          "low": 50,
+          "high": 130
+        },
+        {
+          "item": "Mother 3 GBA Japan CIB",
+          "low": 130,
+          "high": 300
+        },
+        {
+          "item": "Boktai GBA solar sensor cart CIB",
+          "low": 100,
+          "high": 250
+        },
+        {
+          "item": "Drill Dozer GBA CIB rare",
+          "low": 150,
+          "high": 350
+        },
+        {
+          "item": "Castlevania Circle of the Moon CIB",
+          "low": 80,
+          "high": 200
+        }
       ],
-      "target_buy_usd": {"low": 10, "high": 200},
+      "target_buy_usd": {
+        "low": 10,
+        "high": 200
+      },
       "platform_primary": "eBay",
       "platform_secondary": "Heritage Auctions",
       "comp_query_template": "{game} {platform} CIB",
@@ -238,14 +416,17 @@
       "models": [
         "Skies of Arcadia Legends GameCube",
         "Skies of Arcadia GameCube CIB",
-        "Cubivore GameCube", "Cubivore CIB",
+        "Cubivore GameCube",
+        "Cubivore CIB",
         "Gotcha Force GameCube",
         "Pac-Man Vs GameCube",
         "Tales of Symphonia GameCube CIB",
         "Fire Emblem Path of Radiance",
         "Fire Emblem Path of Radiance CIB",
-        "Metroid Prime Trilogy", "Metroid Prime Trilogy Wii",
-        "Xenoblade Chronicles Wii", "Xenoblade Chronicles Wii CIB",
+        "Metroid Prime Trilogy",
+        "Metroid Prime Trilogy Wii",
+        "Xenoblade Chronicles Wii",
+        "Xenoblade Chronicles Wii CIB",
         "The Last Story Wii",
         "Pandora's Tower Wii",
         "Sin and Punishment Star Successor Wii",
@@ -255,8 +436,10 @@
         "Eternal Darkness GameCube CIB",
         "F-Zero GX GameCube CIB",
         "Animal Crossing GameCube CIB",
-        "GameCube sealed", "GameCube CIB",
-        "Wii sealed", "Wii CIB",
+        "GameCube sealed",
+        "GameCube CIB",
+        "Wii sealed",
+        "Wii CIB",
         "Wii Limited Edition"
       ],
       "era_markers": [
@@ -266,16 +449,51 @@
         "Limited-edition packaging (Metroid Prime Trilogy steelbook) +50%"
       ],
       "comp_ranges_usd": [
-        {"item": "Cubivore GameCube CIB", "low": 400, "high": 900},
-        {"item": "Skies of Arcadia Legends CIB", "low": 130, "high": 380},
-        {"item": "Gotcha Force CIB", "low": 200, "high": 500},
-        {"item": "Pac-Man Vs CIB original packaging", "low": 100, "high": 250},
-        {"item": "Metroid Prime Trilogy steelbook sealed", "low": 200, "high": 450},
-        {"item": "Xenoblade Chronicles original Wii CIB", "low": 130, "high": 300},
-        {"item": "Fire Emblem Path of Radiance CIB", "low": 130, "high": 350},
-        {"item": "Tales of Symphonia GameCube CIB", "low": 80, "high": 180}
+        {
+          "item": "Cubivore GameCube CIB",
+          "low": 400,
+          "high": 900
+        },
+        {
+          "item": "Skies of Arcadia Legends CIB",
+          "low": 130,
+          "high": 380
+        },
+        {
+          "item": "Gotcha Force CIB",
+          "low": 200,
+          "high": 500
+        },
+        {
+          "item": "Pac-Man Vs CIB original packaging",
+          "low": 100,
+          "high": 250
+        },
+        {
+          "item": "Metroid Prime Trilogy steelbook sealed",
+          "low": 200,
+          "high": 450
+        },
+        {
+          "item": "Xenoblade Chronicles original Wii CIB",
+          "low": 130,
+          "high": 300
+        },
+        {
+          "item": "Fire Emblem Path of Radiance CIB",
+          "low": 130,
+          "high": 350
+        },
+        {
+          "item": "Tales of Symphonia GameCube CIB",
+          "low": 80,
+          "high": 180
+        }
       ],
-      "target_buy_usd": {"low": 10, "high": 130},
+      "target_buy_usd": {
+        "low": 10,
+        "high": 130
+      },
       "platform_primary": "eBay",
       "platform_secondary": "Heritage Auctions",
       "comp_query_template": "{game} {platform} CIB",
@@ -287,13 +505,15 @@
       "category": "vintage_video_game",
       "tier": 2,
       "models": [
-        "Suikoden II PS1", "Suikoden 2 PS1",
+        "Suikoden II PS1",
+        "Suikoden 2 PS1",
         "Suikoden II CIB",
         "Misadventures of Tron Bonne",
         "Mega Man Legends 2",
         "Klonoa Door to Phantomile",
         "Klonoa Empire of Dreams",
-        "LSD Dream Emulator", "LSD Dream Emulator PS1",
+        "LSD Dream Emulator",
+        "LSD Dream Emulator PS1",
         "Tail Concerto",
         "Persona 2 Eternal Punishment",
         "Persona 2 Innocent Sin",
@@ -304,17 +524,21 @@
         "Chrono Cross PS1",
         "Vagrant Story PS1",
         "Xenogears PS1",
-        "Parasite Eve PS1", "Parasite Eve 2",
+        "Parasite Eve PS1",
+        "Parasite Eve 2",
         "Resident Evil Code Veronica",
-        "Rule of Rose PS2", "Rule of Rose CIB",
-        "Persona 4 PS2", "Persona 3 FES PS2",
+        "Rule of Rose PS2",
+        "Rule of Rose CIB",
+        "Persona 4 PS2",
+        "Persona 3 FES PS2",
         "Persona 3 Portable",
         "Haunting Ground PS2",
         "Kuon PS2",
         "Forbidden Siren PS2",
         "Dragon Quest VIII Special Edition",
         "Atelier Iris 2",
-        "Suikoden III PS2", "Suikoden V PS2",
+        "Suikoden III PS2",
+        "Suikoden V PS2",
         "Wild Arms 2 PS1",
         "Magic Knight Rayearth Saturn",
         "Panzer Dragoon Saga Saturn",
@@ -323,8 +547,10 @@
         "Radiant Silvergun Saturn",
         "Castlevania Symphony of the Night PS1",
         "Symphony of the Night Greatest Hits",
-        "PS1 Black Label", "PS2 sealed",
-        "PS2 CIB", "PS1 CIB"
+        "PS1 Black Label",
+        "PS2 sealed",
+        "PS2 CIB",
+        "PS1 CIB"
       ],
       "era_markers": [
         "PS1: 'Black Label' = original release; 'Greatest Hits' = reprint at lower tier",
@@ -334,20 +560,71 @@
         "Disc condition (no scratches, no peeling label) — disc rot known issue on PS1"
       ],
       "comp_ranges_usd": [
-        {"item": "Suikoden II PS1 Black Label CIB", "low": 600, "high": 1800},
-        {"item": "Misadventures of Tron Bonne CIB", "low": 280, "high": 700},
-        {"item": "LSD Dream Emulator Japan CIB", "low": 600, "high": 1500},
-        {"item": "Rule of Rose PS2 CIB", "low": 400, "high": 1500},
-        {"item": "Haunting Ground PS2 CIB", "low": 200, "high": 500},
-        {"item": "Persona 2 Eternal Punishment CIB", "low": 200, "high": 600},
-        {"item": "Persona 4 PS2 CIB original", "low": 130, "high": 300},
-        {"item": "FF7 Black Label PS1 CIB", "low": 100, "high": 250},
-        {"item": "Vagrant Story Black Label CIB", "low": 130, "high": 380},
-        {"item": "Klonoa Door to Phantomile CIB", "low": 200, "high": 500},
-        {"item": "Panzer Dragoon Saga Saturn CIB", "low": 1500, "high": 4500},
-        {"item": "Snatcher Sega CD CIB", "low": 1500, "high": 4000}
+        {
+          "item": "Suikoden II PS1 Black Label CIB",
+          "low": 600,
+          "high": 1800
+        },
+        {
+          "item": "Misadventures of Tron Bonne CIB",
+          "low": 280,
+          "high": 700
+        },
+        {
+          "item": "LSD Dream Emulator Japan CIB",
+          "low": 600,
+          "high": 1500
+        },
+        {
+          "item": "Rule of Rose PS2 CIB",
+          "low": 400,
+          "high": 1500
+        },
+        {
+          "item": "Haunting Ground PS2 CIB",
+          "low": 200,
+          "high": 500
+        },
+        {
+          "item": "Persona 2 Eternal Punishment CIB",
+          "low": 200,
+          "high": 600
+        },
+        {
+          "item": "Persona 4 PS2 CIB original",
+          "low": 130,
+          "high": 300
+        },
+        {
+          "item": "FF7 Black Label PS1 CIB",
+          "low": 100,
+          "high": 250
+        },
+        {
+          "item": "Vagrant Story Black Label CIB",
+          "low": 130,
+          "high": 380
+        },
+        {
+          "item": "Klonoa Door to Phantomile CIB",
+          "low": 200,
+          "high": 500
+        },
+        {
+          "item": "Panzer Dragoon Saga Saturn CIB",
+          "low": 1500,
+          "high": 4500
+        },
+        {
+          "item": "Snatcher Sega CD CIB",
+          "low": 1500,
+          "high": 4000
+        }
       ],
-      "target_buy_usd": {"low": 10, "high": 250},
+      "target_buy_usd": {
+        "low": 10,
+        "high": 250
+      },
       "platform_primary": "eBay",
       "platform_secondary": "Heritage Auctions",
       "comp_query_template": "{game} {platform} {label}",
@@ -359,25 +636,40 @@
       "category": "vintage_video_game",
       "tier": 2,
       "models": [
-        "NES sealed console", "Nintendo Entertainment System sealed",
+        "NES sealed console",
+        "Nintendo Entertainment System sealed",
         "Nintendo World Class Service Set",
-        "SNES sealed console", "Super Nintendo sealed",
-        "N64 sealed console", "Nintendo 64 sealed",
-        "GameCube sealed console", "GameCube limited edition",
-        "Pokemon Pikachu N64", "Jungle Green N64",
+        "SNES sealed console",
+        "Super Nintendo sealed",
+        "N64 sealed console",
+        "Nintendo 64 sealed",
+        "GameCube sealed console",
+        "GameCube limited edition",
+        "Pokemon Pikachu N64",
+        "Jungle Green N64",
         "Wii sealed console",
-        "Game Boy Color sealed", "Game Boy Advance SP sealed",
+        "Game Boy Color sealed",
+        "Game Boy Advance SP sealed",
         "Game Boy Pocket sealed",
-        "Atari 2600 sealed console", "Atari 2600 Heavy Sixer",
-        "Atari 5200 sealed", "Atari Jaguar sealed",
-        "Sega Genesis sealed console", "Sega Saturn sealed",
-        "Sega Dreamcast sealed", "Dreamcast Limited Edition",
+        "Atari 2600 sealed console",
+        "Atari 2600 Heavy Sixer",
+        "Atari 5200 sealed",
+        "Atari Jaguar sealed",
+        "Sega Genesis sealed console",
+        "Sega Saturn sealed",
+        "Sega Dreamcast sealed",
+        "Dreamcast Limited Edition",
         "Neo Geo AES console",
-        "TurboGrafx-16 sealed", "PC Engine sealed",
-        "PlayStation 1 sealed", "PSone slim sealed",
-        "PS2 Limited Edition", "PS2 Slim sealed",
-        "Pokemon Center Wii", "Animal Crossing Wii limited",
-        "Pikachu Game Boy", "Limited Edition console"
+        "TurboGrafx-16 sealed",
+        "PC Engine sealed",
+        "PlayStation 1 sealed",
+        "PSone slim sealed",
+        "PS2 Limited Edition",
+        "PS2 Slim sealed",
+        "Pokemon Center Wii",
+        "Animal Crossing Wii limited",
+        "Pikachu Game Boy",
+        "Limited Edition console"
       ],
       "era_markers": [
         "Sealed factory wrap intact = collector apex",
@@ -387,22 +679,109 @@
         "Original packaging + foam tray + manuals + AC adapter + AV cable = CIB"
       ],
       "comp_ranges_usd": [
-        {"item": "Atari 2600 Heavy Sixer sealed", "low": 1500, "high": 4000},
-        {"item": "Neo Geo AES console CIB working", "low": 700, "high": 2000},
-        {"item": "NES sealed launch console", "low": 1500, "high": 6000},
-        {"item": "N64 Pikachu console sealed Japan", "low": 600, "high": 1500},
-        {"item": "GameCube Limited Edition (Spice Orange / Crystal White) CIB", "low": 280, "high": 600},
-        {"item": "Sega Dreamcast Limited Edition sealed", "low": 400, "high": 1000},
-        {"item": "Wii sealed first-batch 2006", "low": 600, "high": 1500},
-        {"item": "Game Boy Pocket Pikachu sealed", "low": 400, "high": 900}
+        {
+          "item": "Atari 2600 Heavy Sixer sealed",
+          "low": 1500,
+          "high": 4000
+        },
+        {
+          "item": "Neo Geo AES console CIB working",
+          "low": 700,
+          "high": 2000
+        },
+        {
+          "item": "NES sealed launch console",
+          "low": 1500,
+          "high": 6000
+        },
+        {
+          "item": "N64 Pikachu console sealed Japan",
+          "low": 600,
+          "high": 1500
+        },
+        {
+          "item": "GameCube Limited Edition (Spice Orange / Crystal White) CIB",
+          "low": 280,
+          "high": 600
+        },
+        {
+          "item": "Sega Dreamcast Limited Edition sealed",
+          "low": 400,
+          "high": 1000
+        },
+        {
+          "item": "Wii sealed first-batch 2006",
+          "low": 600,
+          "high": 1500
+        },
+        {
+          "item": "Game Boy Pocket Pikachu sealed",
+          "low": 400,
+          "high": 900
+        }
       ],
-      "target_buy_usd": {"low": 30, "high": 300},
+      "target_buy_usd": {
+        "low": 30,
+        "high": 300
+      },
       "platform_primary": "eBay",
       "platform_secondary": "Heritage Auctions",
       "comp_query_template": "{platform} sealed console",
       "ship_class": "medium_box",
       "notes": "Sealed-in-box launch consoles command extreme premiums (NES 1985 sealed has cleared $100K+ graded). Neo Geo AES is the collector cult — SNK 1990, Japan-import-tier console at $700+ working. Limited-edition console colors (N64 Pikachu, Spice Orange GameCube, Animal Crossing Wii, Hyrule Edition Wii) are the volume-premium tier. Note: sealed-launch consoles need MEDIUM box ship — NOT poly mailer.",
       "condition_critical": true
+    },
+    {
+      "brand": "Modern gaming consoles",
+      "category": "game_consoles",
+      "tier": 2,
+      "models": [
+        "PS5",
+        "PlayStation 5",
+        "PS5 Pro",
+        "Xbox Series X",
+        "Xbox Series S",
+        "Nintendo Switch OLED",
+        "Switch Lite",
+        "PS4 Pro",
+        "Steam Deck"
+      ],
+      "era_markers": [
+        "Disc versus digital edition changes the price materially",
+        "Controllers and original box lift it further",
+        "Model number on the underside label"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "PS5 / Xbox Series X (disc)",
+          "low": 280,
+          "high": 479
+        },
+        {
+          "item": "Switch OLED / Steam Deck",
+          "low": 180,
+          "high": 330
+        },
+        {
+          "item": "PS4 Pro / Xbox Series S",
+          "low": 120,
+          "high": 220
+        }
+      ],
+      "target_buy_usd": {
+        "low": 10,
+        "high": 180
+      },
+      "platform_primary": "eBay",
+      "platform_secondary": "Mercari",
+      "comp_query_template": "Modern gaming consoles {model} sold",
+      "ship_class": "medium_box",
+      "notes": "This file was retro-only. Current-gen consoles turn up constantly in estate and storage-unit lots and are the most liquid thing in the whole catalogue.",
+      "condition_critical": [
+        "Test the disc drive; it is the common failure",
+        "Check for account or activation locks",
+        "Confirm the controller charges and both sticks centre"
+      ]
     }
   ],
   "platform_notes": {

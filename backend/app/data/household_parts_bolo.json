@@ -29,14 +29,51 @@
       "brand": "Le Creuset",
       "category": "cookware_parts",
       "tier": 1,
-      "models": ["lid knob", "phenolic knob", "stainless knob", "replacement gasket", "trivet", "Dutch oven lid", "5.5 qt", "7.25 qt", "9 qt", "Marseille blue", "Cerise", "Flame", "Caribbean", "Indigo", "Sea Salt"],
-      "era_markers": ["Le Creuset stamp on lid underside", "France stamp", "Made in France", "model number on lid lip", "matte black phenolic = pre-2010, stainless knob = post-2010"],
-      "comp_ranges_usd": [
-        {"item": "lid knob (phenolic or stainless)", "low": 15, "high": 35},
-        {"item": "Dutch oven lid (discontinued color)", "low": 50, "high": 180},
-        {"item": "small accessories", "low": 20, "high": 60}
+      "models": [
+        "lid knob",
+        "phenolic knob",
+        "stainless knob",
+        "replacement gasket",
+        "trivet",
+        "Dutch oven lid",
+        "5.5 qt",
+        "7.25 qt",
+        "9 qt",
+        "Marseille blue",
+        "Cerise",
+        "Flame",
+        "Caribbean",
+        "Indigo",
+        "Sea Salt"
       ],
-      "target_buy_usd": {"low": 3, "high": 15},
+      "era_markers": [
+        "Le Creuset stamp on lid underside",
+        "France stamp",
+        "Made in France",
+        "model number on lid lip",
+        "matte black phenolic = pre-2010, stainless knob = post-2010"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "lid knob (phenolic or stainless)",
+          "low": 15,
+          "high": 35
+        },
+        {
+          "item": "Dutch oven lid (discontinued color)",
+          "low": 50,
+          "high": 180
+        },
+        {
+          "item": "small accessories",
+          "low": 20,
+          "high": 60
+        }
+      ],
+      "target_buy_usd": {
+        "low": 3,
+        "high": 15
+      },
       "platform_primary": "eBay",
       "platform_secondary": "Poshmark",
       "comp_query_template": "le creuset {part} {color}",
@@ -49,34 +86,79 @@
       "category": "cookware_parts",
       "tier": 1,
       "models": [
-        "Cinderella bowl", "Cinderella set", "primary colors set",
-        "Butterprint", "Amish Butterprint", "Pumpkin Butterprint",
-        "Orange Butterprint", "Lady on the Left",
-        "Gooseberry", "Robin Egg Blue Gooseberry",
-        "Snowflake", "Snowflake Garland",
-        "Spring Blossom", "Friendship",
-        "Old Orchard", "Daisy", "Pink Daisy", "Crazy Daisy",
-        "Sandalwood", "Sandalwood Ivy",
-        "Sage Scroll", "Penn Dutch", "Pink Stems",
-        "Verde", "Sage", "Avocado",
-        "opal lid", "lid only", "refrigerator dish",
-        "474", "475", "024", "043", "443", "444",
-        "503", "543", "575", "775", "035", "795",
-        "441-444", "401-404",
-        "Atomic Starburst", "Atomic Eyes",
-        "Atomic Casserole", "Sputnik",
-        "UFO", "924CM", "575-B",
-        "Compass", "Zodiac", "Zodiac Plate",
-        "Black Star", "Gypsy Caravan",
-        "Nemacolin", "Nemacolin Country Club",
-        "Dianthus", "Blue Dianthus",
-        "Duchess", "Pink and Gold Duchess",
-        "Stanley Promotional", "Pink Stanley",
-        "Fish Dish", "Holy Grail Fish",
-        "Turquoise Daisy", "JAJ Pyrex",
-        "JAJ Gooseberry", "RIGOPAL",
-        "Horno Argentina", "Argentina Pyrex",
-        "Atomic Mid Century", "MCM Pyrex"
+        "Cinderella bowl",
+        "Cinderella set",
+        "primary colors set",
+        "Butterprint",
+        "Amish Butterprint",
+        "Pumpkin Butterprint",
+        "Orange Butterprint",
+        "Lady on the Left",
+        "Gooseberry",
+        "Robin Egg Blue Gooseberry",
+        "Snowflake",
+        "Snowflake Garland",
+        "Spring Blossom",
+        "Friendship",
+        "Old Orchard",
+        "Daisy",
+        "Pink Daisy",
+        "Crazy Daisy",
+        "Sandalwood",
+        "Sandalwood Ivy",
+        "Sage Scroll",
+        "Penn Dutch",
+        "Pink Stems",
+        "Verde",
+        "Sage",
+        "Avocado",
+        "opal lid",
+        "lid only",
+        "refrigerator dish",
+        "474",
+        "475",
+        "024",
+        "043",
+        "443",
+        "444",
+        "503",
+        "543",
+        "575",
+        "775",
+        "035",
+        "795",
+        "441-444",
+        "401-404",
+        "Atomic Starburst",
+        "Atomic Eyes",
+        "Atomic Casserole",
+        "Sputnik",
+        "UFO",
+        "924CM",
+        "575-B",
+        "Compass",
+        "Zodiac",
+        "Zodiac Plate",
+        "Black Star",
+        "Gypsy Caravan",
+        "Nemacolin",
+        "Nemacolin Country Club",
+        "Dianthus",
+        "Blue Dianthus",
+        "Duchess",
+        "Pink and Gold Duchess",
+        "Stanley Promotional",
+        "Pink Stanley",
+        "Fish Dish",
+        "Holy Grail Fish",
+        "Turquoise Daisy",
+        "JAJ Pyrex",
+        "JAJ Gooseberry",
+        "RIGOPAL",
+        "Horno Argentina",
+        "Argentina Pyrex",
+        "Atomic Mid Century",
+        "MCM Pyrex"
       ],
       "era_markers": [
         "Pyrex stamp with 'made in USA' = 1960s-90s premium era",
@@ -89,49 +171,161 @@
         "RIGOPAL / Horno Argentina = South American licensed manufacture, cult"
       ],
       "comp_ranges_usd": [
-        {"item": "Black Star casserole (1qt holy grail)", "low": 4000, "high": 6000},
-        {"item": "Nemacolin Country Club Zodiac 1963 casserole", "low": 2500, "high": 4000},
-        {"item": "Gypsy Caravan 4qt bowl", "low": 2500, "high": 4000},
-        {"item": "Dianthus Blue 443 Cinderella bowl", "low": 2000, "high": 3000},
-        {"item": "Duchess Pink Gold Stanley Promotional 1959", "low": 1800, "high": 3000},
-        {"item": "Compass C1959 turquoise 4qt casserole", "low": 1500, "high": 2500},
-        {"item": "Sandalwood Ivy covered butter dish", "low": 1200, "high": 2200},
-        {"item": "Snowflake Garland 024 with knobbed lid", "low": 1200, "high": 2000},
-        {"item": "Atomic Starburst 575-B / UFO Sputnik 924CM 1956", "low": 900, "high": 1800},
-        {"item": "Sage Scroll oblong 035 + lid + trivet", "low": 1100, "high": 1700},
-        {"item": "Zodiac Plate MCM Milk Glass 1960s", "low": 900, "high": 1700},
-        {"item": "Pumpkin/Orange Butterprint Amish set 441-444", "low": 800, "high": 1400},
-        {"item": "Pink Stems 043 1962 Promotional", "low": 700, "high": 1100},
-        {"item": "Atomic Eyes Chip & Dip 1950s set", "low": 700, "high": 1100},
-        {"item": "Fish Dish 1959 turquoise blue holy grail", "low": 800, "high": 1300},
-        {"item": "Pink Daisy complete set + freezer", "low": 700, "high": 1100},
-        {"item": "Lady on the Left Butterprint 444 variant", "low": 800, "high": 1400},
-        {"item": "Sandalwood 503 refrigerator dish 1960s", "low": 700, "high": 1200},
-        {"item": "RIGOPAL Argentina Daisy / Snowflake (cult)", "low": 700, "high": 1300},
-        {"item": "JAJ Robin Egg Blue Gooseberry set", "low": 700, "high": 1300},
-        {"item": "Standard Butterprint / Gooseberry set 1960s", "low": 80, "high": 250},
-        {"item": "Cinderella set primary colors", "low": 60, "high": 250},
-        {"item": "Single Cinderella lid (replacement)", "low": 25, "high": 70},
-        {"item": "Single bowl with original lid", "low": 25, "high": 90}
+        {
+          "item": "Black Star casserole (1qt holy grail)",
+          "low": 4000,
+          "high": 6000
+        },
+        {
+          "item": "Nemacolin Country Club Zodiac 1963 casserole",
+          "low": 2500,
+          "high": 4000
+        },
+        {
+          "item": "Gypsy Caravan 4qt bowl",
+          "low": 2500,
+          "high": 4000
+        },
+        {
+          "item": "Dianthus Blue 443 Cinderella bowl",
+          "low": 2000,
+          "high": 3000
+        },
+        {
+          "item": "Duchess Pink Gold Stanley Promotional 1959",
+          "low": 1800,
+          "high": 3000
+        },
+        {
+          "item": "Compass C1959 turquoise 4qt casserole",
+          "low": 1500,
+          "high": 2500
+        },
+        {
+          "item": "Sandalwood Ivy covered butter dish",
+          "low": 1200,
+          "high": 2200
+        },
+        {
+          "item": "Snowflake Garland 024 with knobbed lid",
+          "low": 1200,
+          "high": 2000
+        },
+        {
+          "item": "Atomic Starburst 575-B / UFO Sputnik 924CM 1956",
+          "low": 900,
+          "high": 1800
+        },
+        {
+          "item": "Sage Scroll oblong 035 + lid + trivet",
+          "low": 1100,
+          "high": 1700
+        },
+        {
+          "item": "Zodiac Plate MCM Milk Glass 1960s",
+          "low": 900,
+          "high": 1700
+        },
+        {
+          "item": "Pumpkin/Orange Butterprint Amish set 441-444",
+          "low": 800,
+          "high": 1400
+        },
+        {
+          "item": "Pink Stems 043 1962 Promotional",
+          "low": 700,
+          "high": 1100
+        },
+        {
+          "item": "Atomic Eyes Chip & Dip 1950s set",
+          "low": 700,
+          "high": 1100
+        },
+        {
+          "item": "Fish Dish 1959 turquoise blue holy grail",
+          "low": 800,
+          "high": 1300
+        },
+        {
+          "item": "Pink Daisy complete set + freezer",
+          "low": 700,
+          "high": 1100
+        },
+        {
+          "item": "Lady on the Left Butterprint 444 variant",
+          "low": 800,
+          "high": 1400
+        },
+        {
+          "item": "Sandalwood 503 refrigerator dish 1960s",
+          "low": 700,
+          "high": 1200
+        },
+        {
+          "item": "RIGOPAL Argentina Daisy / Snowflake (cult)",
+          "low": 700,
+          "high": 1300
+        },
+        {
+          "item": "JAJ Robin Egg Blue Gooseberry set",
+          "low": 700,
+          "high": 1300
+        },
+        {
+          "item": "Standard Butterprint / Gooseberry set 1960s",
+          "low": 80,
+          "high": 250
+        },
+        {
+          "item": "Cinderella set primary colors",
+          "low": 60,
+          "high": 250
+        },
+        {
+          "item": "Single Cinderella lid (replacement)",
+          "low": 25,
+          "high": 70
+        },
+        {
+          "item": "Single bowl with original lid",
+          "low": 25,
+          "high": 90
+        }
       ],
-      "target_buy_usd": {"low": 3, "high": 50},
+      "target_buy_usd": {
+        "low": 3,
+        "high": 50
+      },
       "platform_primary": "eBay",
       "platform_secondary": "Etsy",
       "comp_query_template": "pyrex {pattern} {part}",
       "ship_class": "small_box",
       "_disqualifiers": [
-        "water bong", "water pipe bong", "ash catcher",
-        "glass bubbler", "smoking pipe pyrex",
-        "smoking accessory", "bong bowl piece",
-        "lab beaker", "lab glass beaker",
-        "extraction tube", "extractor tube",
-        "volumetric flask", "graduated cylinder",
-        "culture tubes", "kimble culture",
-        "bell jar", "lab pyrex glass",
-        "tig welding torch", "tig gas lens",
-        "tig welding cup", "welding torch glass",
-        "formula 420", "pipe cleaner",
-        "7200-pc", "7202-pc",
+        "water bong",
+        "water pipe bong",
+        "ash catcher",
+        "glass bubbler",
+        "smoking pipe pyrex",
+        "smoking accessory",
+        "bong bowl piece",
+        "lab beaker",
+        "lab glass beaker",
+        "extraction tube",
+        "extractor tube",
+        "volumetric flask",
+        "graduated cylinder",
+        "culture tubes",
+        "kimble culture",
+        "bell jar",
+        "lab pyrex glass",
+        "tig welding torch",
+        "tig gas lens",
+        "tig welding cup",
+        "welding torch glass",
+        "formula 420",
+        "pipe cleaner",
+        "7200-pc",
+        "7202-pc",
         "replacement lids for pyrex",
         "replacement lids covers",
         "lids covers for pyrex"
@@ -143,14 +337,43 @@
       "brand": "Corelle",
       "category": "cookware_parts",
       "tier": 1,
-      "models": ["Butterfly Gold", "Old Town Blue", "Spring Blossom Green", "Snowflake Garland", "Indian Summer", "Wildflower", "Country Cottage", "English Breakfast", "discontinued pattern"],
-      "era_markers": ["Corelle stamp on bottom", "made in USA (pre-2010 = premium)", "pattern name printed on box if original packaging"],
-      "comp_ranges_usd": [
-        {"item": "discontinued pattern dinner set", "low": 50, "high": 180},
-        {"item": "single platter (discontinued)", "low": 20, "high": 60},
-        {"item": "individual replacement piece", "low": 8, "high": 25}
+      "models": [
+        "Butterfly Gold",
+        "Old Town Blue",
+        "Spring Blossom Green",
+        "Snowflake Garland",
+        "Indian Summer",
+        "Wildflower",
+        "Country Cottage",
+        "English Breakfast",
+        "discontinued pattern"
       ],
-      "target_buy_usd": {"low": 2, "high": 12},
+      "era_markers": [
+        "Corelle stamp on bottom",
+        "made in USA (pre-2010 = premium)",
+        "pattern name printed on box if original packaging"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "discontinued pattern dinner set",
+          "low": 50,
+          "high": 180
+        },
+        {
+          "item": "single platter (discontinued)",
+          "low": 20,
+          "high": 60
+        },
+        {
+          "item": "individual replacement piece",
+          "low": 8,
+          "high": 25
+        }
+      ],
+      "target_buy_usd": {
+        "low": 2,
+        "high": 12
+      },
       "platform_primary": "eBay",
       "platform_secondary": "Replacements.com",
       "comp_query_template": "corelle {pattern} replacement",
@@ -161,14 +384,44 @@
       "brand": "Anchor Hocking / Fire-King",
       "category": "cookware_parts",
       "tier": 2,
-      "models": ["Jadeite", "Jade-ite", "Vitrock", "Wexford", "Manhattan pattern", "Royal Ruby", "Forest Green", "milk glass", "philbe pattern"],
-      "era_markers": ["Fire-King stamp on bottom", "Anchor Hocking 'AH' mark", "made in USA", "Jadeite color (real Jadeite is opaque green; modern Martha Stewart line is post-2000 and lower value)"],
-      "comp_ranges_usd": [
-        {"item": "Jadeite individual piece", "low": 25, "high": 200},
-        {"item": "Jadeite complete set", "low": 200, "high": 800},
-        {"item": "Wexford pattern serving piece", "low": 15, "high": 60}
+      "models": [
+        "Jadeite",
+        "Jade-ite",
+        "Vitrock",
+        "Wexford",
+        "Manhattan pattern",
+        "Royal Ruby",
+        "Forest Green",
+        "milk glass",
+        "philbe pattern"
       ],
-      "target_buy_usd": {"low": 3, "high": 30},
+      "era_markers": [
+        "Fire-King stamp on bottom",
+        "Anchor Hocking 'AH' mark",
+        "made in USA",
+        "Jadeite color (real Jadeite is opaque green; modern Martha Stewart line is post-2000 and lower value)"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "Jadeite individual piece",
+          "low": 25,
+          "high": 200
+        },
+        {
+          "item": "Jadeite complete set",
+          "low": 200,
+          "high": 800
+        },
+        {
+          "item": "Wexford pattern serving piece",
+          "low": 15,
+          "high": 60
+        }
+      ],
+      "target_buy_usd": {
+        "low": 3,
+        "high": 30
+      },
       "platform_primary": "eBay",
       "platform_secondary": "Etsy",
       "comp_query_template": "fire king jadeite {piece}",
@@ -179,16 +432,63 @@
       "brand": "KitchenAid",
       "category": "appliance_parts",
       "tier": 1,
-      "models": ["Artisan bowl", "Pro 600 bowl", "5qt bowl", "6qt bowl", "Ksm150", "K45SS", "Ksm5", "flat beater", "wire whip", "dough hook", "pasta roller", "pasta extruder", "food grinder", "ice cream maker", "spiralizer attachment", "shaver attachment", "burnished accessory"],
-      "era_markers": ["KitchenAid logo", "model number on motor head (KSM150 / Pro 600 / etc.)", "metal vs plastic attachment hub end", "burnished aluminum = older premium attachments", "made in Greenville Ohio (US-made stand mixers)"],
-      "comp_ranges_usd": [
-        {"item": "5qt or 6qt bowl (NSF stainless)", "low": 35, "high": 90},
-        {"item": "pasta roller attachment set", "low": 80, "high": 180},
-        {"item": "food grinder attachment", "low": 30, "high": 70},
-        {"item": "ice cream maker bowl", "low": 30, "high": 80},
-        {"item": "individual paddle / whip", "low": 12, "high": 40}
+      "models": [
+        "Artisan bowl",
+        "Pro 600 bowl",
+        "5qt bowl",
+        "6qt bowl",
+        "Ksm150",
+        "K45SS",
+        "Ksm5",
+        "flat beater",
+        "wire whip",
+        "dough hook",
+        "pasta roller",
+        "pasta extruder",
+        "food grinder",
+        "ice cream maker",
+        "spiralizer attachment",
+        "shaver attachment",
+        "burnished accessory"
       ],
-      "target_buy_usd": {"low": 4, "high": 25},
+      "era_markers": [
+        "KitchenAid logo",
+        "model number on motor head (KSM150 / Pro 600 / etc.)",
+        "metal vs plastic attachment hub end",
+        "burnished aluminum = older premium attachments",
+        "made in Greenville Ohio (US-made stand mixers)"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "5qt or 6qt bowl (NSF stainless)",
+          "low": 35,
+          "high": 90
+        },
+        {
+          "item": "pasta roller attachment set",
+          "low": 80,
+          "high": 180
+        },
+        {
+          "item": "food grinder attachment",
+          "low": 30,
+          "high": 70
+        },
+        {
+          "item": "ice cream maker bowl",
+          "low": 30,
+          "high": 80
+        },
+        {
+          "item": "individual paddle / whip",
+          "low": 12,
+          "high": 40
+        }
+      ],
+      "target_buy_usd": {
+        "low": 4,
+        "high": 25
+      },
       "platform_primary": "eBay",
       "platform_secondary": "Poshmark",
       "comp_query_template": "kitchenaid {attachment} {model}",
@@ -199,15 +499,55 @@
       "brand": "Vitamix",
       "category": "appliance_parts",
       "tier": 1,
-      "models": ["64oz container", "48oz container", "32oz container", "wet container", "dry container", "Aer disc", "tamper", "low-profile", "blade assembly", "Ascent A2300", "A3500", "5200", "Pro 750", "5300", "blender base only"],
-      "era_markers": ["Vitamix logo on container", "model number molded into base", "made in USA (Cleveland)", "low-profile vs classic-height container shape"],
-      "comp_ranges_usd": [
-        {"item": "64oz container with blade", "low": 60, "high": 140},
-        {"item": "32oz dry / wet container", "low": 50, "high": 120},
-        {"item": "tamper alone", "low": 15, "high": 30},
-        {"item": "Aer disc container", "low": 80, "high": 180}
+      "models": [
+        "64oz container",
+        "48oz container",
+        "32oz container",
+        "wet container",
+        "dry container",
+        "Aer disc",
+        "tamper",
+        "low-profile",
+        "blade assembly",
+        "Ascent A2300",
+        "A3500",
+        "5200",
+        "Pro 750",
+        "5300",
+        "blender base only"
       ],
-      "target_buy_usd": {"low": 5, "high": 25},
+      "era_markers": [
+        "Vitamix logo on container",
+        "model number molded into base",
+        "made in USA (Cleveland)",
+        "low-profile vs classic-height container shape"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "64oz container with blade",
+          "low": 60,
+          "high": 140
+        },
+        {
+          "item": "32oz dry / wet container",
+          "low": 50,
+          "high": 120
+        },
+        {
+          "item": "tamper alone",
+          "low": 15,
+          "high": 30
+        },
+        {
+          "item": "Aer disc container",
+          "low": 80,
+          "high": 180
+        }
+      ],
+      "target_buy_usd": {
+        "low": 5,
+        "high": 25
+      },
       "platform_primary": "eBay",
       "platform_secondary": null,
       "comp_query_template": "vitamix {container} {capacity}",
@@ -218,14 +558,52 @@
       "brand": "Cuisinart food processor",
       "category": "appliance_parts",
       "tier": 1,
-      "models": ["DLC-7", "DLC-8", "DLC-10", "DFP-14", "FP-14", "FP-13", "Elite Collection", "Custom 14", "DLC-7 super pro", "metal blade", "S blade", "shredding disc", "slicing disc", "small bowl", "large bowl", "feed tube cover", "pusher"],
-      "era_markers": ["Cuisinart logo on base", "model number on bottom (DLC / DFP / FP series)", "made in Japan = older premium era", "made in China = current production"],
-      "comp_ranges_usd": [
-        {"item": "DFP-14 or DLC-7 work bowl", "low": 30, "high": 80},
-        {"item": "shredding/slicing disc set", "low": 25, "high": 60},
-        {"item": "S-blade replacement", "low": 18, "high": 45}
+      "models": [
+        "DLC-7",
+        "DLC-8",
+        "DLC-10",
+        "DFP-14",
+        "FP-14",
+        "FP-13",
+        "Elite Collection",
+        "Custom 14",
+        "DLC-7 super pro",
+        "metal blade",
+        "S blade",
+        "shredding disc",
+        "slicing disc",
+        "small bowl",
+        "large bowl",
+        "feed tube cover",
+        "pusher"
       ],
-      "target_buy_usd": {"low": 3, "high": 15},
+      "era_markers": [
+        "Cuisinart logo on base",
+        "model number on bottom (DLC / DFP / FP series)",
+        "made in Japan = older premium era",
+        "made in China = current production"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "DFP-14 or DLC-7 work bowl",
+          "low": 30,
+          "high": 80
+        },
+        {
+          "item": "shredding/slicing disc set",
+          "low": 25,
+          "high": 60
+        },
+        {
+          "item": "S-blade replacement",
+          "low": 18,
+          "high": 45
+        }
+      ],
+      "target_buy_usd": {
+        "low": 3,
+        "high": 15
+      },
       "platform_primary": "eBay",
       "platform_secondary": null,
       "comp_query_template": "cuisinart {model} {part}",
@@ -237,14 +615,46 @@
       "brand": "Lodge cast iron",
       "category": "cookware_parts",
       "tier": 2,
-      "models": ["12 inch skillet", "10 inch skillet", "8 inch skillet", "Dutch oven", "double-sided griddle", "drip pan lid", "heat-treated", "made in USA", "pre-Sanforized logo", "3-notch", "Lodge unmarked"],
-      "era_markers": ["Lodge text logo on bottom (modern) vs unmarked (older Lodge)", "made in USA mark", "smooth machined cooking surface (older) vs pebbled (modern)", "letter prefix on size code (BSR / Lodge)"],
-      "comp_ranges_usd": [
-        {"item": "vintage smooth-bottom skillet", "low": 40, "high": 150},
-        {"item": "drip pan lid (specific size)", "low": 25, "high": 80},
-        {"item": "modern skillet (used)", "low": 15, "high": 35}
+      "models": [
+        "12 inch skillet",
+        "10 inch skillet",
+        "8 inch skillet",
+        "Dutch oven",
+        "double-sided griddle",
+        "drip pan lid",
+        "heat-treated",
+        "made in USA",
+        "pre-Sanforized logo",
+        "3-notch",
+        "Lodge unmarked"
       ],
-      "target_buy_usd": {"low": 3, "high": 20},
+      "era_markers": [
+        "Lodge text logo on bottom (modern) vs unmarked (older Lodge)",
+        "made in USA mark",
+        "smooth machined cooking surface (older) vs pebbled (modern)",
+        "letter prefix on size code (BSR / Lodge)"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "vintage smooth-bottom skillet",
+          "low": 40,
+          "high": 150
+        },
+        {
+          "item": "drip pan lid (specific size)",
+          "low": 25,
+          "high": 80
+        },
+        {
+          "item": "modern skillet (used)",
+          "low": 15,
+          "high": 35
+        }
+      ],
+      "target_buy_usd": {
+        "low": 3,
+        "high": 20
+      },
       "platform_primary": "eBay",
       "platform_secondary": null,
       "comp_query_template": "lodge cast iron {size} vintage",
@@ -255,14 +665,45 @@
       "brand": "Tupperware vintage",
       "category": "cookware_parts",
       "tier": 2,
-      "models": ["Wonderlier", "Servalier", "Modular Mates", "Stuffables", "Crystalwave", "Fix-N-Mix", "Jel-Ette", "vintage harvest gold", "vintage avocado", "pastel set", "Tupperware Gold"],
-      "era_markers": ["Tupperware seal stamped on lid", "made in USA (pre-2018, manufactured in NC)", "color-correct lid match (avocado/harvest gold/pastel = 60s-70s)"],
-      "comp_ranges_usd": [
-        {"item": "Wonderlier vintage set", "low": 30, "high": 100},
-        {"item": "Modular Mates discontinued", "low": 25, "high": 75},
-        {"item": "Jel-Ette set", "low": 35, "high": 90}
+      "models": [
+        "Wonderlier",
+        "Servalier",
+        "Modular Mates",
+        "Stuffables",
+        "Crystalwave",
+        "Fix-N-Mix",
+        "Jel-Ette",
+        "vintage harvest gold",
+        "vintage avocado",
+        "pastel set",
+        "Tupperware Gold"
       ],
-      "target_buy_usd": {"low": 2, "high": 15},
+      "era_markers": [
+        "Tupperware seal stamped on lid",
+        "made in USA (pre-2018, manufactured in NC)",
+        "color-correct lid match (avocado/harvest gold/pastel = 60s-70s)"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "Wonderlier vintage set",
+          "low": 30,
+          "high": 100
+        },
+        {
+          "item": "Modular Mates discontinued",
+          "low": 25,
+          "high": 75
+        },
+        {
+          "item": "Jel-Ette set",
+          "low": 35,
+          "high": 90
+        }
+      ],
+      "target_buy_usd": {
+        "low": 2,
+        "high": 15
+      },
       "platform_primary": "eBay",
       "platform_secondary": "Etsy",
       "comp_query_template": "vintage tupperware {pattern}",
@@ -273,15 +714,51 @@
       "brand": "Wusthof / Henckels / Shun / Global",
       "category": "kitchen_knives",
       "tier": 2,
-      "models": ["Wusthof Classic", "Wusthof Ikon", "Henckels Pro S", "Henckels Twin", "Shun Classic", "Shun Premier", "Global G-2", "Global GS-3", "8 inch chef", "santoku", "10 inch slicer"],
-      "era_markers": ["Wusthof Solingen Germany stamp", "Henckels twin-man logo (J.A. Henckels = premium)", "Shun Damascus pattern", "Global hammered aluminum handle"],
-      "comp_ranges_usd": [
-        {"item": "Wusthof Classic 8 inch chef", "low": 40, "high": 95},
-        {"item": "Henckels Pro S 8 inch chef", "low": 40, "high": 90},
-        {"item": "Shun Classic chef knife", "low": 80, "high": 180},
-        {"item": "Global G-2 chef", "low": 40, "high": 100}
+      "models": [
+        "Wusthof Classic",
+        "Wusthof Ikon",
+        "Henckels Pro S",
+        "Henckels Twin",
+        "Shun Classic",
+        "Shun Premier",
+        "Global G-2",
+        "Global GS-3",
+        "8 inch chef",
+        "santoku",
+        "10 inch slicer"
       ],
-      "target_buy_usd": {"low": 5, "high": 30},
+      "era_markers": [
+        "Wusthof Solingen Germany stamp",
+        "Henckels twin-man logo (J.A. Henckels = premium)",
+        "Shun Damascus pattern",
+        "Global hammered aluminum handle"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "Wusthof Classic 8 inch chef",
+          "low": 40,
+          "high": 95
+        },
+        {
+          "item": "Henckels Pro S 8 inch chef",
+          "low": 40,
+          "high": 90
+        },
+        {
+          "item": "Shun Classic chef knife",
+          "low": 80,
+          "high": 180
+        },
+        {
+          "item": "Global G-2 chef",
+          "low": 40,
+          "high": 100
+        }
+      ],
+      "target_buy_usd": {
+        "low": 5,
+        "high": 30
+      },
       "platform_primary": "eBay",
       "platform_secondary": null,
       "comp_query_template": "{brand} {model} chef knife {size}",
@@ -292,14 +769,44 @@
       "brand": "Dewalt batteries (OEM only)",
       "category": "tool_parts",
       "tier": 2,
-      "models": ["DCB205", "DCB206", "DCB606", "DCB609", "20V MAX 5Ah", "20V MAX 6Ah", "20V MAX 8Ah", "20V MAX 12Ah", "FlexVolt 60V"],
-      "era_markers": ["Dewalt logo molded into casing", "model number printed on side (DCB-prefix)", "yellow + black two-tone case", "made-in-USA stamp on cells"],
-      "comp_ranges_usd": [
-        {"item": "DCB205 (5Ah)", "low": 35, "high": 70},
-        {"item": "DCB606 / DCB609 (6Ah / 9Ah FlexVolt)", "low": 70, "high": 150},
-        {"item": "DCB204 (4Ah)", "low": 30, "high": 60}
+      "models": [
+        "DCB205",
+        "DCB206",
+        "DCB606",
+        "DCB609",
+        "20V MAX 5Ah",
+        "20V MAX 6Ah",
+        "20V MAX 8Ah",
+        "20V MAX 12Ah",
+        "FlexVolt 60V"
       ],
-      "target_buy_usd": {"low": 5, "high": 30},
+      "era_markers": [
+        "Dewalt logo molded into casing",
+        "model number printed on side (DCB-prefix)",
+        "yellow + black two-tone case",
+        "made-in-USA stamp on cells"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "DCB205 (5Ah)",
+          "low": 35,
+          "high": 70
+        },
+        {
+          "item": "DCB606 / DCB609 (6Ah / 9Ah FlexVolt)",
+          "low": 70,
+          "high": 150
+        },
+        {
+          "item": "DCB204 (4Ah)",
+          "low": 30,
+          "high": 60
+        }
+      ],
+      "target_buy_usd": {
+        "low": 5,
+        "high": 30
+      },
       "platform_primary": "eBay",
       "platform_secondary": null,
       "comp_query_template": "dewalt {model} battery oem",
@@ -311,15 +818,51 @@
       "brand": "Milwaukee batteries (OEM only)",
       "category": "tool_parts",
       "tier": 2,
-      "models": ["48-11-1850", "48-11-1862", "48-11-1880", "48-11-1865", "M18 5Ah", "M18 6Ah", "M18 8Ah", "M18 12Ah", "HD HighOutput", "Forge", "M12 4Ah", "M12 6Ah"],
-      "era_markers": ["Milwaukee red logo", "48-11-prefix model number", "HD vs HO (HighOutput) variant marked on case"],
-      "comp_ranges_usd": [
-        {"item": "M18 5Ah XC (48-11-1850)", "low": 50, "high": 100},
-        {"item": "M18 8Ah HighOutput", "low": 90, "high": 170},
-        {"item": "M18 12Ah HD", "low": 130, "high": 240},
-        {"item": "M12 6Ah XC", "low": 40, "high": 80}
+      "models": [
+        "48-11-1850",
+        "48-11-1862",
+        "48-11-1880",
+        "48-11-1865",
+        "M18 5Ah",
+        "M18 6Ah",
+        "M18 8Ah",
+        "M18 12Ah",
+        "HD HighOutput",
+        "Forge",
+        "M12 4Ah",
+        "M12 6Ah"
       ],
-      "target_buy_usd": {"low": 8, "high": 40},
+      "era_markers": [
+        "Milwaukee red logo",
+        "48-11-prefix model number",
+        "HD vs HO (HighOutput) variant marked on case"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "M18 5Ah XC (48-11-1850)",
+          "low": 50,
+          "high": 100
+        },
+        {
+          "item": "M18 8Ah HighOutput",
+          "low": 90,
+          "high": 170
+        },
+        {
+          "item": "M18 12Ah HD",
+          "low": 130,
+          "high": 240
+        },
+        {
+          "item": "M12 6Ah XC",
+          "low": 40,
+          "high": 80
+        }
+      ],
+      "target_buy_usd": {
+        "low": 8,
+        "high": 40
+      },
       "platform_primary": "eBay",
       "platform_secondary": null,
       "comp_query_template": "milwaukee m18 {capacity} battery oem",
@@ -331,14 +874,48 @@
       "brand": "Snap-On hand tools",
       "category": "tool_parts",
       "tier": 2,
-      "models": ["socket set", "ratchet", "torque wrench", "screwdriver set", "pliers", "wrench set", "FH80", "FHD80", "GMRT72", "1/4 drive", "3/8 drive", "1/2 drive", "Made in USA"],
-      "era_markers": ["Snap-On logo etched on tool", "S/N on shank", "Made in USA stamp", "knurled finish on older USA-made (premium over Chinese-made post-2010 Williams brand)"],
-      "comp_ranges_usd": [
-        {"item": "ratchet (any 1/4 / 3/8 / 1/2 USA)", "low": 60, "high": 200},
-        {"item": "socket set USA-made", "low": 80, "high": 400},
-        {"item": "torque wrench", "low": 100, "high": 350}
+      "models": [
+        "socket set",
+        "ratchet",
+        "torque wrench",
+        "screwdriver set",
+        "pliers",
+        "wrench set",
+        "FH80",
+        "FHD80",
+        "GMRT72",
+        "1/4 drive",
+        "3/8 drive",
+        "1/2 drive",
+        "Made in USA"
       ],
-      "target_buy_usd": {"low": 8, "high": 60},
+      "era_markers": [
+        "Snap-On logo etched on tool",
+        "S/N on shank",
+        "Made in USA stamp",
+        "knurled finish on older USA-made (premium over Chinese-made post-2010 Williams brand)"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "ratchet (any 1/4 / 3/8 / 1/2 USA)",
+          "low": 60,
+          "high": 200
+        },
+        {
+          "item": "socket set USA-made",
+          "low": 80,
+          "high": 400
+        },
+        {
+          "item": "torque wrench",
+          "low": 100,
+          "high": 350
+        }
+      ],
+      "target_buy_usd": {
+        "low": 8,
+        "high": 60
+      },
       "platform_primary": "eBay",
       "platform_secondary": null,
       "comp_query_template": "snap-on {tool} usa",
@@ -349,15 +926,53 @@
       "brand": "Marantz / Pioneer / Sansui vintage audio parts",
       "category": "audio_parts",
       "tier": 3,
-      "models": ["Marantz 2230", "Marantz 2270", "Marantz 2325", "Pioneer SX-780", "Pioneer SX-1280", "Sansui G-22000", "Sansui 9090DB", "knob set", "dial cover", "wood cabinet", "VU meter", "rotary switch", "potentiometer", "lamp"],
-      "era_markers": ["model number on faceplate", "wood cabinet (genuine vinyl-wrap = premium)", "anodized faceplate vs painted (anodized = original)"],
-      "comp_ranges_usd": [
-        {"item": "knob set (single receiver)", "low": 50, "high": 200},
-        {"item": "dial cover / glass", "low": 80, "high": 250},
-        {"item": "VU meter (working pair)", "low": 80, "high": 300},
-        {"item": "complete wood cabinet", "low": 100, "high": 400}
+      "models": [
+        "Marantz 2230",
+        "Marantz 2270",
+        "Marantz 2325",
+        "Pioneer SX-780",
+        "Pioneer SX-1280",
+        "Sansui G-22000",
+        "Sansui 9090DB",
+        "knob set",
+        "dial cover",
+        "wood cabinet",
+        "VU meter",
+        "rotary switch",
+        "potentiometer",
+        "lamp"
       ],
-      "target_buy_usd": {"low": 5, "high": 50},
+      "era_markers": [
+        "model number on faceplate",
+        "wood cabinet (genuine vinyl-wrap = premium)",
+        "anodized faceplate vs painted (anodized = original)"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "knob set (single receiver)",
+          "low": 50,
+          "high": 200
+        },
+        {
+          "item": "dial cover / glass",
+          "low": 80,
+          "high": 250
+        },
+        {
+          "item": "VU meter (working pair)",
+          "low": 80,
+          "high": 300
+        },
+        {
+          "item": "complete wood cabinet",
+          "low": 100,
+          "high": 400
+        }
+      ],
+      "target_buy_usd": {
+        "low": 5,
+        "high": 50
+      },
       "platform_primary": "eBay",
       "platform_secondary": null,
       "comp_query_template": "{model} {part} replacement",
@@ -368,15 +983,51 @@
       "brand": "Singer Featherweight",
       "category": "sewing_parts",
       "tier": 3,
-      "models": ["221", "222K", "Featherweight", "centennial badge", "Featherweight case", "bobbin", "foot pedal", "carrying case", "attachments box", "manual"],
-      "era_markers": ["Singer Featherweight 221 nameplate", "AL / AM / AJ / ED / AK serial prefix (era markers)", "centennial (1851-1951) gold badge = premium", "Egyptian scrollwork decals (older = better)", "white tag = post-1968 (lower value)"],
-      "comp_ranges_usd": [
-        {"item": "complete working 221 with case", "low": 350, "high": 800},
-        {"item": "case alone (in good shape)", "low": 50, "high": 150},
-        {"item": "attachments set (original tin)", "low": 60, "high": 180},
-        {"item": "foot pedal / cord set", "low": 30, "high": 80}
+      "models": [
+        "221",
+        "222K",
+        "Featherweight",
+        "centennial badge",
+        "Featherweight case",
+        "bobbin",
+        "foot pedal",
+        "carrying case",
+        "attachments box",
+        "manual"
       ],
-      "target_buy_usd": {"low": 30, "high": 200},
+      "era_markers": [
+        "Singer Featherweight 221 nameplate",
+        "AL / AM / AJ / ED / AK serial prefix (era markers)",
+        "centennial (1851-1951) gold badge = premium",
+        "Egyptian scrollwork decals (older = better)",
+        "white tag = post-1968 (lower value)"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "complete working 221 with case",
+          "low": 350,
+          "high": 800
+        },
+        {
+          "item": "case alone (in good shape)",
+          "low": 50,
+          "high": 150
+        },
+        {
+          "item": "attachments set (original tin)",
+          "low": 60,
+          "high": 180
+        },
+        {
+          "item": "foot pedal / cord set",
+          "low": 30,
+          "high": 80
+        }
+      ],
+      "target_buy_usd": {
+        "low": 30,
+        "high": 200
+      },
       "platform_primary": "eBay",
       "platform_secondary": "Etsy",
       "comp_query_template": "singer featherweight 221 {part}",
@@ -389,15 +1040,35 @@
       "category": "appliance_parts",
       "tier": 2,
       "models": [
-        "control board", "main control board", "ice maker",
-        "water inlet valve", "drain pump", "dishwasher rack",
-        "upper rack", "lower rack", "dishwasher pump",
-        "dishwasher motor", "agitator", "drum belt",
-        "dryer drum", "dryer heating element", "thermal fuse",
-        "refrigerator shelf", "crisper drawer", "evaporator fan",
-        "compressor", "knob assembly", "door handle",
-        "W10712395", "W10300024", "WPW10312695", "W10350375",
-        "WPW10295370", "WPW10337712", "Cabrio", "Duet"
+        "control board",
+        "main control board",
+        "ice maker",
+        "water inlet valve",
+        "drain pump",
+        "dishwasher rack",
+        "upper rack",
+        "lower rack",
+        "dishwasher pump",
+        "dishwasher motor",
+        "agitator",
+        "drum belt",
+        "dryer drum",
+        "dryer heating element",
+        "thermal fuse",
+        "refrigerator shelf",
+        "crisper drawer",
+        "evaporator fan",
+        "compressor",
+        "knob assembly",
+        "door handle",
+        "W10712395",
+        "W10300024",
+        "WPW10312695",
+        "W10350375",
+        "WPW10295370",
+        "WPW10337712",
+        "Cabrio",
+        "Duet"
       ],
       "era_markers": [
         "Whirlpool stamping with model number",
@@ -407,14 +1078,41 @@
         "Date code on data plate"
       ],
       "comp_ranges_usd": [
-        {"item": "control board (any major appliance)", "low": 80, "high": 280},
-        {"item": "ice maker assembly", "low": 50, "high": 150},
-        {"item": "dishwasher rack (upper/lower)", "low": 40, "high": 120},
-        {"item": "drum belt / pulley", "low": 12, "high": 35},
-        {"item": "knobs / handles", "low": 15, "high": 50},
-        {"item": "control panel assembly", "low": 60, "high": 200}
+        {
+          "item": "control board (any major appliance)",
+          "low": 80,
+          "high": 280
+        },
+        {
+          "item": "ice maker assembly",
+          "low": 50,
+          "high": 150
+        },
+        {
+          "item": "dishwasher rack (upper/lower)",
+          "low": 40,
+          "high": 120
+        },
+        {
+          "item": "drum belt / pulley",
+          "low": 12,
+          "high": 35
+        },
+        {
+          "item": "knobs / handles",
+          "low": 15,
+          "high": 50
+        },
+        {
+          "item": "control panel assembly",
+          "low": 60,
+          "high": 200
+        }
       ],
-      "target_buy_usd": {"low": 3, "high": 30},
+      "target_buy_usd": {
+        "low": 3,
+        "high": 30
+      },
       "platform_primary": "eBay",
       "platform_secondary": null,
       "comp_query_template": "whirlpool {part_number} oem",
@@ -427,12 +1125,23 @@
       "category": "appliance_parts",
       "tier": 2,
       "models": [
-        "control board", "ice maker", "dishwasher rack",
-        "agitator", "drum belt", "drum bearing",
-        "dryer heating element", "thermal fuse",
-        "refrigerator shelf", "crisper drawer",
-        "Bravos", "Bravos XL", "Centennial", "Performa",
-        "Atlantis", "Neptune", "Maxima"
+        "control board",
+        "ice maker",
+        "dishwasher rack",
+        "agitator",
+        "drum belt",
+        "drum bearing",
+        "dryer heating element",
+        "thermal fuse",
+        "refrigerator shelf",
+        "crisper drawer",
+        "Bravos",
+        "Bravos XL",
+        "Centennial",
+        "Performa",
+        "Atlantis",
+        "Neptune",
+        "Maxima"
       ],
       "era_markers": [
         "Maytag stamping with model number",
@@ -441,12 +1150,31 @@
         "Bravos / Neptune / Atlantis line markings"
       ],
       "comp_ranges_usd": [
-        {"item": "Bravos control board", "low": 90, "high": 250},
-        {"item": "Neptune washer parts", "low": 30, "high": 150},
-        {"item": "ice maker assembly", "low": 50, "high": 130},
-        {"item": "general appliance part", "low": 15, "high": 80}
+        {
+          "item": "Bravos control board",
+          "low": 90,
+          "high": 250
+        },
+        {
+          "item": "Neptune washer parts",
+          "low": 30,
+          "high": 150
+        },
+        {
+          "item": "ice maker assembly",
+          "low": 50,
+          "high": 130
+        },
+        {
+          "item": "general appliance part",
+          "low": 15,
+          "high": 80
+        }
       ],
-      "target_buy_usd": {"low": 3, "high": 30},
+      "target_buy_usd": {
+        "low": 3,
+        "high": 30
+      },
       "platform_primary": "eBay",
       "platform_secondary": null,
       "comp_query_template": "maytag {model} {part}",
@@ -459,13 +1187,26 @@
       "category": "appliance_parts",
       "tier": 2,
       "models": [
-        "dishwasher rack", "upper rack", "lower rack",
-        "control board", "ice maker", "water inlet valve",
-        "drain pump", "agitator", "compressor",
-        "refrigerator shelf", "crisper drawer", "knob assembly",
-        "door handle", "drawer slide", "Superba",
-        "Pro Line", "Architect Series",
-        "KSCS25INSS", "KFCS22EVMS", "KRMF706ESS"
+        "dishwasher rack",
+        "upper rack",
+        "lower rack",
+        "control board",
+        "ice maker",
+        "water inlet valve",
+        "drain pump",
+        "agitator",
+        "compressor",
+        "refrigerator shelf",
+        "crisper drawer",
+        "knob assembly",
+        "door handle",
+        "drawer slide",
+        "Superba",
+        "Pro Line",
+        "Architect Series",
+        "KSCS25INSS",
+        "KFCS22EVMS",
+        "KRMF706ESS"
       ],
       "era_markers": [
         "KitchenAid stamping with model number",
@@ -474,11 +1215,26 @@
         "Whirlpool-family parts numbering (often WP prefix)"
       ],
       "comp_ranges_usd": [
-        {"item": "control board", "low": 90, "high": 280},
-        {"item": "dishwasher rack", "low": 50, "high": 140},
-        {"item": "Superba refrigerator parts", "low": 40, "high": 180}
+        {
+          "item": "control board",
+          "low": 90,
+          "high": 280
+        },
+        {
+          "item": "dishwasher rack",
+          "low": 50,
+          "high": 140
+        },
+        {
+          "item": "Superba refrigerator parts",
+          "low": 40,
+          "high": 180
+        }
       ],
-      "target_buy_usd": {"low": 3, "high": 30},
+      "target_buy_usd": {
+        "low": 3,
+        "high": 30
+      },
       "platform_primary": "eBay",
       "platform_secondary": null,
       "comp_query_template": "kitchenaid {model} {part}",
@@ -491,10 +1247,17 @@
       "category": "appliance_parts",
       "tier": 2,
       "models": [
-        "control board", "ice maker", "dishwasher rack",
-        "compressor", "evaporator fan", "thermostat",
-        "refrigerator shelf", "crisper drawer", "drum belt",
-        "Radarange", "vintage Amana refrigerator"
+        "control board",
+        "ice maker",
+        "dishwasher rack",
+        "compressor",
+        "evaporator fan",
+        "thermostat",
+        "refrigerator shelf",
+        "crisper drawer",
+        "drum belt",
+        "Radarange",
+        "vintage Amana refrigerator"
       ],
       "era_markers": [
         "Amana Iowa stamping",
@@ -503,11 +1266,26 @@
         "Radarange microwave (vintage Amana exclusive)"
       ],
       "comp_ranges_usd": [
-        {"item": "vintage Amana refrigerator drawer / shelf", "low": 30, "high": 100},
-        {"item": "control board (older)", "low": 60, "high": 200},
-        {"item": "Radarange parts", "low": 30, "high": 120}
+        {
+          "item": "vintage Amana refrigerator drawer / shelf",
+          "low": 30,
+          "high": 100
+        },
+        {
+          "item": "control board (older)",
+          "low": 60,
+          "high": 200
+        },
+        {
+          "item": "Radarange parts",
+          "low": 30,
+          "high": 120
+        }
       ],
-      "target_buy_usd": {"low": 2, "high": 20},
+      "target_buy_usd": {
+        "low": 2,
+        "high": 20
+      },
       "platform_primary": "eBay",
       "platform_secondary": null,
       "comp_query_template": "amana {part} {model}",
@@ -520,10 +1298,18 @@
       "category": "appliance_parts",
       "tier": 2,
       "models": [
-        "downdraft motor", "downdraft fan", "grill cartridge",
-        "ceramic cartridge", "cooktop element", "control board",
-        "knob assembly", "grate", "burner cap",
-        "wall oven element", "Pro-Style", "Euro-Style"
+        "downdraft motor",
+        "downdraft fan",
+        "grill cartridge",
+        "ceramic cartridge",
+        "cooktop element",
+        "control board",
+        "knob assembly",
+        "grate",
+        "burner cap",
+        "wall oven element",
+        "Pro-Style",
+        "Euro-Style"
       ],
       "era_markers": [
         "Jenn-Air stamping with model number",
@@ -532,12 +1318,31 @@
         "Made in Indianapolis (vintage premium)"
       ],
       "comp_ranges_usd": [
-        {"item": "downdraft motor / fan assembly", "low": 90, "high": 280},
-        {"item": "grill cartridge", "low": 40, "high": 130},
-        {"item": "knobs (set)", "low": 30, "high": 90},
-        {"item": "control board", "low": 100, "high": 250}
+        {
+          "item": "downdraft motor / fan assembly",
+          "low": 90,
+          "high": 280
+        },
+        {
+          "item": "grill cartridge",
+          "low": 40,
+          "high": 130
+        },
+        {
+          "item": "knobs (set)",
+          "low": 30,
+          "high": 90
+        },
+        {
+          "item": "control board",
+          "low": 100,
+          "high": 250
+        }
       ],
-      "target_buy_usd": {"low": 5, "high": 40},
+      "target_buy_usd": {
+        "low": 5,
+        "high": 40
+      },
       "platform_primary": "eBay",
       "platform_secondary": null,
       "comp_query_template": "jenn-air {model} {part}",
@@ -550,14 +1355,30 @@
       "category": "appliance_parts",
       "tier": 2,
       "models": [
-        "control board", "ice maker", "water inlet valve",
-        "drain pump", "dishwasher rack", "agitator",
-        "drum belt", "drum bearing", "compressor",
-        "refrigerator shelf", "crisper drawer", "knob",
-        "Profile", "Cafe", "Café", "Monogram",
-        "Adora", "Spacemaker", "WR series",
-        "WR55X10025", "WR60X10141", "WR55X11097",
-        "WD21X25148", "WD12X10334"
+        "control board",
+        "ice maker",
+        "water inlet valve",
+        "drain pump",
+        "dishwasher rack",
+        "agitator",
+        "drum belt",
+        "drum bearing",
+        "compressor",
+        "refrigerator shelf",
+        "crisper drawer",
+        "knob",
+        "Profile",
+        "Cafe",
+        "Café",
+        "Monogram",
+        "Adora",
+        "Spacemaker",
+        "WR series",
+        "WR55X10025",
+        "WR60X10141",
+        "WR55X11097",
+        "WD21X25148",
+        "WD12X10334"
       ],
       "era_markers": [
         "GE Profile / Cafe / Monogram line markings",
@@ -566,12 +1387,31 @@
         "OEM Genuine GE packaging"
       ],
       "comp_ranges_usd": [
-        {"item": "control board (Profile / Cafe)", "low": 100, "high": 320},
-        {"item": "ice maker assembly", "low": 60, "high": 180},
-        {"item": "Monogram refrigerator drawer", "low": 80, "high": 250},
-        {"item": "knobs / handles", "low": 20, "high": 60}
+        {
+          "item": "control board (Profile / Cafe)",
+          "low": 100,
+          "high": 320
+        },
+        {
+          "item": "ice maker assembly",
+          "low": 60,
+          "high": 180
+        },
+        {
+          "item": "Monogram refrigerator drawer",
+          "low": 80,
+          "high": 250
+        },
+        {
+          "item": "knobs / handles",
+          "low": 20,
+          "high": 60
+        }
       ],
-      "target_buy_usd": {"low": 3, "high": 35},
+      "target_buy_usd": {
+        "low": 3,
+        "high": 35
+      },
       "platform_primary": "eBay",
       "platform_secondary": null,
       "comp_query_template": "ge profile {part} oem",
@@ -584,14 +1424,28 @@
       "category": "appliance_parts",
       "tier": 2,
       "models": [
-        "control board", "ice maker", "water inlet valve",
-        "drain pump", "dishwasher rack", "agitator",
-        "drum belt", "drum bearing", "thermal fuse",
-        "refrigerator shelf", "crisper drawer", "knob",
-        "Gallery", "Professional", "FFTR series",
-        "FGHC series", "FGHB series",
-        "240356402", "240534901", "240337103",
-        "5304507212", "5304502779"
+        "control board",
+        "ice maker",
+        "water inlet valve",
+        "drain pump",
+        "dishwasher rack",
+        "agitator",
+        "drum belt",
+        "drum bearing",
+        "thermal fuse",
+        "refrigerator shelf",
+        "crisper drawer",
+        "knob",
+        "Gallery",
+        "Professional",
+        "FFTR series",
+        "FGHC series",
+        "FGHB series",
+        "240356402",
+        "240534901",
+        "240337103",
+        "5304507212",
+        "5304502779"
       ],
       "era_markers": [
         "Frigidaire stamping with model number",
@@ -600,12 +1454,31 @@
         "Made in USA / Mexico (varies by era)"
       ],
       "comp_ranges_usd": [
-        {"item": "control board", "low": 70, "high": 220},
-        {"item": "ice maker assembly", "low": 50, "high": 140},
-        {"item": "dishwasher rack", "low": 35, "high": 100},
-        {"item": "knobs / handles", "low": 12, "high": 40}
+        {
+          "item": "control board",
+          "low": 70,
+          "high": 220
+        },
+        {
+          "item": "ice maker assembly",
+          "low": 50,
+          "high": 140
+        },
+        {
+          "item": "dishwasher rack",
+          "low": 35,
+          "high": 100
+        },
+        {
+          "item": "knobs / handles",
+          "low": 12,
+          "high": 40
+        }
       ],
-      "target_buy_usd": {"low": 2, "high": 25},
+      "target_buy_usd": {
+        "low": 2,
+        "high": 25
+      },
       "platform_primary": "eBay",
       "platform_secondary": null,
       "comp_query_template": "frigidaire {part_number} oem",
@@ -618,13 +1491,32 @@
       "category": "appliance_parts",
       "tier": 2,
       "models": [
-        "dishwasher pump", "dishwasher rack", "wash arm",
-        "drain pump", "control board", "door latch",
-        "heating element", "spray arm", "tine",
-        "SHX", "SHE", "SHU", "SHV", "SHP", "SHEM",
-        "SHX3AR", "SHX863WD", "SHE3AR", "SHU33A", "SHUM",
-        "Silence Plus", "Ascenta", "300 Series",
-        "500 Series", "800 Series", "Benchmark"
+        "dishwasher pump",
+        "dishwasher rack",
+        "wash arm",
+        "drain pump",
+        "control board",
+        "door latch",
+        "heating element",
+        "spray arm",
+        "tine",
+        "SHX",
+        "SHE",
+        "SHU",
+        "SHV",
+        "SHP",
+        "SHEM",
+        "SHX3AR",
+        "SHX863WD",
+        "SHE3AR",
+        "SHU33A",
+        "SHUM",
+        "Silence Plus",
+        "Ascenta",
+        "300 Series",
+        "500 Series",
+        "800 Series",
+        "Benchmark"
       ],
       "era_markers": [
         "Bosch with SHX / SHE / SHU / SHV / SHP model series",
@@ -633,12 +1525,31 @@
         "OEM Bosch original packaging"
       ],
       "comp_ranges_usd": [
-        {"item": "dishwasher pump / motor", "low": 90, "high": 250},
-        {"item": "wash arm assembly", "low": 40, "high": 130},
-        {"item": "control board", "low": 120, "high": 320},
-        {"item": "rack tine / clip parts", "low": 12, "high": 35}
+        {
+          "item": "dishwasher pump / motor",
+          "low": 90,
+          "high": 250
+        },
+        {
+          "item": "wash arm assembly",
+          "low": 40,
+          "high": 130
+        },
+        {
+          "item": "control board",
+          "low": 120,
+          "high": 320
+        },
+        {
+          "item": "rack tine / clip parts",
+          "low": 12,
+          "high": 35
+        }
       ],
-      "target_buy_usd": {"low": 3, "high": 35},
+      "target_buy_usd": {
+        "low": 3,
+        "high": 35
+      },
       "platform_primary": "eBay",
       "platform_secondary": null,
       "comp_query_template": "bosch {model} dishwasher {part}",
@@ -651,14 +1562,31 @@
       "category": "appliance_parts",
       "tier": 2,
       "models": [
-        "drum bearing", "drum spider", "drain pump",
-        "tub bearing", "control board", "main pcb",
-        "ice maker", "compressor", "evaporator fan",
-        "shock absorber", "door latch", "door boot",
-        "TROMM", "WT series", "WM series", "WD series",
-        "DLEX", "DLGX", "LFX series", "LSXS series",
-        "LMV series", "LRE series",
-        "AJR74442604", "AJR74663205", "EBR62545304"
+        "drum bearing",
+        "drum spider",
+        "drain pump",
+        "tub bearing",
+        "control board",
+        "main pcb",
+        "ice maker",
+        "compressor",
+        "evaporator fan",
+        "shock absorber",
+        "door latch",
+        "door boot",
+        "TROMM",
+        "WT series",
+        "WM series",
+        "WD series",
+        "DLEX",
+        "DLGX",
+        "LFX series",
+        "LSXS series",
+        "LMV series",
+        "LRE series",
+        "AJR74442604",
+        "AJR74663205",
+        "EBR62545304"
       ],
       "era_markers": [
         "LG with WM / WT / WD / DLEX / DLGX model prefix",
@@ -667,12 +1595,31 @@
         "Made in Korea (premium) vs Mexico (current)"
       ],
       "comp_ranges_usd": [
-        {"item": "front-load washer drum bearing kit", "low": 40, "high": 120},
-        {"item": "main control board", "low": 100, "high": 300},
-        {"item": "ice maker assembly", "low": 80, "high": 220},
-        {"item": "drain pump", "low": 35, "high": 90}
+        {
+          "item": "front-load washer drum bearing kit",
+          "low": 40,
+          "high": 120
+        },
+        {
+          "item": "main control board",
+          "low": 100,
+          "high": 300
+        },
+        {
+          "item": "ice maker assembly",
+          "low": 80,
+          "high": 220
+        },
+        {
+          "item": "drain pump",
+          "low": 35,
+          "high": 90
+        }
       ],
-      "target_buy_usd": {"low": 3, "high": 30},
+      "target_buy_usd": {
+        "low": 3,
+        "high": 30
+      },
       "platform_primary": "eBay",
       "platform_secondary": null,
       "comp_query_template": "lg {model} {part}",
@@ -685,15 +1632,33 @@
       "category": "appliance_parts",
       "tier": 2,
       "models": [
-        "control board", "main pcb", "ice maker",
-        "water inlet valve", "drain pump", "drum bearing",
-        "shock absorber", "door latch", "door boot",
-        "compressor", "evaporator fan", "fridge drawer",
-        "FlexZone drawer", "twin cooling",
-        "RF series", "RS series", "RT series",
-        "WF series", "WA series", "DV series",
-        "DA97", "DA29", "DC92", "DC97",
-        "RF28HMEDBSR", "RF28R7351SR", "WF45T6000AW"
+        "control board",
+        "main pcb",
+        "ice maker",
+        "water inlet valve",
+        "drain pump",
+        "drum bearing",
+        "shock absorber",
+        "door latch",
+        "door boot",
+        "compressor",
+        "evaporator fan",
+        "fridge drawer",
+        "FlexZone drawer",
+        "twin cooling",
+        "RF series",
+        "RS series",
+        "RT series",
+        "WF series",
+        "WA series",
+        "DV series",
+        "DA97",
+        "DA29",
+        "DC92",
+        "DC97",
+        "RF28HMEDBSR",
+        "RF28R7351SR",
+        "WF45T6000AW"
       ],
       "era_markers": [
         "Samsung with RF / RS / RT / WF / WA / DV model prefix",
@@ -702,18 +1667,132 @@
         "Made in Korea / Mexico / Vietnam (varies)"
       ],
       "comp_ranges_usd": [
-        {"item": "ice maker assembly (RF series)", "low": 100, "high": 280},
-        {"item": "main control board", "low": 90, "high": 260},
-        {"item": "FlexZone drawer assembly", "low": 80, "high": 200},
-        {"item": "drain pump", "low": 40, "high": 100}
+        {
+          "item": "ice maker assembly (RF series)",
+          "low": 100,
+          "high": 280
+        },
+        {
+          "item": "main control board",
+          "low": 90,
+          "high": 260
+        },
+        {
+          "item": "FlexZone drawer assembly",
+          "low": 80,
+          "high": 200
+        },
+        {
+          "item": "drain pump",
+          "low": 40,
+          "high": 100
+        }
       ],
-      "target_buy_usd": {"low": 3, "high": 30},
+      "target_buy_usd": {
+        "low": 3,
+        "high": 30
+      },
       "platform_primary": "eBay",
       "platform_secondary": null,
       "comp_query_template": "samsung {model} {part}",
       "ship_class": "small_box",
       "notes": "Samsung refrigerator ice-maker assemblies are infamous for failures, creating massive replacement demand. RF series specifically has constant parts turnover. Use exact model number from door tag for proper part match.",
       "condition_critical": true
+    },
+    {
+      "brand": "Premium hand and power tools",
+      "category": "tools",
+      "tier": 2,
+      "models": [
+        "Makita",
+        "Festool",
+        "Starrett",
+        "Stanley Bailey",
+        "Stanley No. 4",
+        "Stanley No. 5",
+        "Stanley plane",
+        "Lie-Nielsen",
+        "Veritas",
+        "Estwing"
+      ],
+      "era_markers": [
+        "Starrett machinist tools are marked with the name on the beam",
+        "Vintage Stanley planes: type study by the lateral lever and logo",
+        "Festool green and Makita teal are recognisable at a glance",
+        "Original box and inserts matter for Festool"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "Festool track saws and routers",
+          "low": 200,
+          "high": 700
+        },
+        {
+          "item": "Starrett precision measuring tools",
+          "low": 60,
+          "high": 250
+        },
+        {
+          "item": "Vintage Stanley Bailey planes",
+          "low": 30,
+          "high": 180
+        }
+      ],
+      "target_buy_usd": {
+        "low": 2,
+        "high": 100
+      },
+      "platform_primary": "eBay",
+      "platform_secondary": "Mercari",
+      "comp_query_template": "Premium hand and power tools {model} sold",
+      "ship_class": "medium_box",
+      "notes": "The sheet lists these alongside DeWalt and Milwaukee, which were already here as battery entries only. Hand tools do not need batteries tested, which makes them the easier buy.",
+      "condition_critical": [
+        "Check motors for sparking under load",
+        "Verify makers marks; Starrett and Stanley are widely faked",
+        "Plane soles must be flat and the iron must not be pitted through"
+      ]
+    },
+    {
+      "brand": "Small replacement parts",
+      "category": "replacement_parts",
+      "tier": 2,
+      "models": [
+        "appliance knob",
+        "vacuum attachment",
+        "sewing machine foot",
+        "sewing machine bobbin case",
+        "OEM filter",
+        "range knob",
+        "dryer knob",
+        "blender jar lid"
+      ],
+      "era_markers": [
+        "OEM part numbers are moulded into the plastic or printed on a label",
+        "Match the parent appliance model before listing",
+        "Cracked mounting tabs are the usual reason these are replaced"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "OEM appliance knobs and small spares",
+          "low": 12,
+          "high": 65
+        }
+      ],
+      "target_buy_usd": {
+        "low": 0.5,
+        "high": 15
+      },
+      "platform_primary": "eBay",
+      "platform_secondary": "Mercari",
+      "comp_query_template": "Small replacement parts {model} sold",
+      "ship_class": "poly_mailer",
+      "notes": "Highest margin per ounce in the sheet: pennies to acquire in mixed lots, under 1lb to ship, and buyers search the exact part number because the appliance is otherwise unusable.",
+      "condition_critical": [
+        "Verify the exact model or part number",
+        "Check mounting tabs and splines for cracks",
+        "Test connectors and clips actually latch"
+      ]
     }
   ],
   "platform_notes": {

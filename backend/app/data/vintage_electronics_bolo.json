@@ -593,6 +593,65 @@
         "Check the cable for fraying and the plug for burn marks",
         "Factory reset any smart or wifi features before listing"
       ]
+    },
+    {
+      "brand": "Vintage hi-fi separates",
+      "category": "vintage_audio",
+      "tier": 1,
+      "models": [
+        "McIntosh MC",
+        "McIntosh MA",
+        "Marantz 2270",
+        "Marantz 2275",
+        "Sansui AU",
+        "Sansui 9090",
+        "Pioneer SX-1250",
+        "Pioneer SX-1980",
+        "Technics SL-1200",
+        "Technics SU",
+        "JVC receiver",
+        "Akai GX",
+        "Luxman",
+        "Teac reel to reel"
+      ],
+      "era_markers": [
+        "Silver-faced receivers from the 1970s are the collected era",
+        "McIntosh blue meters and glass front panel are unmistakable",
+        "Model number on the rear panel next to the speaker terminals",
+        "Wood cases add materially and are often missing"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "McIntosh amplifiers and tuners",
+          "low": 900,
+          "high": 2880
+        },
+        {
+          "item": "Marantz / Sansui / Pioneer flagship receivers",
+          "low": 450,
+          "high": 1500
+        },
+        {
+          "item": "Technics SL-1200 turntables",
+          "low": 400,
+          "high": 900
+        }
+      ],
+      "target_buy_usd": {
+        "low": 20,
+        "high": 250
+      },
+      "platform_primary": "eBay",
+      "platform_secondary": "Mercari",
+      "comp_query_template": "Vintage hi-fi separates {model} sold",
+      "ship_class": "large_box",
+      "notes": "The top of the sheet by resale, and consistently mispriced at estate auctions because a receiver looks like junk furniture. Heavy enough that shipping needs checking before bidding.",
+      "condition_critical": [
+        "Test every channel, both left and right",
+        "Listen for crackle when turning the volume pot",
+        "No burning or smoke smell; that means a failed output stage",
+        "Confirm the wood case is present if the model had one"
+      ]
     }
   ],
   "platform_notes": {
