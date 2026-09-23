@@ -19,7 +19,6 @@ import re
 import statistics
 import threading
 import time
-from collections import deque
 from typing import Optional
 
 from datetime import datetime, timedelta, timezone
@@ -649,25 +648,60 @@ COMP_CACHE_DAYS = float(os.environ.get("COMP_CACHE_DAYS", "7"))
 _CACHE_MAX_ITEMS = 60
 _db_cache_stats = {"hit": 0, "miss": 0}
 
-# The last few replies from SoldComps, for /status. A lookup that comes
-# back 200 with zero items logs nothing - the warnings only fire on
-# failure - so an outage where the API answers politely and emptily was
-# invisible from outside: 1,390 lots drifted onto asking prices with no
-# line anywhere saying why. This is what makes that observable without
-# reading the worker's logs. Never holds the key or any header.
+# The last replies from SoldComps, for /status. A lookup that comes back
+# 200 with zero items logs nothing - the warnings only fire on failure -
+# so an outage where the API answers politely and emptily was invisible
+# from outside: 1,390 lots drifted onto asking prices with no line
+# anywhere saying why. Kept in Postgres, not memory: the worker makes the
+# calls and the backend serves /status, and they are different containers,
+# so an in-process buffer was unreadable by design. Never holds the key.
 SOLDCOMPS_WINDOW_DAYS = 90
-_recent_responses: deque = deque(maxlen=20)
+_REPLIES_SHOWN = 20
+_no_key_noted = False
 
 
-def _note_response(query: str, status, **extra) -> None:
-    _recent_responses.append({
-        "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "query": query[:120], "status": status, **extra})
+def _note_response(query: str, status, *, total_items=None, items=None,
+                   parsed=None, note=None) -> None:
+    """Write one reply row. Never raises - a lost trace must not cost the
+    lookup that produced it."""
+    from ..database import SessionLocal
+    from .. import models
+    db = None
+    try:
+        db = SessionLocal()
+        db.add(models.ApiReply(
+            source="soldcomps", query=(query or "")[:200], status=status,
+            total_items=total_items, items=items, parsed=parsed,
+            note=(note or "")[:200] or None))
+        db.commit()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not record SoldComps reply for %r: %s", query, exc)
+    finally:
+        if db is not None:
+            db.close()
 
 
-def soldcomps_recent() -> list[dict]:
-    """Newest first."""
-    return list(reversed(_recent_responses))
+def soldcomps_recent(limit: int = _REPLIES_SHOWN) -> list[dict]:
+    """Newest first. Never raises: /status must not go down with the table."""
+    from ..database import SessionLocal
+    from .. import models
+    db = None
+    try:
+        db = SessionLocal()
+        rows = (db.query(models.ApiReply)
+                  .filter(models.ApiReply.source == "soldcomps")
+                  .order_by(models.ApiReply.id.desc()).limit(limit).all())
+        return [{"at": (r.created_at.isoformat(timespec="seconds")
+                        if r.created_at else None),
+                 "query": r.query, "status": r.status,
+                 "total_items": r.total_items, "items": r.items,
+                 "parsed": r.parsed, "note": r.note} for r in rows]
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not read SoldComps replies: %s", exc)
+        return []
+    finally:
+        if db is not None:
+            db.close()
 
 
 def _db_cache_get(query: str, source: str):
@@ -735,6 +769,14 @@ def _soldcomps_lookup(query: str, count: int = 120) -> list[tuple[float, str]]:
     limited quietly downgrades a sold-price estimate to an asking-price one.
     """
     if not SOLDCOMPS_API_KEY:
+        # Once per process, not per variant: a persistent misconfig would
+        # otherwise write four rows per lot forever. One row is the signal -
+        # Railway services carry separate variable sets, so a key present
+        # on the backend says nothing about the worker that actually calls.
+        global _no_key_noted
+        if not _no_key_noted:
+            _no_key_noted = True
+            _note_response(query, None, note="no SOLDCOMPS_API_KEY in this process")
         return []
     key = f"{query}|{count}"
     cached = _cache_get(key)
@@ -827,9 +869,7 @@ def _soldcomps_lookup(query: str, count: int = 120) -> list[tuple[float, str]]:
                             "date": item.get("soldDate") or item.get("dateSold")
                                     or item.get("date"),
                             "kind": "sold"})
-        _note_response(query, 200,
-                       total_items=body.get("totalItems"),
-                       scraped_count=body.get("scrapedCount"),
+        _note_response(query, 200, total_items=body.get("totalItems"),
                        items=len(items), parsed=len(out))
         # Cached even when empty: "nothing sold matching this" is an answer,
         # and re-asking it per variant is what built the burst.

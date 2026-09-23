@@ -13,6 +13,10 @@ import pytest
 
 from app.services import pricing
 
+# What _note_response was asked to write, per test. The real writer goes to
+# Postgres; these tests are pure, so the fixture captures the call instead.
+RECORDED: list = []
+
 
 class _Resp:
     def __init__(self, status, items=None, retry_after=None, total=None):
@@ -42,7 +46,11 @@ def _reset(monkeypatch):
     # throttle test is measuring, and stubbing it globally made that test
     # pass trivially against a throttle that wasn't working.
     monkeypatch.setattr(pricing, "_retry_after_seconds", lambda *a: 0.0)
-    pricing._recent_responses.clear()
+    # Capture the reply trace rather than write it: these tests are pure.
+    RECORDED.clear()
+    monkeypatch.setattr(pricing, "_note_response",
+                        lambda q, s, **kw: RECORDED.append({"query": q, "status": s, **kw}))
+    monkeypatch.setattr(pricing, "_no_key_noted", False)
 
 
 def _client(responses):
@@ -239,17 +247,26 @@ def test_every_reply_is_recorded_for_the_status_bar(monkeypatch):
     FakeClient, _ = _client([_Resp(200, [], total=0)])
     monkeypatch.setattr(pricing.httpx, "Client", FakeClient)
     pricing._soldcomps_lookup("nothing")
-    rec = pricing.soldcomps_recent()[0]
-    assert rec["query"] == "nothing"
-    assert rec["status"] == 200
-    assert rec["total_items"] == 0
-    assert rec["items"] == 0 and rec["parsed"] == 0
+    assert RECORDED[-1] == {"query": "nothing", "status": 200,
+                            "total_items": 0, "items": 0, "parsed": 0}
 
     Broken, _ = _client([_Resp(503)])
     monkeypatch.setattr(pricing.httpx, "Client", Broken)
     pricing._soldcomps_lookup("broken")
-    assert pricing.soldcomps_recent()[0] == {
-        **pricing.soldcomps_recent()[0], "query": "broken", "status": 503}
+    assert RECORDED[-1]["query"] == "broken"
+    assert RECORDED[-1]["status"] == 503
+
+
+def test_a_missing_key_is_recorded_once_not_per_variant(monkeypatch):
+    """Railway services carry separate variable sets: a key present on the
+    backend says nothing about the worker that actually calls. One row is
+    the signal; four per lot forever would be noise."""
+    monkeypatch.setattr(pricing, "SOLDCOMPS_API_KEY", "")
+    for q in ("a", "b", "c"):
+        assert pricing._soldcomps_lookup(q) == []
+    assert len(RECORDED) == 1
+    assert RECORDED[0]["status"] is None
+    assert "no SOLDCOMPS_API_KEY" in RECORDED[0]["note"]
 
 
 def test_the_record_never_carries_the_key(monkeypatch):
@@ -258,4 +275,5 @@ def test_the_record_never_carries_the_key(monkeypatch):
     FakeClient, _ = _client([_Resp(200, [{"soldPrice": "5.00", "title": "w"}])])
     monkeypatch.setattr(pricing.httpx, "Client", FakeClient)
     pricing._soldcomps_lookup("widget")
-    assert "test-key" not in json.dumps(pricing.soldcomps_recent())
+    assert RECORDED, "nothing was recorded for a successful call"
+    assert "test-key" not in json.dumps(RECORDED)

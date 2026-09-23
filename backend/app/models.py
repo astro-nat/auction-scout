@@ -376,3 +376,28 @@ class CompCache(Base):
     payload = Column(JSONB)
     hits = Column(Integer, default=0)
     created_at = Column(DateTime, server_default=func.now(), index=True)
+
+
+class ApiReply(Base):
+    """The last replies from the comp API, readable from any process.
+
+    A 200 with zero items logs nothing - the warnings fire only on failure -
+    so an outage where the API answers politely and emptily was invisible
+    from outside: 1,390 lots drifted onto asking prices with no line
+    anywhere saying why. An in-memory buffer was tried first and could not
+    be read at all: the worker makes the calls and the backend serves
+    /status, and they are different containers. Never holds the key.
+    """
+    __tablename__ = "api_replies"
+
+    id = Column(Integer, primary_key=True)
+    source = Column(String, nullable=False, index=True)   # soldcomps
+    query = Column(String)
+    # HTTP status of the reply. NULL means no request was made at all -
+    # no key in this process, or the client raised before sending.
+    status = Column(Integer)
+    total_items = Column(Integer)     # what the API says matched
+    items = Column(Integer)           # how many it returned on this page
+    parsed = Column(Integer)          # how many carried a usable price
+    note = Column(String)
+    created_at = Column(DateTime, server_default=func.now(), index=True)
