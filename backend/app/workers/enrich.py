@@ -508,6 +508,7 @@ def _enrich(lot: models.Lot, e: models.Enrichment, db: Session,
             with _step(phase, "comps"):
                 comps = pricing.lookup_comps(search_title)
         mult = CONDITION_MULTIPLIER.get(e.verdict, 1.0)
+        prior_resale = e.est_resale
         if not comps["est_resale"] and e.est_resale is not None:
             # The lookup came back empty, and we already had a number.
             # Every failure path in lookup_comps - no key, breaker open,
@@ -543,6 +544,16 @@ def _enrich(lot: models.Lot, e: models.Enrichment, db: Session,
             if mult != 1.0 and comps["price_source"]:
                 e.price_source += f" ×{mult:g} condition"
             _apply_estimate_cap(lot, e)
+        # A changed value voids its old audit - the check certified a number
+        # that no longer exists. The bulk path has always done this; this
+        # path did not, so a lot re-identified from a $771 Topps rookie to a
+        # $53 Upper Deck card kept the demotion and the note about the $771
+        # comp, and could never be audited again. The kept-value path above
+        # leaves the audit standing on purpose: the number it certified is
+        # still the number on display.
+        if str(prior_resale) != str(e.est_resale):
+            e.gold_check = None
+            e.gold_check_note = None
 
     # --- 4. ROI ---
     _progress(db, e, "computing max bid and ROI…")
@@ -617,6 +628,16 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
                                    or titled_vehicle
                                    or thin_evidence or demoted)
                         else lead.status)
+        if demoted:
+            # The auditor rejected this number and offered no replacement.
+            # A ceiling, a profit and an ROI computed from it are guidance
+            # derived from a rejected number - a LeBron rookie showed a
+            # struck-through $771 beside a $326 max bid that only made
+            # sense if the $771 were true. The value stays for context
+            # (the UI strikes it through); the advice goes.
+            e.max_bid = None
+            e.est_roi = None
+            e.profit = None
         # Name the gate, in gate order — the first one that blocked is the
         # one the user should read. NULL on a clean gold: nothing to explain.
         if red_flag:
