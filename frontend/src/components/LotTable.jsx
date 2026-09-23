@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { enrichLot, inspectLot, fetchLot, patchEnrichment, enrichBatch, setWatch, setHidden, setWon, alertOnce, parseUtc } from '../api'
+import { enrichLot, inspectLot, fetchLot, patchEnrichment, enrichBatch, repriceSelected, setWatch, setHidden, setWon, alertOnce, parseUtc } from '../api'
 import { compRows, ebaySoldUrl } from '../lib/comps'
 import { houseRatioLabel, houseRatioTitle } from '../lib/calibration'
 import { MONEY_RANGES, ROI_RANGES, matchesFilter, roiPercent } from '../lib/filters'
+import { allSelected, chunked, inView, selectAll, toggle } from '../lib/selection'
 import useMediaQuery from '../useMediaQuery'
 
 // The homework behind a resale number: the comp records the pricer actually
@@ -302,6 +303,11 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
   const [renderLimit, setRenderLimit] = useState(150)
   // True while the enrich-batch request is in flight.
   const [queuing, setQueuing] = useState(false)
+  // Multi-select: lot_ids the user has ticked. Kept as a Set of ids rather
+  // than row indexes so ticks survive re-sorting, re-filtering and the
+  // 5-second refresh while a batch runs. Actions act on the ticked lots
+  // still in the current result (see lib/selection.inView).
+  const [selected, setSelected] = useState(() => new Set())
 
   // Whenever ANY lot is queued — no matter which client or button started the
   // batch — refresh the table every 5s until the queue drains, so background
@@ -485,6 +491,82 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
     }
   }
 
+  // --- bulk actions on the selection ------------------------------------
+  const selectedInView = inView(selected, sorted)
+
+  // Per-lot endpoints (hide, watch) a few at a time: sequential is slow on
+  // a hundred lots, all-at-once is a request storm. Every settled result
+  // updates its row; a failure names itself once and the rest carry on.
+  async function bulkEach(ids, fn) {
+    for (const chunk of chunked(ids, 6)) {
+      const results = await Promise.allSettled(chunk.map(fn))
+      for (const r of results) {
+        if (r.status === 'fulfilled') onLotUpdated(r.value)
+        else alertOnce(r.reason?.message || String(r.reason))
+      }
+    }
+  }
+
+  async function handleBulkPrice() {
+    const ids = selectedInView
+      .filter((l) => !['success', 'queued'].includes(l.enrichment?.status))
+      .map((l) => l.lot_id)
+    if (!ids.length) { alert('Every selected lot is already priced or in progress.'); return }
+    const cost = (ids.length * 0.005).toFixed(2)
+    if (!window.confirm(`Price ${ids.length} selected lots?\n\nEach runs an AI pass and a comp `
+                        + `lookup — roughly $${cost} of API usage, in the order shown.`)) return
+    setQueuing(true)
+    try { await enrichBatch(ids); onRefresh?.() } catch (e) { alertOnce(e.message) }
+    finally { setQueuing(false) }
+  }
+
+  async function handleBulkComps() {
+    const ids = selectedInView.map((l) => l.lot_id)
+    if (!window.confirm(`Look up sold comps for ${ids.length} selected lots, using their titles `
+                        + `as-is?\n\nNo AI cost. About ${ids.length} SoldComps requests against `
+                        + `your plan. Lots that already have a value are searched again.`)) return
+    setQueuing(true)
+    try {
+      const r = await repriceSelected(ids)
+      if (r.already_running) alert('A re-price is already running; let it finish first.')
+      onRefresh?.()
+    } catch (e) { alertOnce(e.message) }
+    finally { setQueuing(false) }
+  }
+
+  const handleBulkHide = (hidden) =>
+    bulkEach(selectedInView.map((l) => l.lot_id), (id) => setHidden(id, hidden))
+  const handleBulkWatch = (watched) =>
+    bulkEach(selectedInView.map((l) => l.lot_id), (id) => setWatch(id, watched))
+
+  const smallBtn = { fontSize: 13, padding: '4px 9px' }
+  const bulkBar = selectedInView.length > 0 && (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center',
+                  margin: '6px 0', padding: 6, borderRadius: 6,
+                  border: '1px solid var(--border, #555)' }}>
+      <strong style={{ marginRight: 4 }}>{selectedInView.length.toLocaleString()} selected</strong>
+      {!allSelected(selected, sorted) && (
+        <button style={smallBtn} onClick={() => setSelected(selectAll(sorted))}
+                title="Select every lot matching the current filters — the whole result, not just the rows on screen">
+          Select all {sorted.length.toLocaleString()}
+        </button>
+      )}
+      <button style={smallBtn} onClick={handleBulkPrice} disabled={queuing}
+              title="AI pass plus comp lookup on the selected lots (asks first, shows cost)">
+        Price selected
+      </button>
+      <button style={smallBtn} onClick={handleBulkComps} disabled={queuing}
+              title="Sold-comps lookup on the selected lots' titles as-is. No AI cost (asks first, shows the request count)">
+        Comps only, no AI
+      </button>
+      <button style={smallBtn} onClick={() => handleBulkHide(true)}>Hide</button>
+      <button style={smallBtn} onClick={() => handleBulkHide(false)}>Unhide</button>
+      <button style={smallBtn} onClick={() => handleBulkWatch(true)}>Watch</button>
+      <button style={smallBtn} onClick={() => handleBulkWatch(false)}>Unwatch</button>
+      <button style={smallBtn} onClick={() => setSelected(new Set())}>Clear selection</button>
+    </div>
+  )
+
   if (!lots.length) return <p>No lots yet — scan auctions and import one above.</p>
 
   const enrichableCount = enrichable.length
@@ -552,6 +634,14 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
             {queuing ? <><span className="spinner" />Queuing {enrichableCount} lots…</>
                      : `Price all ${enrichableCount}`}
           </button>
+          {!selectedInView.length && sorted.length > 0 && (
+            <button style={{ flex: '1 1 100%', padding: 6, fontSize: 13 }}
+                    onClick={() => setSelected(selectAll(sorted))}
+                    title="Select every lot matching the current filters, then act on them together">
+              Select all {sorted.length.toLocaleString()}
+            </button>
+          )}
+          {bulkBar && <div style={{ flexBasis: '100%' }}>{bulkBar}</div>}
           {anyQueued && <span style={{ flexBasis: '100%' }}><span className="spinner" />{lots.filter((l) => l.enrichment?.status === 'queued').length} lots in the queue… auto-refreshing</span>}
           <div style={{ flexBasis: '100%' }}>{countLine}</div>
         </div>
@@ -565,6 +655,11 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                  style={{ marginBottom: 10 }}
                  title={overbid ? 'Bid has passed your max-bid ceiling' : undefined}>
               <div style={{ fontWeight: 600 }}>
+                <input type="checkbox"
+                       checked={selected.has(lot.lot_id)}
+                       onChange={() => setSelected(toggle(selected, lot.lot_id))}
+                       title="Select this lot for a bulk action"
+                       style={{ marginRight: 6, transform: 'scale(1.2)' }} />
                 <button
                   className="bare"
                   onClick={() => handleWatch(lot.lot_id, !lot.watched)}
@@ -706,6 +801,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
       {anyQueued && <span style={{ marginLeft: '0.75rem' }}><span className="spinner" />{lots.filter((l) => l.enrichment?.status === 'queued').length} lots in the queue… auto-refreshing</span>}
       <span style={{ marginLeft: '0.75rem' }}>{countLine}</span>
     </div>
+    {bulkBar}
     {/* No overflow wrapper: an overflow-x container becomes the scrollport
         position:sticky binds to, and the thead's top offset then displaces
         it INSIDE the table by the status bar's height — a blank band with
@@ -719,6 +815,12 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
         background: 'var(--card-bg)',
       }}>
         <tr>
+          <th style={{ width: 28 }}
+              title={`Select all ${sorted.length.toLocaleString()} lots matching the current filters`}>
+            <input type="checkbox"
+                   checked={allSelected(selected, sorted)}
+                   onChange={(ev) => setSelected(ev.target.checked ? selectAll(sorted) : new Set())} />
+          </th>
           {COLUMNS.map((c) => (
             <th
               key={c.key}
@@ -735,6 +837,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
           <th></th>
         </tr>
         <tr className="filter-row">
+          <th></th>
           {COLUMNS.map((c) => (
             <th key={c.key} style={{ fontWeight: 'normal',
                                      textAlign: c.num ? 'right' : undefined }}>
@@ -782,6 +885,12 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                 // Weak-evidence gold (asking prices, AI estimates) gets a
                 // paler wash: worth a look, not the same claim as real sales.
                 style={paleGold ? { opacity: 0.82 } : undefined}>
+              <td style={cell}>
+                <input type="checkbox"
+                       checked={selected.has(lot.lot_id)}
+                       onChange={() => setSelected(toggle(selected, lot.lot_id))}
+                       title="Select this lot for a bulk action" />
+              </td>
               <td className="num" style={{ ...cell, color: 'var(--muted)' }}>
                 {lot.lot_number || '—'}
               </td>

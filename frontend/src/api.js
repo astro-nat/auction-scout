@@ -113,6 +113,15 @@ export function repriceUnpriced({ auctionIds = [], category = '', dryRun = false
   return request(`/lots/reprice?${params}`, { method: 'POST' })
 }
 
+// Comps-only on an explicit selection: the lots the user ticked, whatever
+// their state. Raw title when there is no AI one; no AI spend either way.
+export function repriceSelected(lotIds, { dryRun = false } = {}) {
+  return request(`/lots/reprice${dryRun ? '?dry_run=true' : ''}`, {
+    method: 'POST',
+    body: JSON.stringify({ lot_ids: lotIds }),
+  })
+}
+
 export function fetchStatus() {
   return request('/status')
 }

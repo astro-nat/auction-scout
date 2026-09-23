@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -81,6 +81,7 @@ def reprice(auction_id: int | None = None, weak_only: bool = False,
             unpriced_only: bool = False, dry_run: bool = False,
             auction_ids: list[int] | None = Query(None),
             category: str | None = None,
+            payload: schemas.RepriceRequest | None = Body(None),
             db: Session = Depends(get_db)):
     """Recompute comps + ROI for enriched lots using current pricing rules.
 
@@ -110,6 +111,11 @@ def reprice(auction_id: int | None = None, weak_only: bool = False,
                .filter(models.Enrichment.est_resale.is_(None),
                        (models.Auction.closing_date.is_(None))
                        | (models.Auction.closing_date >= datetime.now())))
+    elif payload and payload.lot_ids:
+        # An explicit selection: the user ticked these. No scope filter -
+        # a lot with no AI title is searched on its raw one, a lot with a
+        # value already is searched again. Their intent, their request cost.
+        q = q.filter(models.Lot.lot_id.in_(payload.lot_ids))
     else:
         q = q.filter(models.Enrichment.enriched_title.isnot(None))
     if auction_id:

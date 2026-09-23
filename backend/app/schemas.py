@@ -143,6 +143,13 @@ class EnrichBatchRequest(BaseModel):
     lot_ids: list[str]
 
 
+class RepriceRequest(BaseModel):
+    """An explicit selection for the re-price job. The user ticked these
+    lots, so no scope filter applies: a lot with no AI title is searched on
+    its raw one, and a lot that already has a value is searched again."""
+    lot_ids: list[str]
+
+
 class ImportAllRequest(BaseModel):
     """Bulk import: which auctions, in display order, and how much of each.
 

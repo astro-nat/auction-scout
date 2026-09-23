@@ -135,3 +135,23 @@ def test_the_pass_can_be_scoped_to_selected_auctions(seeded):
                        "&auction_ids=999999998&auction_ids=999999999").json()
     assert none["repricing"] == 0
     assert enqueued == []
+
+
+def test_an_explicit_selection_takes_every_lot_named_whatever_its_state(seeded):
+    """Multi-select: the user ticked these. The never-priced lot goes in
+    without an AI title (raw-title search), and the already-priced lot goes
+    in too - a selection is a request to search again, not a scope."""
+    ids, enqueued = seeded
+    r = client.post("/lots/reprice", json={"lot_ids": ["up-1", "up-2"]})
+    assert r.status_code == 202, r.text
+    queued = _queued(enqueued)
+    assert ids["unpriced"] in queued
+    assert ids["priced"] in queued
+    assert ids["closed"] not in queued          # not named, so not touched
+
+
+def test_a_selection_dry_run_counts_without_queuing(seeded):
+    ids, enqueued = seeded
+    body = client.post("/lots/reprice?dry_run=true", json={"lot_ids": ["up-1"]}).json()
+    assert body["repricing"] == 1
+    assert enqueued == []
