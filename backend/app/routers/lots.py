@@ -173,7 +173,14 @@ def flush_closed_now(db: Session, dry_run: bool = False) -> dict:
     # feed the per-house calibration, and the rows are about to be deleted.
     calibration.capture(db, doomed)
     if lot_ids:
-        # No delete-cascade on the models, so enrichments go first.
+        # No delete-cascade on the models, so the children go first. The
+        # price trail was added after this was written, and the first closed
+        # auction whose lots carried one failed the whole flush on its
+        # foreign key and rolled it back - after a day of re-pricing, that
+        # was nearly every closed auction.
+        (db.query(models.PriceObservation)
+           .filter(models.PriceObservation.lot_id.in_(lot_ids))
+           .delete(synchronize_session=False))
         (db.query(models.Enrichment)
            .filter(models.Enrichment.lot_id.in_(lot_ids))
            .delete(synchronize_session=False))
