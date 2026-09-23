@@ -158,13 +158,20 @@ def test_zero_realistic_value_is_a_plain_demotion(verify_with):
     assert e.roi_status == "PASS"
 
 
-def test_an_incoherent_higher_value_is_ignored(verify_with):
-    """'Implausible, and it's worth MORE' contradicts itself — demote."""
+def test_a_higher_value_confirms_the_claim_as_a_floor(verify_with):
+    """'Implausible, and it's worth MORE' used to be read as incoherent and
+    demoted. It is not incoherent - it is an auditor agreeing the number on
+    display is at least right. A $1-bid LeBron rookie at $56 was demoted
+    to PASS by an audit saying it 'typically sells for $200-$400'. The
+    claim stands as a floor and keeps the badge; it is NOT raised to the
+    auditor's figure, because one opinion pushing a value up is the risk
+    the audit exists to catch in the other direction."""
     lot, e = _gold_lot()
     verify_with(lot, e, {"plausible": False, "reason": "x",
                          "realistic_value": 500})
-    assert e.gold_check == "demoted"
+    assert e.gold_check == "confirmed"
     assert float(e.est_resale) == 200
+    assert e.roi_status == "GOLD MINE"
 
 
 def test_a_corrected_retail_gold_survives_the_thin_evidence_gate(verify_with):

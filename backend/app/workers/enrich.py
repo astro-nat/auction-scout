@@ -703,6 +703,29 @@ false: it replaces the claim you rejected."""
 _PROSE_VALUE_RE = re.compile(r"\$\s?(\d[\d,]*(?:\.\d{1,2})?)")
 
 
+def _audit_says_higher(result: dict, claimed: float) -> bool:
+    """True when the auditor's figure sits ABOVE the value it rejected -
+    "implausible" meaning too low. Structured field first, then the prose,
+    and a reason that names any figure below the claim is not an upward
+    call: _audit_correction's below-the-claim rule owns that case."""
+    if claimed <= 0:
+        return False
+    try:
+        value = float(result.get("realistic_value"))
+        if value > 0:
+            return value > claimed
+    except (TypeError, ValueError):
+        pass
+    figures = []
+    for match in _PROSE_VALUE_RE.finditer(str(result.get("reason") or "")):
+        try:
+            figures.append(float(match.group(1).replace(",", "")))
+        except ValueError:
+            continue
+    figures = [f for f in figures if f > 0 and abs(f - claimed) > 0.005]
+    return bool(figures) and all(f > claimed for f in figures)
+
+
 def _audit_correction(result: dict, claimed: float) -> float | None:
     """The auditor's own value, when usable: a positive number meaningfully
     below the claim it just rejected. Zero means 'no real value' (plain
@@ -802,12 +825,27 @@ def _verify_gold(db: Session, lot: models.Lot, e: models.Enrichment, *,
             _apply_roi(lot, e)
     else:
         e.gold_check_note = reason or "resale value judged implausible"
+        search_title = e.enriched_title or lot.title
         if e.est_resale is not None:
             price_log.record(lot.id, float(e.est_resale), method="comps",
                              price_source=e.price_source,
                              comp_count=e.comp_count, chosen=False,
-                             rejected=True,
+                             rejected=True, query=search_title,
                              note=f"audit rejected: {reason}"[:400])
+        if _audit_says_higher(result, float(e.est_resale or 0)):
+            # "Implausible" because it is too LOW. Every rejection used to
+            # be read as too high, so an auditor saying a $1-bid LeBron
+            # rookie at $56 "typically sells for $200-$400" demoted the lot
+            # to PASS - the exact opposite of its point. The number on
+            # display is one the auditor agrees is at least right, so it
+            # stands as a floor: confirm it, keep the badge. Not raised to
+            # the auditor's figure - one opinion pushing a value UP is the
+            # risk the whole audit exists to catch in the other direction.
+            e.gold_check = "confirmed"
+            if candidate:
+                _apply_roi(lot, e)
+            db.commit()
+            return
         corrected = _audit_correction(result, float(e.est_resale))
         if corrected is not None:
             e.gold_check = "corrected"
@@ -817,7 +855,8 @@ def _verify_gold(db: Session, lot: models.Lot, e: models.Enrichment, *,
             price_log.record(lot.id, float(e.est_resale), method="comps",
                              price_source=e.price_source,
                              comp_count=e.comp_count, chosen=False,
-                             rejected=True, note=f"audit: {reason}"[:400])
+                             rejected=True, query=search_title,
+                             note=f"audit: {reason}"[:400])
             price_log.record(lot.id, corrected, method="audit",
                              price_source="audit-corrected",
                              note=reason or None)
@@ -830,7 +869,11 @@ def _verify_gold(db: Session, lot: models.Lot, e: models.Enrichment, *,
             _apply_roi(lot, e)
         else:
             e.gold_check = "demoted"
-            e.roi_status = "PASS"
+            # Regrade NOW, not on the next bid refresh: _apply_roi is where
+            # a demoted lot loses its bid guidance, and ROI already ran
+            # before this audit - so without this the lot kept showing a
+            # max bid computed from the number just rejected.
+            _apply_roi(lot, e)
     db.commit()
 
 

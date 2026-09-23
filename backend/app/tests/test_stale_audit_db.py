@@ -29,6 +29,11 @@ from app.workers import enrich
 
 pytestmark = pytest.mark.db
 
+# The fixture stubs _verify_gold to a no-op so the pipeline tests never call
+# the model. The audit-branch tests below need the real one back, with only
+# the model call itself stubbed - captured here, before any fixture runs.
+_REAL_VERIFY_GOLD = enrich._verify_gold
+
 TEST_HIBID = 999999981
 EMPTY = {"est_resale": None, "price_low": None, "price_high": None,
          "comp_count": 0, "price_source": None, "comps": []}
@@ -127,3 +132,81 @@ def test_a_kept_value_keeps_its_audit(demoted_lot, monkeypatch):
     assert e.gold_check == "demoted"
     assert e.gold_check_note == NOTE
     assert e.max_bid is None, "a kept-but-rejected number still advised a bid"
+
+
+# --- through the real audit branch, with only the model call stubbed --------
+
+def _fresh_gold(db, lot_id, value=56.0):
+    """The lot as the audit finds it: a fresh GOLD MINE, no verdict yet."""
+    lot = db.query(models.Lot).filter(models.Lot.id == lot_id).one()
+    e = lot.enrichment
+    e.gold_check = None
+    e.gold_check_note = None
+    e.est_resale = value
+    e.price_source = "sold (SoldComps)"
+    e.comp_count = 36
+    enrich._apply_roi(lot, e)
+    e.roi_status = "GOLD MINE"
+    db.commit()
+    return lot, e
+
+
+def _audit_returns(monkeypatch, reason, realistic_value=None):
+    monkeypatch.setattr(enrich, "_verify_gold", _REAL_VERIFY_GOLD)
+    monkeypatch.setattr(enrich, "GOLD_CHECK", True)
+    payload = {"plausible": False, "reason": reason}
+    if realistic_value is not None:
+        payload["realistic_value"] = realistic_value
+    monkeypatch.setattr(enrich, "_call_with_retry", lambda fn: payload)
+
+
+def test_an_audit_that_says_the_value_is_too_low_confirms_it(demoted_lot, monkeypatch):
+    """The LeBron case after the identity was fixed: $56 from 36 correct
+    comps, and the auditor said 'typically sells for $200-$400, not $56'.
+    That is an auditor agreeing the number is at least right. It used to
+    demote the lot to PASS on a $1 bid - the opposite of its point."""
+    db, lot_id = demoted_lot
+    lot, e = _fresh_gold(db, lot_id)
+    _audit_returns(monkeypatch, "Rookie Exclusives #1 in mint condition typically "
+                                "sells for $200-$400+, not $56; undervalued")
+    enrich._verify_gold(db, lot, e)
+    db.expire_all()
+    e = _enrichment(db, lot_id)
+    assert e.gold_check == "confirmed"
+    assert float(e.est_resale) == pytest.approx(56.0), "raised on one opinion"
+    assert e.roi_status != "PASS"
+    assert e.max_bid is not None and e.max_bid > 0
+
+
+def test_an_audit_with_no_number_demotes_and_blanks_the_advice_now(demoted_lot, monkeypatch):
+    """Not on the next bid refresh - now. ROI ran before the audit, so the
+    demotion branch has to regrade itself or the rejected number's max
+    bid stays on the card."""
+    db, lot_id = demoted_lot
+    lot, e = _fresh_gold(db, lot_id)
+    _audit_returns(monkeypatch, "no real resale value; this is a reprint")
+    enrich._verify_gold(db, lot, e)
+    db.expire_all()
+    e = _enrichment(db, lot_id)
+    assert e.gold_check == "demoted"
+    assert e.roi_status == "PASS"
+    assert e.max_bid is None and e.profit is None
+    assert float(e.est_resale) == pytest.approx(56.0)        # context stays
+
+
+def test_an_audit_with_a_lower_number_still_corrects(demoted_lot, monkeypatch):
+    """The path that already worked, kept: a figure below the claim
+    replaces it and the lot is regraded on the auditor's number."""
+    db, lot_id = demoted_lot
+    lot, e = _fresh_gold(db, lot_id, value=771.02)
+    _audit_returns(monkeypatch, "worn raw copies typically sell $30-150; "
+                                "the $771 comp is a graded copy")
+    enrich._verify_gold(db, lot, e)
+    db.expire_all()
+    e = _enrichment(db, lot_id)
+    assert e.gold_check == "corrected"
+    assert float(e.est_resale) == pytest.approx(30.0)         # the low end, on purpose
+    assert e.price_source.startswith("audit-corrected")
+    rows = db.query(models.PriceObservation).filter(
+        models.PriceObservation.lot_id == lot_id).all()
+    assert any(r.rejected and r.query for r in rows), "the rejection row lost its query"
