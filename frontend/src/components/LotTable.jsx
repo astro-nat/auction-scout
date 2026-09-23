@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { enrichLot, inspectLot, fetchLot, patchEnrichment, enrichBatch, setWatch, setHidden, setWon, alertOnce, parseUtc } from '../api'
 import { compRows, ebaySoldUrl } from '../lib/comps'
 import { houseRatioLabel, houseRatioTitle } from '../lib/calibration'
+import { MONEY_RANGES, ROI_RANGES, matchesFilter, roiPercent } from '../lib/filters'
 import useMediaQuery from '../useMediaQuery'
 
 // The homework behind a resale number: the comp records the pricer actually
@@ -61,8 +62,6 @@ const VERDICTS = [
   'normal wear and tear',
 ]
 const SHIP_TIERS = ['EASY', 'NEUTRAL', 'HARD']
-const MONEY_RANGES = ['<5', '<10', '<25', '<50', '<100']
-
 function money(v) {
   if (v === null || v === undefined) return '—'
   return `$${Number(v).toFixed(2)}`
@@ -107,7 +106,10 @@ const COLUMNS = [
   { key: 'ship', label: 'Ship', get: (l) => l.logistics_ease, filter: 'values' },
   { key: 'est_resale', label: 'Est Resale', get: (l) => num(l.enrichment?.est_resale), filter: 'range', num: true },
   { key: 'max_bid', label: 'Max Bid', get: (l) => num(l.enrichment?.max_bid), filter: 'range', num: true },
-  { key: 'roi', label: 'ROI %', get: (l) => num(l.enrichment?.est_roi), filter: 'range', num: true },
+  // In percent, matching the cell, with "at least" presets: ROI is the one
+  // column where "under N" is never the question.
+  { key: 'roi', label: 'ROI %', get: (l) => roiPercent(l.enrichment?.est_roi),
+    filter: 'range', ranges: ROI_RANGES, num: true },
   { key: 'verdict', label: 'Verdict', get: (l) => l.enrichment?.verdict, filter: 'values' },
   { key: 'status', label: 'Status', get: (l) => l.enrichment?.status, filter: 'values' },
 ]
@@ -200,15 +202,6 @@ function roiTooltip(lot, e) {
       + (e.profit != null ? ` → profit ${money(e.profit)}` : ''))
   }
   return lines.join(String.fromCharCode(10))
-}
-
-function matchesFilter(value, query) {
-  if (!query) return true
-  if (value == null) return false
-  if (query.startsWith('>')) return typeof value === 'number' && value > parseFloat(query.slice(1))
-  if (query.startsWith('<')) return typeof value === 'number' && value < parseFloat(query.slice(1))
-  if (typeof value === 'number') return String(value).includes(query)
-  return String(value).toLowerCase().includes(query.toLowerCase())
 }
 
 // Click-to-edit cell. Enter saves (PATCHes the correction to the backend,
@@ -759,7 +752,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                   style={{ maxWidth: 110 }}
                 >
                   <option value="">all</option>
-                  {(c.filter === 'range' ? MONEY_RANGES : distinctValues[c.key] ?? []).map((v) => (
+                  {(c.filter === 'range' ? (c.ranges ?? MONEY_RANGES) : distinctValues[c.key] ?? []).map((v) => (
                     <option key={v} value={v}>{v}</option>
                   ))}
                 </select>
