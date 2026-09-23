@@ -507,24 +507,41 @@ def _enrich(lot: models.Lot, e: models.Enrichment, db: Session,
             with _step(phase, "comps"):
                 comps = pricing.lookup_comps(search_title)
         mult = CONDITION_MULTIPLIER.get(e.verdict, 1.0)
-        e.est_resale = (round(float(comps["est_resale"]) * mult, 2)
-                        if comps["est_resale"] else None)
-        e.price_low = (round(float(comps["price_low"]) * mult, 2)
-                       if comps["price_low"] else None)
-        e.price_high = (round(float(comps["price_high"]) * mult, 2)
-                        if comps["price_high"] else None)
-        e.comp_count = comps["comp_count"]
-        e.price_source = comps["price_source"]
-        if e.est_resale is not None:
-            price_log.record(lot.id, float(e.est_resale), method="comps",
-                             price_source=e.price_source,
-                             comp_count=e.comp_count, query=search_title)
-        # .get: the retail-in-title path predates the comps key on some
-        # builders — missing simply means no evidence rows to show.
-        e.comps = comps.get("comps") or None
-        if mult != 1.0 and comps["price_source"]:
-            e.price_source += f" ×{mult:g} condition"
-        _apply_estimate_cap(lot, e)
+        if not comps["est_resale"] and e.est_resale is not None:
+            # The lookup came back empty, and we already had a number.
+            # Every failure path in lookup_comps - no key, breaker open,
+            # quota wall, non-200 - returns exactly this shape, which is
+            # indistinguishable from "nothing like this has ever sold".
+            # Overwriting a working estimate on that basis is how one
+            # re-price during an outage erased values: a DeWalt DCF825 went
+            # from $19.49 to nothing in a single click. Keep what we had,
+            # and leave a trace so the trail can finally tell "no sold
+            # history" apart from "the API returned nothing".
+            price_log.record(
+                lot.id, None, method="empty", chosen=False,
+                note=(f"lookup returned nothing; kept "
+                      f"${float(e.est_resale):.2f} "
+                      f"({e.price_source or 'unknown source'})"),
+                query=search_title)
+        else:
+            e.est_resale = (round(float(comps["est_resale"]) * mult, 2)
+                            if comps["est_resale"] else None)
+            e.price_low = (round(float(comps["price_low"]) * mult, 2)
+                           if comps["price_low"] else None)
+            e.price_high = (round(float(comps["price_high"]) * mult, 2)
+                            if comps["price_high"] else None)
+            e.comp_count = comps["comp_count"]
+            e.price_source = comps["price_source"]
+            if e.est_resale is not None:
+                price_log.record(lot.id, float(e.est_resale), method="comps",
+                                 price_source=e.price_source,
+                                 comp_count=e.comp_count, query=search_title)
+            # .get: the retail-in-title path predates the comps key on some
+            # builders — missing simply means no evidence rows to show.
+            e.comps = comps.get("comps") or None
+            if mult != 1.0 and comps["price_source"]:
+                e.price_source += f" ×{mult:g} condition"
+            _apply_estimate_cap(lot, e)
 
     # --- 4. ROI ---
     _progress(db, e, "computing max bid and ROI…")

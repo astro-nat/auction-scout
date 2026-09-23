@@ -338,19 +338,34 @@ _DIMENSION_RE = re.compile(
         |\d+(?:[.,]\d+)?)$""",
     re.IGNORECASE | re.VERBOSE)
 
+# Trailing qualifier words that describe the listing, not the item. The AI
+# enrichment step appends these freely ("...Impact Driver Tool Only" for a
+# bare tool with no battery), and anchoring on one produced four variants
+# ending in "Only" - "DeWalt DCF825 Only" - a phrase no eBay seller has ever
+# typed. Four empty queries, four API requests burned, and the empties cached
+# for a week. Condition words (new, used, untested, sealed) never reach here:
+# clean_title strips them first.
+_ANCHOR_SKIP = frozenset({
+    "only", "nib", "mib", "nos", "nwt", "nwot", "misb", "lot", "pair",
+    "bundle", "each", "ea", "boxed", "oem", "genuine", "works", "working",
+    "tested", "pc", "pcs", "piece", "pieces",
+})
+
 
 def query_variants(title: str) -> list[str]:
     """Progressively shorter queries. eBay returns zero results for very long
     queries; 4-6 words is the sweet spot. When truncating, always keep the
     LAST MEANINGFUL word — enriched titles end with the item-type noun
     ("...Ironwood 18 Head Statue"), and dropping it comps a statue against
-    generic 'vintage african' listings. Trailing dimensions are skipped when
-    picking that anchor; they describe the item, they don't identify it."""
+    generic 'vintage african' listings. Trailing dimensions and listing
+    qualifiers ("Tool Only", "NIB", "Pair") are skipped when picking that
+    anchor; they describe the item, they don't identify it."""
     cleaned = clean_title(title)
     words = cleaned.split()
-    # Anchor on the last non-dimension token.
+    # Anchor on the last token that names the item.
     anchor_idx = len(words) - 1
-    while anchor_idx > 0 and _DIMENSION_RE.match(words[anchor_idx]):
+    while anchor_idx > 0 and (_DIMENSION_RE.match(words[anchor_idx])
+                              or words[anchor_idx].lower() in _ANCHOR_SKIP):
         anchor_idx -= 1
     anchor = words[anchor_idx:anchor_idx + 1]
     variants, seen = [], set()
