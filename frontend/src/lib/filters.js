@@ -29,3 +29,30 @@ export function roiPercent(estRoi) {
   if (estRoi === null || estRoi === undefined) return null
   return Math.round(Number(estRoi) * 100)
 }
+
+// Closing-time presets. The value is what the filter compares - hours
+// until close - and the label is what the dropdown shows, because "<48"
+// reads as nonsense where "< 2 days" reads as a question. A preset may be
+// a plain string (money) or a {value, label} pair; optionOf normalises.
+export const CLOSING_RANGES = [
+  { value: '<1', label: '< 1 hr' },
+  { value: '<24', label: '< 24 hrs' },
+  { value: '<48', label: '< 2 days' },
+  { value: '<168', label: '< 7 days' },
+  { value: '>168', label: '> 7 days' },
+]
+
+export function optionOf(preset) {
+  return typeof preset === 'string' ? { value: preset, label: preset } : preset
+}
+
+// Hours from now until a lot closes, or null when there is nothing to
+// count down to: no close time on file, or already closed. Null matches no
+// preset, so "< 1 hr" is lots closing within the hour, not lots that
+// closed an hour ago - those are not something you can still bid on.
+export function hoursUntil(closesAt, now, parse = (s) => new Date(s)) {
+  if (!closesAt) return null
+  const ms = parse(closesAt).getTime() - now
+  if (!Number.isFinite(ms) || ms <= 0) return null
+  return ms / 3600000
+}

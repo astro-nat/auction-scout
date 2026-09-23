@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MONEY_RANGES, ROI_RANGES, matchesFilter, roiPercent } from './filters'
+import { CLOSING_RANGES, MONEY_RANGES, ROI_RANGES, hoursUntil, matchesFilter, optionOf, roiPercent } from './filters'
 
 describe('matchesFilter', () => {
   it('reads > as more than and < as less than', () => {
@@ -41,5 +41,45 @@ describe('the ROI presets', () => {
     expect(matchesFilter(roiPercent(0.76), '>50')).toBe(true)
     expect(matchesFilter(roiPercent(0.76), '>100')).toBe(false)
     expect(matchesFilter(roiPercent(1.5), '>100')).toBe(true)
+  })
+})
+
+describe('closing-time presets', () => {
+  const NOW = Date.parse('2026-09-23T12:00:00Z')
+  const at = (hours) => new Date(NOW + hours * 3600000).toISOString()
+  const inWindow = (hours, preset) => matchesFilter(hoursUntil(at(hours), NOW), preset)
+
+  it('measure hours until close', () => {
+    expect(hoursUntil(at(3), NOW)).toBeCloseTo(3)
+    expect(hoursUntil(at(0.5), NOW)).toBeCloseTo(0.5)
+  })
+
+  it('treat a closed or unknown close time as nothing to count down to', () => {
+    // Null matches no preset: "< 1 hr" means closing within the hour,
+    // not closed an hour ago - you cannot bid on that.
+    expect(hoursUntil(at(-1), NOW)).toBeNull()
+    expect(hoursUntil(null, NOW)).toBeNull()
+    expect(hoursUntil('not a date', NOW)).toBeNull()
+    expect(matchesFilter(hoursUntil(at(-1), NOW), '<1')).toBe(false)
+  })
+
+  it('bucket the way the labels promise', () => {
+    expect(inWindow(0.5, '<1')).toBe(true)
+    expect(inWindow(0.5, '<24')).toBe(true)
+    expect(inWindow(0.5, '>168')).toBe(false)
+    expect(inWindow(30, '<24')).toBe(false)
+    expect(inWindow(30, '<48')).toBe(true)
+    expect(inWindow(6 * 24, '<168')).toBe(true)
+    expect(inWindow(10 * 24, '<168')).toBe(false)
+    expect(inWindow(10 * 24, '>168')).toBe(true)
+  })
+
+  it('carry a label distinct from the value they compare', () => {
+    expect(CLOSING_RANGES.map((r) => optionOf(r).label)).toEqual(
+      ['< 1 hr', '< 24 hrs', '< 2 days', '< 7 days', '> 7 days'])
+    expect(CLOSING_RANGES.map((r) => optionOf(r).value)).toEqual(
+      ['<1', '<24', '<48', '<168', '>168'])
+    // Money presets stay plain strings and normalise to themselves.
+    expect(optionOf('<5')).toEqual({ value: '<5', label: '<5' })
   })
 })

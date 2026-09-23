@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { enrichLot, inspectLot, fetchLot, patchEnrichment, enrichBatch, repriceSelected, setWatch, setHidden, setWon, alertOnce, parseUtc } from '../api'
 import { compRows, ebaySoldUrl } from '../lib/comps'
 import { houseRatioLabel, houseRatioTitle } from '../lib/calibration'
-import { MONEY_RANGES, ROI_RANGES, matchesFilter, roiPercent } from '../lib/filters'
+import { CLOSING_RANGES, MONEY_RANGES, ROI_RANGES, hoursUntil, matchesFilter, optionOf, roiPercent } from '../lib/filters'
 import { allSelected, chunked, inView, selectAll, toggle } from '../lib/selection'
 import useMediaQuery from '../useMediaQuery'
 
@@ -101,7 +101,12 @@ const COLUMNS = [
   { key: 'title', label: 'Title', get: (l) => l.title?.toLowerCase(), filter: 'text' },
   { key: 'auction', label: 'Auction', get: (l) => l.auction_name, filter: 'values' },
   { key: 'category', label: 'Category', get: (l) => l.category, filter: 'values' },
-  { key: 'closes', label: 'Closes', get: (l) => l.closes_at ? parseUtc(l.closes_at).getTime() : Number.MAX_SAFE_INTEGER, filter: null },
+  // Sorts by the instant (unknown last); FILTERS by hours until close, so
+  // the presets read "< 24 hrs" and a closed lot matches none of them.
+  { key: 'closes', label: 'Closes',
+    get: (l) => l.closes_at ? parseUtc(l.closes_at).getTime() : Number.MAX_SAFE_INTEGER,
+    filterGet: (l) => hoursUntil(l.closes_at, Date.now(), parseUtc),
+    filter: 'range', ranges: CLOSING_RANGES },
   { key: 'bid', label: 'Bid', get: (l) => num(l.current_bid), filter: 'range', num: true },
   { key: 'est_cost', label: 'Est Cost', get: (l) => num(l.est_cost), filter: 'range', num: true },
   { key: 'ship', label: 'Ship', get: (l) => l.logistics_ease, filter: 'values' },
@@ -336,7 +341,10 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
   const filtered = useMemo(() => {
     const active = COLUMNS.filter((c) => colFilters[c.key]?.trim())
     if (!active.length) return lots
-    return lots.filter((l) => active.every((c) => matchesFilter(c.get(l), colFilters[c.key].trim())))
+    // filterGet lets a column sort by one value and filter by another - the
+    // Closes column sorts by the instant but filters by hours until close.
+    return lots.filter((l) => active.every((c) =>
+      matchesFilter((c.filterGet ?? c.get)(l), colFilters[c.key].trim())))
   }, [lots, colFilters])
 
   const sortedBase = useMemo(() => {
@@ -608,6 +616,18 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
           >
             {MOBILE_SORTS.map((s, i) => <option key={s.label} value={i}>{s.label}</option>)}
           </select>
+          <select
+            value={colFilters.closes ?? ''}
+            onChange={(ev) => setFilter('closes', ev.target.value)}
+            style={{ flex: 1, padding: 6, fontSize: 14, maxWidth: '48%' }}
+            title="Closing within…"
+          >
+            <option value="">Closes: any</option>
+            {CLOSING_RANGES.map((r) => {
+              const o = optionOf(r)
+              return <option key={o.value} value={o.value}>{o.label}</option>
+            })}
+          </select>
           {/* Same filter engine the desktop column dropdowns use — the
               card view just has nowhere to hang per-column widgets. */}
           {[['ship', 'Ship'], ['status', 'Status'], ['verdict', 'Verdict']].map(([key, label]) => (
@@ -855,9 +875,10 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                   style={{ maxWidth: 110 }}
                 >
                   <option value="">all</option>
-                  {(c.filter === 'range' ? (c.ranges ?? MONEY_RANGES) : distinctValues[c.key] ?? []).map((v) => (
-                    <option key={v} value={v}>{v}</option>
-                  ))}
+                  {(c.filter === 'range' ? (c.ranges ?? MONEY_RANGES) : distinctValues[c.key] ?? []).map((r) => {
+                    const o = optionOf(r)
+                    return <option key={o.value} value={o.value}>{o.label}</option>
+                  })}
                 </select>
               )}
             </th>
