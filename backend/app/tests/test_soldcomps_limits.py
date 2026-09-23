@@ -15,13 +15,14 @@ from app.services import pricing
 
 
 class _Resp:
-    def __init__(self, status, items=None, retry_after=None):
+    def __init__(self, status, items=None, retry_after=None, total=None):
         self.status_code = status
         self._items = items or []
+        self._total = len(self._items) if total is None else total
         self.headers = {"Retry-After": retry_after} if retry_after else {}
 
     def json(self):
-        return {"items": self._items}
+        return {"items": self._items, "totalItems": self._total}
 
 
 @pytest.fixture(autouse=True)
@@ -41,6 +42,7 @@ def _reset(monkeypatch):
     # throttle test is measuring, and stubbing it globally made that test
     # pass trivially against a throttle that wasn't working.
     monkeypatch.setattr(pricing, "_retry_after_seconds", lambda *a: 0.0)
+    pricing._recent_responses.clear()
 
 
 def _client(responses):
@@ -48,6 +50,8 @@ def _client(responses):
     calls = []
 
     class FakeClient:
+        sent = []          # every params dict, for the request-shape tests
+
         def __init__(self, *a, **kw):
             pass
 
@@ -59,6 +63,7 @@ def _client(responses):
 
         def get(self, url, headers=None, params=None):
             calls.append(params["keyword"])
+            FakeClient.sent.append(dict(params))
             return responses[min(len(calls) - 1, len(responses) - 1)]
 
     return FakeClient, calls
@@ -206,3 +211,51 @@ def test_the_breaker_logs_once_not_per_call(monkeypatch, caplog):
         pricing._open_breaker("first")
         pricing._open_breaker("second")
     assert sum("pausing sold-comp" in r.message for r in caplog.records) == 1
+
+
+def test_the_request_uses_the_documented_parameters(monkeypatch):
+    """daysToScrape was a body field of their bulk-job endpoint and means
+    nothing on this one; soldAfter (YYYY-MM-DD) is how the spec bounds the
+    window. And exactMatch defaults to true on their side, which strips
+    every loosened match - for a long enriched title, all of them."""
+    import re
+    from datetime import datetime, timezone
+    FakeClient, _ = _client([_Resp(200, [{"soldPrice": "5.00", "title": "w"}])])
+    monkeypatch.setattr(pricing.httpx, "Client", FakeClient)
+    pricing._soldcomps_lookup("widget")
+    p = FakeClient.sent[-1]
+    assert "daysToScrape" not in p
+    assert p["exactMatch"] == "false"
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", p["soldAfter"])
+    age = (datetime.now(timezone.utc).date()
+           - datetime.strptime(p["soldAfter"], "%Y-%m-%d").date()).days
+    assert abs(age - pricing.SOLDCOMPS_WINDOW_DAYS) <= 1
+
+
+def test_every_reply_is_recorded_for_the_status_bar(monkeypatch):
+    """A 200 with zero items logs nothing at all - the warnings fire only
+    on failure - so an outage where the API answers politely and emptily
+    was invisible from outside. This is the trace, served on /status."""
+    FakeClient, _ = _client([_Resp(200, [], total=0)])
+    monkeypatch.setattr(pricing.httpx, "Client", FakeClient)
+    pricing._soldcomps_lookup("nothing")
+    rec = pricing.soldcomps_recent()[0]
+    assert rec["query"] == "nothing"
+    assert rec["status"] == 200
+    assert rec["total_items"] == 0
+    assert rec["items"] == 0 and rec["parsed"] == 0
+
+    Broken, _ = _client([_Resp(503)])
+    monkeypatch.setattr(pricing.httpx, "Client", Broken)
+    pricing._soldcomps_lookup("broken")
+    assert pricing.soldcomps_recent()[0] == {
+        **pricing.soldcomps_recent()[0], "query": "broken", "status": 503}
+
+
+def test_the_record_never_carries_the_key(monkeypatch):
+    """It is served on /status, which anyone with the app open can read."""
+    import json
+    FakeClient, _ = _client([_Resp(200, [{"soldPrice": "5.00", "title": "w"}])])
+    monkeypatch.setattr(pricing.httpx, "Client", FakeClient)
+    pricing._soldcomps_lookup("widget")
+    assert "test-key" not in json.dumps(pricing.soldcomps_recent())

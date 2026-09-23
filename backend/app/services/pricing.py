@@ -19,6 +19,7 @@ import re
 import statistics
 import threading
 import time
+from collections import deque
 from typing import Optional
 
 from datetime import datetime, timedelta, timezone
@@ -648,6 +649,26 @@ COMP_CACHE_DAYS = float(os.environ.get("COMP_CACHE_DAYS", "7"))
 _CACHE_MAX_ITEMS = 60
 _db_cache_stats = {"hit": 0, "miss": 0}
 
+# The last few replies from SoldComps, for /status. A lookup that comes
+# back 200 with zero items logs nothing - the warnings only fire on
+# failure - so an outage where the API answers politely and emptily was
+# invisible from outside: 1,390 lots drifted onto asking prices with no
+# line anywhere saying why. This is what makes that observable without
+# reading the worker's logs. Never holds the key or any header.
+SOLDCOMPS_WINDOW_DAYS = 90
+_recent_responses: deque = deque(maxlen=20)
+
+
+def _note_response(query: str, status, **extra) -> None:
+    _recent_responses.append({
+        "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "query": query[:120], "status": status, **extra})
+
+
+def soldcomps_recent() -> list[dict]:
+    """Newest first."""
+    return list(reversed(_recent_responses))
+
 
 def _db_cache_get(query: str, source: str):
     """Cached answer, or None. Never raises - a cache that breaks the
@@ -736,11 +757,27 @@ def _soldcomps_lookup(query: str, count: int = 120) -> list[tuple[float, str]]:
                 r = client.get(
                     "https://api.sold-comps.com/v1/scrape",
                     headers={"Authorization": f"Bearer {SOLDCOMPS_API_KEY}"},
-                    params={"keyword": query, "count": min(max(count, 1), 240),
-                            "daysToScrape": 90},
+                    params={
+                        "keyword": query, "count": min(max(count, 1), 240),
+                        # Their spec bounds the window with soldAfter
+                        # (YYYY-MM-DD). daysToScrape, sent here for months,
+                        # is a body field of their bulk-job endpoint and
+                        # means nothing on this one.
+                        "soldAfter": (datetime.now(timezone.utc)
+                                      - timedelta(days=SOLDCOMPS_WINDOW_DAYS)
+                                      ).strftime("%Y-%m-%d"),
+                        # exactMatch=true, their default, strips eBay's
+                        # "results matching fewer words" - which for a long
+                        # enriched title is all of them. The app runs five
+                        # relevance filters and an IQR trim on whatever
+                        # comes back, so it wants volume; their docs say
+                        # that is exactly when to set this false.
+                        "exactMatch": "false",
+                    },
                 )
         except Exception as exc:  # noqa: BLE001
             logger.warning("SoldComps failed for %r: %s", query, exc)
+            _note_response(query, None, note=f"{type(exc).__name__}: {exc}"[:120])
             return []
 
         last_status = r.status_code
@@ -754,6 +791,7 @@ def _soldcomps_lookup(query: str, count: int = 120) -> list[tuple[float, str]]:
             # through to active listings immediately.
             if wait >= _QUOTA_WALL_SECONDS:
                 _open_breaker(reason=f"Retry-After {wait:.0f}s — quota, not pace")
+                _note_response(query, 429, note=f"quota wall, retry-after {wait:.0f}s")
                 return []
             _note_429()
             if attempt < SOLDCOMPS_MAX_RETRIES - 1 and not _breaker_open():
@@ -761,14 +799,18 @@ def _soldcomps_lookup(query: str, count: int = 120) -> list[tuple[float, str]]:
                 continue
             logger.warning("SoldComps rate-limited on %r, giving up after %d "
                            "attempts", query, attempt + 1)
+            _note_response(query, 429, note=f"gave up after {attempt + 1} attempts")
             return []
         if r.status_code != 200:
             logger.warning("SoldComps HTTP %s for %r", r.status_code, query)
+            _note_response(query, r.status_code)
             return []
 
         _note_ok()
+        body = r.json() or {}
+        items = body.get("items") or []
         out = []
-        for item in r.json().get("items", []) or []:
+        for item in items:
             raw = str(item.get("soldPrice") or "").replace("$", "").replace(",", "")
             try:
                 p = float(raw)
@@ -785,6 +827,10 @@ def _soldcomps_lookup(query: str, count: int = 120) -> list[tuple[float, str]]:
                             "date": item.get("soldDate") or item.get("dateSold")
                                     or item.get("date"),
                             "kind": "sold"})
+        _note_response(query, 200,
+                       total_items=body.get("totalItems"),
+                       scraped_count=body.get("scrapedCount"),
+                       items=len(items), parsed=len(out))
         # Cached even when empty: "nothing sold matching this" is an answer,
         # and re-asking it per variant is what built the burst.
         _cache_put(key, out)

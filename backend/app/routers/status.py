@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from .. import models
 from ..database import get_db
-from ..services import jobs
+from ..services import jobs, pricing
 
 router = APIRouter(tags=["status"])
 
@@ -60,7 +60,10 @@ def get_status(db: Session = Depends(get_db)):
     # "still going" and "nothing is running this".
     workers = jobs.live_workers()
     return {"jobs": jobs.active(), "enrichment": enrichment,
-            "workers": {"live": len(workers), "ids": [w["id"] for w in workers]}}
+            "workers": {"live": len(workers), "ids": [w["id"] for w in workers]},
+            # The last few SoldComps replies. A 200 with zero items logs
+            # nothing, so this is the only place an "empty outage" shows.
+            "soldcomps": pricing.soldcomps_recent()}
 
 
 @router.get("/timings")
