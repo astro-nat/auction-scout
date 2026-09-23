@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -79,6 +79,8 @@ def enrich_batch(payload: schemas.EnrichBatchRequest, db: Session = Depends(get_
 @router.post("/reprice", status_code=202)
 def reprice(auction_id: int | None = None, weak_only: bool = False,
             unpriced_only: bool = False, dry_run: bool = False,
+            auction_ids: list[int] | None = Query(None),
+            category: str | None = None,
             db: Session = Depends(get_db)):
     """Recompute comps + ROI for enriched lots using current pricing rules.
 
@@ -112,6 +114,15 @@ def reprice(auction_id: int | None = None, weak_only: bool = False,
         q = q.filter(models.Enrichment.enriched_title.isnot(None))
     if auction_id:
         q = q.filter(models.Lot.auction_id == auction_id)
+    # The on-screen scope. A production dry run of the comps-only pass came
+    # back with 8,262 lots when the user was thinking of about 2,000: the
+    # whole inventory, not the auctions and category they had in view. The
+    # button now sends what the screen shows, so the request count quoted
+    # is the one they meant.
+    if auction_ids:
+        q = q.filter(models.Lot.auction_id.in_(auction_ids))
+    if category:
+        q = q.filter(models.Lot.category == category)
     if weak_only:
         q = q.filter(models.Enrichment.price_source.ilike("active%"))
     lot_ids = [row[0] for row in q.all()]

@@ -387,15 +387,21 @@ export default function App() {
   // condition judgement later, and only on the ones worth it.
   async function handleCompsOnly() {
     try {
-      const peek = await repriceUnpriced({ dryRun: true })
-      if (!peek.repricing) { alert('Every item in an open auction already has a value.'); return }
-      const msg = `Look up sold comps for ${peek.repricing} unpriced items, using their `
+      // Scoped to what is on screen - the ticked auctions and the category
+      // dropdown - so the request count quoted is the one the user meant.
+      // Unscoped, a production dry run came back with 8,262 lots.
+      const scope = { auctionIds: selectedAuctions, category: categoryFilter }
+      const peek = await repriceUnpriced({ ...scope, dryRun: true })
+      if (!peek.repricing) { alert('Every item in view already has a value.'); return }
+      const where = [selectedAuctions.length ? `${selectedAuctions.length} selected auction(s)` : 'all open auctions',
+                     categoryFilter ? `category "${categoryFilter}"` : null].filter(Boolean).join(', ')
+      const msg = `Look up sold comps for ${peek.repricing} unpriced items (${where}), using their `
         + `auction titles as-is?\n\nNo AI cost. About ${peek.requests_estimate ?? peek.repricing} `
         + `SoldComps requests against your plan. Items stay marked pending, so `
         + `"Price the unpriced" can still add a condition check later. `
         + `Progress shows in the bar at the top.`
       if (!window.confirm(msg)) return
-      const r = await repriceUnpriced()
+      const r = await repriceUnpriced(scope)
       if (r.already_running) { alert('A re-price is already running; let it finish first.'); return }
       alert(`Queued ${r.repricing} items.`)
       loadLots()

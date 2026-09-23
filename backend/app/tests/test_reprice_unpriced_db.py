@@ -45,7 +45,7 @@ def seeded(monkeypatch):
     db.add_all([open_a, closed_a])
     db.flush()
     unpriced = models.Lot(lot_id="up-1", title="DeWalt DCF825 Impact Driver",
-                          auction_id=open_a.id, current_bid=2)
+                          auction_id=open_a.id, current_bid=2, category="Tools")
     priced = models.Lot(lot_id="up-2", title="Craftsman Rotary Tool",
                         auction_id=open_a.id, current_bid=2)
     closed = models.Lot(lot_id="up-3", title="Makita Drill", auction_id=closed_a.id,
@@ -60,13 +60,15 @@ def seeded(monkeypatch):
         models.Enrichment(lot_id=closed.id, status="pending"),
     ])
     db.commit()
-    ids = {"unpriced": unpriced.id, "priced": priced.id, "closed": closed.id}
+    ids = {"unpriced": unpriced.id, "priced": priced.id, "closed": closed.id,
+           "open_auction": open_a.id}
     yield ids, enqueued
     db.rollback()
+    lot_ids = [ids["unpriced"], ids["priced"], ids["closed"]]   # not the auction id
     db.query(models.Enrichment).filter(
-        models.Enrichment.lot_id.in_(list(ids.values()))).delete(synchronize_session=False)
+        models.Enrichment.lot_id.in_(lot_ids)).delete(synchronize_session=False)
     db.query(models.Lot).filter(
-        models.Lot.id.in_(list(ids.values()))).delete(synchronize_session=False)
+        models.Lot.id.in_(lot_ids)).delete(synchronize_session=False)
     db.query(models.Auction).filter(
         models.Auction.id.in_([open_a.id, closed_a.id])).delete(synchronize_session=False)
     db.commit()
@@ -110,3 +112,26 @@ def test_the_plain_reprice_still_requires_an_ai_title(seeded):
     queued = _queued(enqueued)
     assert ids["priced"] in queued
     assert ids["unpriced"] not in queued
+
+
+def test_the_pass_can_be_scoped_to_a_category(seeded):
+    """Unscoped, a production dry run quoted 8,262 lots to a user thinking
+    of about 2,000. The button sends what the screen shows."""
+    ids, enqueued = seeded
+    body = client.post("/lots/reprice?unpriced_only=true&dry_run=true&category=Tools").json()
+    assert body["repricing"] >= 1
+    other = client.post("/lots/reprice?unpriced_only=true&dry_run=true&category=Nope").json()
+    assert other["repricing"] == 0
+    client.post("/lots/reprice?unpriced_only=true&category=Tools")
+    assert ids["unpriced"] in _queued(enqueued)
+
+
+def test_the_pass_can_be_scoped_to_selected_auctions(seeded):
+    ids, enqueued = seeded
+    mine = client.post(f"/lots/reprice?unpriced_only=true&dry_run=true"
+                       f"&auction_ids={ids['open_auction']}").json()
+    assert mine["repricing"] >= 1
+    none = client.post("/lots/reprice?unpriced_only=true&dry_run=true"
+                       "&auction_ids=999999998&auction_ids=999999999").json()
+    assert none["repricing"] == 0
+    assert enqueued == []
