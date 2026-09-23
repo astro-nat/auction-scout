@@ -43,6 +43,10 @@ def test_rows_parse_into_items():
     # Epoch millis 1789999200000 → 2026-09-21 14:00:00 UTC.
     assert pots["closes_at"] == datetime(2026, 9, 21, 14, 0, 0)
     assert pots["thumbnail_url"].endswith("/thumb-b/4085421/71821503")
+    # The grid only links the 120px rendition; the full photo is the same
+    # path under thumb-a. The vision pass read a model number wrong from the
+    # thumbnail once, and the badge was legible on the full photo.
+    assert pots["fullsize_url"].endswith("/thumb-a/4085421/71821503")
     assert "auc=4085421" in pots["lot_link"]
     assert last_page == 5
 
@@ -55,6 +59,7 @@ def test_rows_missing_extras_still_parse():
     assert pile["current_bid"] == 26.0
     assert pile["closes_at"] is None
     assert pile["thumbnail_url"] is None
+    assert pile["fullsize_url"] is None
 
 
 def test_an_empty_page_parses_to_nothing():

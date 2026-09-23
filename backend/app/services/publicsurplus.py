@@ -76,6 +76,14 @@ def parse_page(html: str) -> tuple[list[dict], int]:
             "current_bid": prices.get(auc_id, 0.0),
             "closes_at": ends.get(auc_id),
             "thumbnail_url": thumbs.get(auc_id),
+            # The listing page only links the 120px "thumb-b" rendition. The
+            # same path with "thumb-a" serves the full photo (~20x the bytes),
+            # and the vision pass needs it: from the thumbnail alone it read a
+            # Denon deck's model as "DR-M11" - a guess from the layout - and
+            # priced it against three-head decks worth four times as much.
+            # The badge on the full photo says DRM-555.
+            "fullsize_url": (thumbs[auc_id].replace("/thumb-b/", "/thumb-a/")
+                             if thumbs.get(auc_id) else None),
             "lot_link": item_link(auc_id),
         })
     pages = [int(p) for p in _LASTPAGE_RE.findall(html)]

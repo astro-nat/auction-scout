@@ -80,6 +80,7 @@ def _save_items(db: Session, auction: models.Auction,
             row.closes_at = it["closes_at"]
             row.status = "OPEN"
             row.thumbnail_url = it["thumbnail_url"]
+            row.fullsize_url = it.get("fullsize_url")
             updated += 1
         else:
             row = models.Lot(
@@ -97,6 +98,7 @@ def _save_items(db: Session, auction: models.Auction,
                 logistics_ease=classify_logistics(it["title"], "", ""),
                 lot_link=it["lot_link"],
                 thumbnail_url=it["thumbnail_url"],
+                fullsize_url=it.get("fullsize_url"),
             )
             db.add(row)
             db.flush()

@@ -26,8 +26,11 @@ from app import models
 from app.database import SessionLocal
 from app.services import pricing
 from app.workers import enrich
+from fastapi.testclient import TestClient
+from app.main import app
 
 pytestmark = pytest.mark.db
+client = TestClient(app)
 
 # The fixture stubs _verify_gold to a no-op so the pipeline tests never call
 # the model. The audit-branch tests below need the real one back, with only
@@ -210,3 +213,35 @@ def test_an_audit_with_a_lower_number_still_corrects(demoted_lot, monkeypatch):
     rows = db.query(models.PriceObservation).filter(
         models.PriceObservation.lot_id == lot_id).all()
     assert any(r.rejected and r.query for r in rows), "the rejection row lost its query"
+
+
+def test_the_audit_looks_at_the_largest_photo_on_file(demoted_lot, monkeypatch):
+    """A Denon deck's model was read as 'DR-M11' from a 120px thumbnail
+    while a full photo with the badge DRM-555 legible sat one path segment
+    away. Two of three image call sites preferred the thumbnail; the
+    itemized pass always took the largest. Now they all do."""
+    db, lot_id = demoted_lot
+    lot, e = _fresh_gold(db, lot_id)
+    lot.thumbnail_url = "https://img.test/thumb-b/1/1"
+    lot.fullsize_url = "https://img.test/thumb-a/1/1"
+    db.commit()
+    asked = []
+    monkeypatch.setattr(enrich, "_download_image", lambda url: (asked.append(url), None)[1])
+    _audit_returns(monkeypatch, "fine")
+    enrich._verify_gold(db, lot, e)
+    assert asked == ["https://img.test/thumb-a/1/1"]
+
+
+def test_pricing_one_lot_by_hand_clears_its_stale_verdict(demoted_lot):
+    """One click on one lot is a request for a fresh look, and a fresh look
+    includes a fresh audit. Without this, a lot whose re-price came back at
+    the same value kept a verdict produced under old rules with no way to
+    shake it. Bulk paths leave verdicts alone."""
+    db, lot_id = demoted_lot
+    assert _enrichment(db, lot_id).gold_check == "demoted"
+    r = client.post("/lots/sa-1/enrich")
+    assert r.status_code == 202, r.text
+    e = _enrichment(db, lot_id)
+    assert e.status == "queued" and e.queued_task == "enrich"
+    assert e.gold_check is None
+    assert e.gold_check_note is None

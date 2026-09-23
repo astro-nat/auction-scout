@@ -28,6 +28,14 @@ def enrich_lot(lot_id: str, db: Session = Depends(get_db)):
     lot.enrichment.queued_at = datetime.now(timezone.utc)
     lot.enrichment.queue_rank = 0
     lot.enrichment.claimed_at = None
+    # The user asked for a fresh look at THIS lot, and a fresh look includes
+    # a fresh audit. A lot with any verdict is never re-audited, and the
+    # verdict only clears when the value changes - so a LeBron rookie whose
+    # re-price came back at the same $56 kept an audit verdict produced
+    # under the old rules, with no way to shake it. Bulk paths leave
+    # verdicts alone; one click on one lot is a different intent.
+    lot.enrichment.gold_check = None
+    lot.enrichment.gold_check_note = None
     db.commit()
 
     # Returns immediately: the worker process picks this up within a poll.

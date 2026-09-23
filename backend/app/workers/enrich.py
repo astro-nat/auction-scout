@@ -462,7 +462,13 @@ def _enrich(lot: models.Lot, e: models.Enrichment, db: Session,
     if not from_title and (ai is None or not ai.get("confident")):
         _progress(db, e, "AI examining the photo…")
         with _step(phase, "image_download"):
-            image_bytes = _download_image(lot.thumbnail_url or lot.hd_thumbnail_url)
+            # Largest first. The vision pass was reading 120px thumbnails when
+            # a full photo was on file: a Denon deck's model came back as
+            # "DR-M11" - a guess from the layout - and priced against
+            # three-head decks worth four times as much. The badge on the
+            # full photo says DRM-555. The itemized pass always did this.
+            image_bytes = _download_image(lot.fullsize_url or lot.hd_thumbnail_url
+                                          or lot.thumbnail_url)
         if image_bytes:
             with _step(phase, "ai_vision"):
                 vision = _call_vision(title, image_bytes, description)
@@ -788,7 +794,8 @@ def _verify_gold(db: Session, lot: models.Lot, e: models.Enrichment, *,
         return
     # House rule: never hold a transaction across the network.
     db.commit()
-    image_bytes = _download_image(lot.thumbnail_url or lot.hd_thumbnail_url)
+    image_bytes = _download_image(lot.fullsize_url or lot.hd_thumbnail_url
+                                  or lot.thumbnail_url)
     prompt = GOLD_CHECK_PROMPT.format(
         title=lot.title or "",
         description=(lot.description or "")[:800] or "(none)",
