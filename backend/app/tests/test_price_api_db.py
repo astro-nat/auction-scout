@@ -152,3 +152,49 @@ def test_a_write_with_no_lot_is_dropped_quietly():
     """Unsaved lots turn up in tests and in half-built rows; a failed
     INSERT is not worth the noise, and never worth an exception."""
     price_log.record(None, 10.0, method="comps")      # must not raise
+
+
+def _empty_row(lot_db_id):
+    """What the guards write when a lookup comes back with nothing: no
+    value, method 'empty', not chosen. New today, and the readers were
+    written before it existed."""
+    price_log.record(lot_db_id, None, method="empty", chosen=False,
+                     note="lookup returned nothing; kept $80.00 (sold (SoldComps))",
+                     query="Swarovski 2023 SCS Crystal Egg Golden Topaz")
+
+
+def test_an_empty_row_shows_in_history_with_no_value(lot):
+    db, lot_db_id, lot_key = lot
+    _swarovski_trail(lot_db_id)
+    _empty_row(lot_db_id)
+    body = client.get(f"/prices/history/{lot_key}").json()
+    assert body["current"] == 80.0                    # the kept value, untouched
+    newest = body["observations"][0]
+    assert newest["method"] == "empty" and newest["value"] is None
+    assert "kept $80.00" in newest["note"]
+
+
+def test_an_empty_row_is_not_a_disagreement(lot):
+    """No value means nothing to disagree with. It must neither create a
+    disagreement on its own nor break the ratio maths for the real ones."""
+    db, lot_db_id, lot_key = lot
+    _swarovski_trail(lot_db_id)
+    _empty_row(lot_db_id)
+    r = client.get("/prices/disagreements?hours=24&min_ratio=2")
+    assert r.status_code == 200
+    ours = [x for x in r.json()["lots"] if x["lot_id"] == lot_key]
+    assert ours and ours[0]["ratio"] == pytest.approx(4.6, abs=0.1)
+    assert all(o["value"] is not None for o in ours[0]["observations"])
+
+
+def test_an_empty_row_gets_its_own_evidence_bucket_and_no_average(lot):
+    """The mix groups by evidence and averages value; a bucket of NULLs
+    must come out as a count with avg_value None, not a 500."""
+    db, lot_db_id, _ = lot
+    _empty_row(lot_db_id)
+    r = client.get("/prices/evidence-mix?hours=24")
+    assert r.status_code == 200
+    mix = r.json()["by_evidence"]
+    assert "empty" in mix
+    assert mix["empty"]["produced"] >= 1
+    assert mix["empty"]["avg_value"] is None
