@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { enrichLot, inspectLot, fetchLot, patchEnrichment, enrichBatch, repriceSelected, setWatch, setHidden, setWon, alertOnce, parseUtc } from '../api'
 import { compRows, ebaySoldUrl } from '../lib/comps'
 import { houseRatioLabel, houseRatioTitle } from '../lib/calibration'
-import { CLOSING_RANGES, MONEY_RANGES, ROI_RANGES, hoursUntil, matchesFilter, optionOf, roiPercent } from '../lib/filters'
+import { CLOSING_RANGES, ROI_RANGES, hoursUntil, matchesFilter, presetsFor, roiPercent } from '../lib/filters'
 import { allSelected, chunked, inView, selectAll, toggle } from '../lib/selection'
 import useMediaQuery from '../useMediaQuery'
 
@@ -293,6 +293,11 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
   // exists to answer. Click any header (or the mobile Sort menu) to change it.
   const [sort, setSort] = useState({ key: 'roi', dir: -1 })
   const [colFilters, setColFilters] = useState({})
+  // Phone layout: the filters live behind a toggle. Twelve selects at the
+  // top of a 375px screen pushed the first card below the fold; the label
+  // carries the active count so a hidden filter is never a mystery.
+  const [showFilters, setShowFilters] = useState(false)
+  const activeFilterCount = Object.values(colFilters).filter((v) => v?.trim()).length
   // Rows the user just enriched/inspected hold their screen position (and
   // App exempts them from hide filters) so the result can be read before
   // sorting sweeps it away. Pins release when the user re-sorts/re-filters.
@@ -599,14 +604,6 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
             style={{ flex: '1 1 100%', padding: 8, fontSize: 16 }}
           />
           <select
-            value={colFilters.category ?? ''}
-            onChange={(ev) => setFilter('category', ev.target.value)}
-            style={{ flex: 1, padding: 6, fontSize: 14, maxWidth: '48%' }}
-          >
-            <option value="">All categories</option>
-            {(distinctValues.category ?? []).map((v) => <option key={v} value={v}>{v}</option>)}
-          </select>
-          <select
             value={MOBILE_SORTS.findIndex((s) => s.key === sort.key && s.dir === sort.dir)}
             onChange={(ev) => {
               const s = MOBILE_SORTS[Number(ev.target.value)] ?? MOBILE_SORTS[0]
@@ -616,35 +613,32 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
           >
             {MOBILE_SORTS.map((s, i) => <option key={s.label} value={i}>{s.label}</option>)}
           </select>
-          <select
-            value={colFilters.closes ?? ''}
-            onChange={(ev) => setFilter('closes', ev.target.value)}
-            style={{ flex: 1, padding: 6, fontSize: 14, maxWidth: '48%' }}
-            title="Closing within…"
-          >
-            <option value="">Closes: any</option>
-            {CLOSING_RANGES.map((r) => {
-              const o = optionOf(r)
-              return <option key={o.value} value={o.value}>{o.label}</option>
-            })}
-          </select>
-          {/* Same filter engine the desktop column dropdowns use — the
-              card view just has nowhere to hang per-column widgets. */}
-          {[['ship', 'Ship'], ['status', 'Status'], ['verdict', 'Verdict']].map(([key, label]) => (
+          {/* Every filterable column, generated from the same list the
+              desktop header uses - the phone used to hand-maintain a subset
+              with no bid, cost, resale, max-bid, ROI or auction filter. The
+              title search above already binds the one text column. */}
+          <button style={{ flex: '1 1 100%', padding: 8, fontSize: 14 }}
+                  onClick={() => setShowFilters((v) => !v)}
+                  aria-expanded={showFilters}>
+            {showFilters ? 'Hide filters' : `Filters${activeFilterCount ? ` (${activeFilterCount} on)` : ''}`}
+          </button>
+          {showFilters && COLUMNS.filter((c) => c.filter && c.filter !== 'text').map((c) => (
             <select
-              key={key}
-              value={colFilters[key] ?? ''}
-              onChange={(ev) => setFilter(key, ev.target.value)}
-              style={{ flex: 1, padding: 6, fontSize: 14, maxWidth: '31%' }}
+              key={c.key}
+              value={colFilters[c.key] ?? ''}
+              onChange={(ev) => setFilter(c.key, ev.target.value)}
+              style={{ flex: '1 1 47%', padding: 6, fontSize: 14, maxWidth: '48%' }}
             >
-              <option value="">{label}: all</option>
-              {(distinctValues[key] ?? []).map((v) => <option key={v} value={v}>{v}</option>)}
+              <option value="">{c.label}: all</option>
+              {presetsFor(c, distinctValues).map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
             </select>
           ))}
-          {Object.values(colFilters).some((v) => v?.trim()) && (
+          {activeFilterCount > 0 && (
             <button style={{ flex: '1 1 100%', padding: 6, fontSize: 13 }}
                     onClick={() => setColFilters({})}>
-              Clear filters
+              Clear {activeFilterCount} filter{activeFilterCount === 1 ? '' : 's'}
             </button>
           )}
           <button className="primary" onClick={handleEnrichMatching}
@@ -875,10 +869,9 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                   style={{ maxWidth: 110 }}
                 >
                   <option value="">all</option>
-                  {(c.filter === 'range' ? (c.ranges ?? MONEY_RANGES) : distinctValues[c.key] ?? []).map((r) => {
-                    const o = optionOf(r)
-                    return <option key={o.value} value={o.value}>{o.label}</option>
-                  })}
+                  {presetsFor(c, distinctValues).map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
                 </select>
               )}
             </th>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CLOSING_RANGES, MONEY_RANGES, ROI_RANGES, hoursUntil, matchesFilter, optionOf, roiPercent } from './filters'
+import { CLOSING_RANGES, MONEY_RANGES, ROI_RANGES, hoursUntil, matchesFilter, optionOf, presetsFor, roiPercent } from './filters'
 
 describe('matchesFilter', () => {
   it('reads > as more than and < as less than', () => {
@@ -81,5 +81,30 @@ describe('closing-time presets', () => {
       ['<1', '<24', '<48', '<168', '>168'])
     // Money presets stay plain strings and normalise to themselves.
     expect(optionOf('<5')).toEqual({ value: '<5', label: '<5' })
+  })
+})
+
+describe('presetsFor', () => {
+  // One rule for the desktop header and the phone panel, so the phone can
+  // generate its filters from the column list instead of hand-maintaining
+  // a subset - which had no bid, cost, resale, max-bid, ROI or auction
+  // filter at all.
+  it('gives a range column its own presets, or money by default', () => {
+    expect(presetsFor({ key: 'closes', filter: 'range', ranges: CLOSING_RANGES }).map((o) => o.label))
+      .toEqual(['< 1 hr', '< 24 hrs', '< 2 days', '< 7 days', '> 7 days'])
+    expect(presetsFor({ key: 'bid', filter: 'range' }).map((o) => o.value)).toEqual(MONEY_RANGES)
+  })
+
+  it('gives a values column the distinct values seen', () => {
+    const distinct = { ship: ['EASY', 'HARD', 'NEUTRAL'] }
+    expect(presetsFor({ key: 'ship', filter: 'values' }, distinct))
+      .toEqual([{ value: 'EASY', label: 'EASY' }, { value: 'HARD', label: 'HARD' },
+                { value: 'NEUTRAL', label: 'NEUTRAL' }])
+    expect(presetsFor({ key: 'ship', filter: 'values' }, {})).toEqual([])
+  })
+
+  it('gives a text column nothing - it gets a search box, not a dropdown', () => {
+    expect(presetsFor({ key: 'title', filter: 'text' })).toEqual([])
+    expect(presetsFor({ key: 'lot_number', filter: null })).toEqual([])
   })
 })

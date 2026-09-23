@@ -46,6 +46,17 @@ export function optionOf(preset) {
   return typeof preset === 'string' ? { value: preset, label: preset } : preset
 }
 
+// The options a column's filter offers, as {value, label} pairs. One rule
+// for the desktop header and the phone panel, so the phone can generate
+// its filters from the column list instead of hand-maintaining a subset
+// that drifted: for months it had no way to filter by bid, cost, resale,
+// max bid, ROI or auction at all.
+export function presetsFor(col, distinctValues = {}) {
+  if (col.filter === 'range') return (col.ranges ?? MONEY_RANGES).map(optionOf)
+  if (col.filter === 'values') return (distinctValues[col.key] ?? []).map(optionOf)
+  return []
+}
+
 // Hours from now until a lot closes, or null when there is nothing to
 // count down to: no close time on file, or already closed. Null matches no
 // preset, so "< 1 hr" is lots closing within the hour, not lots that
