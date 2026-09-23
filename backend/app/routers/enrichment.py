@@ -69,22 +69,34 @@ def enrich_batch(payload: schemas.EnrichBatchRequest, db: Session = Depends(get_
 
 
 @router.post("/reprice", status_code=202)
-def reprice(auction_id: int | None = None,
-            db: Session = Depends(get_db)):
+def reprice(auction_id: int | None = None, weak_only: bool = False,
+            dry_run: bool = False, db: Session = Depends(get_db)):
     """Recompute comps + ROI for enriched lots using current pricing rules.
 
     Reuses the AI title and verdict already stored, so it's the right way to
     apply a pricing change to old data. Near-free: the only model spend is
     the second-opinion audit on lots that come out GOLD MINE (~half a cent
     each, see workers/enrich._verify_gold).
+
+    weak_only limits it to lots priced from asking listings - the ones an
+    outage or a bad query left behind - and first purges every cached EMPTY
+    sold answer, because otherwise the re-price is handed the same empties
+    back for a week and changes nothing. dry_run reports both counts and
+    spends nothing, so the request cost is known before it is paid.
     """
+    from ..services import pricing
     q = (db.query(models.Lot.id)
            .join(models.Enrichment)
            .filter(models.Enrichment.enriched_title.isnot(None))
            .filter(_not_hidden()))
     if auction_id:
         q = q.filter(models.Lot.auction_id == auction_id)
+    if weak_only:
+        q = q.filter(models.Enrichment.price_source.ilike("active%"))
     lot_ids = [row[0] for row in q.all()]
+    if dry_run:
+        return {"repricing": len(lot_ids), "dry_run": True,
+                "cache_empties": pricing.count_empty_sold_cache() if weak_only else 0}
     if not lot_ids:
         return {"repricing": 0}
     # Deploys resume orphaned reprices, so stacking a second one is easy to
@@ -94,9 +106,11 @@ def reprice(auction_id: int | None = None,
         # jobs by itself, so an unrelated one being busy is no reason to drop
         # this request — it would simply wait its turn.
         return {"repricing": 0, "already_running": True}
+    # Purge BEFORE enqueueing, so the worker never sees the stale empties.
+    purged = pricing.purge_empty_sold_cache() if weak_only else 0
     jobs.enqueue("reprice", "Re-pricing lots with current comp rules",
                  total=len(lot_ids), payload={"lot_ids": lot_ids})
-    return {"repricing": len(lot_ids)}
+    return {"repricing": len(lot_ids), "cache_purged": purged}
 
 
 @router.post("/audit-golds", status_code=202)

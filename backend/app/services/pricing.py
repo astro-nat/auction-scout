@@ -755,6 +755,66 @@ def _db_cache_put(query: str, source: str, comps: list) -> None:
             db.close()
 
 
+def _empty_sold_cache_filter():
+    # No jsonb_array_length anywhere: Postgres does not short-circuit OR, and
+    # that function throws on a JSON null - which is what SQLAlchemy stores
+    # for a Python None in a JSONB column, not SQL NULL. Compare against the
+    # empty array instead, and treat anything that is not an array (JSON
+    # null, a scalar) as "not an answer" too.
+    from sqlalchemy import func, or_
+    from .. import models
+    p = models.CompCache.payload
+    return (models.CompCache.source == "soldcomps",
+            or_(p.is_(None),
+                func.jsonb_typeof(p) != "array",
+                p == func.jsonb_build_array()))
+
+
+def count_empty_sold_cache() -> int:
+    from ..database import SessionLocal
+    from .. import models
+    db = None
+    try:
+        db = SessionLocal()
+        return db.query(models.CompCache).filter(*_empty_sold_cache_filter()).count()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Comp cache count failed: %s", exc)
+        return 0
+    finally:
+        if db is not None:
+            db.close()
+
+
+def purge_empty_sold_cache() -> int:
+    """Delete every cached EMPTY sold answer. Returns rows removed.
+
+    An empty answer is only trustworthy if the API was healthy and the
+    query was sane when it was asked. Three things produced empties that
+    were neither - a variant anchored on "Only", exactMatch=true stripping
+    every loosened match, and the 09-21 quota wall - and the cache then
+    served each of them for a week without asking again. A re-price meant
+    to recover from those was handed the same empties back in ten seconds.
+    Deleting them costs exactly one re-ask per query; full answers, which
+    are the cache doing its job, are left alone.
+    """
+    from ..database import SessionLocal
+    from .. import models
+    db = None
+    try:
+        db = SessionLocal()
+        n = (db.query(models.CompCache).filter(*_empty_sold_cache_filter())
+               .delete(synchronize_session=False))
+        db.commit()
+        _cache.clear()          # the in-process hop holds the same empties
+        return n
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Comp cache purge failed: %s", exc)
+        return 0
+    finally:
+        if db is not None:
+            db.close()
+
+
 def cache_stats() -> dict:
     total = _db_cache_stats["hit"] + _db_cache_stats["miss"]
     return {**_db_cache_stats,
@@ -787,6 +847,14 @@ def _soldcomps_lookup(query: str, count: int = 120) -> list[tuple[float, str]]:
     cached = _db_cache_get(key, "soldcomps")
     if cached is not None:
         _cache_put(key, cached)
+        if not cached:
+            # An empty answer served from cache is the one hop that can hide
+            # an outage for a week: the API is never asked, so nothing above
+            # records anything, and a re-price to "check" comes back empty
+            # in ten seconds looking exactly like a genuine miss. Only
+            # empties are noted - full answers are the cache working.
+            _note_response(query, None, items=0, parsed=0,
+                           note="durable cache served an empty answer; API not asked")
         return cached
     if _breaker_open():
         return []

@@ -1376,23 +1376,36 @@ def run_reprice(lot_db_ids: list[int], resume_job_id: str | None = None) -> None
                     if comps is not None:
                         prior_resale = e.est_resale
                         mult = CONDITION_MULTIPLIER.get(e.verdict, 1.0)
-                        e.est_resale = (round(float(comps["est_resale"]) * mult, 2)
-                                        if comps["est_resale"] else None)
-                        e.price_low = (round(float(comps["price_low"]) * mult, 2)
-                                       if comps["price_low"] else None)
-                        e.price_high = (round(float(comps["price_high"]) * mult, 2)
-                                        if comps["price_high"] else None)
-                        e.comp_count = comps["comp_count"]
-                        e.price_source = comps["price_source"]
-                        if e.est_resale is not None:
+                        if not comps["est_resale"] and e.est_resale is not None:
+                            # Same guard as the comps block in _enrich, for
+                            # the same reason: every failure path in
+                            # lookup_comps returns this shape, and a bulk
+                            # re-price during an outage would erase every
+                            # value it touched. Keep it, leave a trace.
                             price_log.record(
-                                lot.id, float(e.est_resale), method="reprice",
-                                price_source=e.price_source,
-                                comp_count=e.comp_count, query=search_title)
-                        e.comps = comps.get("comps") or None
-                        if mult != 1.0 and comps["price_source"]:
-                            e.price_source += f" ×{mult:g} condition"
-                        _apply_estimate_cap(lot, e)
+                                lot.id, None, method="empty", chosen=False,
+                                note=(f"reprice lookup returned nothing; kept "
+                                      f"${float(e.est_resale):.2f} "
+                                      f"({e.price_source or 'unknown source'})"),
+                                query=search_title)
+                        else:
+                            e.est_resale = (round(float(comps["est_resale"]) * mult, 2)
+                                            if comps["est_resale"] else None)
+                            e.price_low = (round(float(comps["price_low"]) * mult, 2)
+                                           if comps["price_low"] else None)
+                            e.price_high = (round(float(comps["price_high"]) * mult, 2)
+                                            if comps["price_high"] else None)
+                            e.comp_count = comps["comp_count"]
+                            e.price_source = comps["price_source"]
+                            if e.est_resale is not None:
+                                price_log.record(
+                                    lot.id, float(e.est_resale), method="reprice",
+                                    price_source=e.price_source,
+                                    comp_count=e.comp_count, query=search_title)
+                            e.comps = comps.get("comps") or None
+                            if mult != 1.0 and comps["price_source"]:
+                                e.price_source += f" ×{mult:g} condition"
+                            _apply_estimate_cap(lot, e)
                         # A changed value voids its old audit — the check
                         # certified a number that no longer exists.
                         if str(prior_resale) != str(e.est_resale):

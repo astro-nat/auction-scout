@@ -277,3 +277,25 @@ def test_the_record_never_carries_the_key(monkeypatch):
     pricing._soldcomps_lookup("widget")
     assert RECORDED, "nothing was recorded for a successful call"
     assert "test-key" not in json.dumps(RECORDED)
+
+
+def test_an_empty_answer_served_from_cache_leaves_a_trace(monkeypatch):
+    """The hop that hid an outage for a week. A re-price meant to check
+    whether the API had recovered came back empty in ten seconds, from
+    cache, with the API never asked and nothing recorded anywhere - it
+    looked exactly like a genuine miss. Full cached answers stay silent;
+    only the empties are worth a row."""
+    monkeypatch.setattr(pricing, "_db_cache_get", lambda *a, **k: [])
+    FakeClient, calls = _client([_Resp(200, [{"soldPrice": "5.00", "title": "w"}])])
+    monkeypatch.setattr(pricing.httpx, "Client", FakeClient)
+    assert pricing._soldcomps_lookup("stale-empty") == []
+    assert calls == [], "asked the API for an answer the cache already had"
+    assert RECORDED[-1]["query"] == "stale-empty"
+    assert RECORDED[-1]["status"] is None
+    assert "cache" in RECORDED[-1]["note"]
+
+    RECORDED.clear()
+    monkeypatch.setattr(pricing, "_db_cache_get",
+                        lambda *a, **k: [{"price": 5.0, "title": "w", "kind": "sold"}])
+    pricing._soldcomps_lookup("stale-full")
+    assert RECORDED == [], "a full cached answer is the cache working, not news"
