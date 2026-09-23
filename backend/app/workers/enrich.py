@@ -23,6 +23,7 @@ at startup.
 
 import asyncio
 import json
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 import os
 import re
@@ -1293,9 +1294,126 @@ def run_audit_sweep(resume_job_id: str | None = None) -> None:
           f"({len(candidates)} thin candidates)")
 
 
+# How many comp lookups a re-price keeps in flight at once. The wait per lot
+# is almost entirely SoldComps' own latency - its endpoint scrapes eBay live,
+# 5-8s a call - so overlapping the calls is where the time is. Four in
+# flight at ~5s each is well under the process-wide throttle (SOLDCOMPS_RPS).
+REPRICE_CONCURRENCY = int(os.environ.get("REPRICE_CONCURRENCY", "4"))
+
+
+def _plan_reprice_lot(db: Session, lot_db_id: int) -> dict:
+    """Phase A of a re-price: everything that needs the session and nothing
+    that needs the network. Returns what to do next for this lot."""
+    lot = db.query(models.Lot).filter(models.Lot.id == lot_db_id).first()
+    e = lot.enrichment if lot else None
+    plan = {"lot_db_id": lot_db_id, "title": (lot.title if lot else None)}
+    if e is None:
+        plan["kind"] = "missing"
+        return plan
+    marks = set(e.user_overrides or [])
+    if "est_resale" in marks:
+        plan["kind"] = "override"       # never overwrite a hand-corrected price
+        return plan
+    # Reclassify ship tier with the current regex rules — free, and ship-rule
+    # fixes should reach old lots the same way pricing-rule fixes do.
+    # Hand-set tiers ("logistics_ease") and AI-set tiers survive.
+    if not marks & {"logistics_ease", "logistics_ease_ai"}:
+        lot.logistics_ease = classify_logistics(
+            lot.title or "", lot.category or "", lot.description or "")
+    lot_title = lot.title or ""
+    plan.update(title=lot_title, search_title=e.enriched_title or lot_title,
+                retail=pricing.retail_from_title(lot_title), marks=marks)
+    if plan["retail"] is not None and plan["retail"] < pricing.RETAIL_VERIFY_MIN:
+        # Cheap claim: the zero-network path stands. The halved retail
+        # already carries the discount, so the stale AI verdict must not be
+        # applied on top of it — a $729 shelf came back at $255 (x0.5 x0.7)
+        # instead of $364. Re-read the grade from the same title.
+        plan["kind"] = "title"
+        plan["comps"] = pricing.price_from_title(lot_title)
+        if "verdict" not in marks:
+            e.verdict = pricing.condition_from_title(lot_title)
+    else:
+        plan["kind"] = "network"
+    return plan
+
+
+def _fetch_reprice_comps(plan: dict) -> dict:
+    """Phase B: the network call. Runs off the main thread with NO session -
+    a comp lookup walks several query variants at up to 40s each, and holding
+    an open transaction through that is what starved the pool once. Expensive
+    retail claims come here too; their market cross-check is a lookup."""
+    if plan["retail"] is not None:
+        return pricing.verified_title_price(plan["title"], plan["search_title"])
+    return pricing.lookup_comps(plan["search_title"])
+
+
+def _apply_reprice(db: Session, plan: dict, comps) -> bool:
+    """Phase C: write one result, on the main thread. Returns True when the
+    lot was priced (or deliberately kept), False when there was nothing to
+    apply - the lot vanished mid-run, or its lookup failed."""
+    lot = db.query(models.Lot).filter(models.Lot.id == plan["lot_db_id"]).first()
+    e = lot.enrichment if lot else None
+    if e is None:
+        return False            # deleted while we were off querying comps
+    if plan["kind"] == "network" and plan["retail"] is not None \
+            and "verdict" not in plan["marks"]:
+        e.verdict = pricing.condition_from_title(plan["title"])
+    if comps is None:
+        return False
+    search_title = plan["search_title"]
+    prior_resale = e.est_resale
+    mult = CONDITION_MULTIPLIER.get(e.verdict, 1.0)
+    if not comps["est_resale"] and e.est_resale is not None:
+        # Same guard as the comps block in _enrich, for the same reason:
+        # every failure path in lookup_comps returns this shape, and a bulk
+        # re-price during an outage would erase every value it touched.
+        price_log.record(
+            lot.id, None, method="empty", chosen=False,
+            note=(f"reprice lookup returned nothing; kept "
+                  f"${float(e.est_resale):.2f} "
+                  f"({e.price_source or 'unknown source'})"),
+            query=search_title)
+    else:
+        e.est_resale = (round(float(comps["est_resale"]) * mult, 2)
+                        if comps["est_resale"] else None)
+        e.price_low = (round(float(comps["price_low"]) * mult, 2)
+                       if comps["price_low"] else None)
+        e.price_high = (round(float(comps["price_high"]) * mult, 2)
+                        if comps["price_high"] else None)
+        e.comp_count = comps["comp_count"]
+        e.price_source = comps["price_source"]
+        if e.est_resale is not None:
+            price_log.record(lot.id, float(e.est_resale), method="reprice",
+                             price_source=e.price_source,
+                             comp_count=e.comp_count, query=search_title)
+        e.comps = comps.get("comps") or None
+        if mult != 1.0 and comps["price_source"]:
+            e.price_source += f" ×{mult:g} condition"
+        _apply_estimate_cap(lot, e)
+    # A changed value voids its old audit — the check certified a number
+    # that no longer exists.
+    if str(prior_resale) != str(e.est_resale):
+        e.gold_check = None
+        e.gold_check_note = None
+    _apply_roi(lot, e)
+    db.commit()
+    try:
+        # The one model spend in reprice: fresh golds get their second
+        # opinion (~half a cent each).
+        _verify_gold(db, lot, e)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Gold check failed for lot %s: %s", plan["lot_db_id"], exc)
+    return True
+
+
 def run_reprice(lot_db_ids: list[int], resume_job_id: str | None = None) -> None:
     """Recompute comps + ROI for already-enriched lots, reusing the AI title
     and verdict we already paid for.
+
+    Lots are handled in batches of REPRICE_CONCURRENCY: plan them on the
+    session, commit, fetch their comps concurrently with no session held,
+    then apply the results in order. Only the network fans out; every
+    database write stays on this thread. Cancellation is checked per batch.
 
     Pricing rules change (realization factor, condition multipliers, comp
     filters) far more often than an item's identity does — this applies them
@@ -1316,117 +1434,62 @@ def run_reprice(lot_db_ids: list[int], resume_job_id: str | None = None) -> None
                          total=len(lot_db_ids), payload={"lot_ids": lot_db_ids})
         start_at = 0
     repriced = skipped = 0
+    width = max(1, REPRICE_CONCURRENCY)
     try:
-        for i, lot_db_id in enumerate(lot_db_ids[start_at:], start_at + 1):
+        i = start_at
+        while i < len(lot_db_ids):
             if jobs.is_cancelled(job):
-                print(f"Reprice cancelled after {i - 1} lots")
+                print(f"Reprice cancelled after {i} lots")
                 break
-            lot = db.query(models.Lot).filter(models.Lot.id == lot_db_id).first()
-            e = lot.enrichment if lot else None
-            if e and "est_resale" in set(e.user_overrides or []):
-                skipped += 1            # never overwrite a hand-corrected price
-                e = None
-            if e:
+            batch = lot_db_ids[i:i + width]
+
+            # --- A. plan on the session; no network yet
+            plans = []
+            for lot_db_id in batch:
                 try:
-                    # Reclassify ship tier with the current regex rules — free,
-                    # and ship-rule fixes should reach old lots the same way
-                    # pricing-rule fixes do. Hand-set tiers ("logistics_ease")
-                    # and AI-set tiers ("logistics_ease_ai" sentinel) survive.
-                    marks = set(e.user_overrides or [])
-                    if not marks & {"logistics_ease", "logistics_ease_ai"}:
-                        lot.logistics_ease = classify_logistics(
-                            lot.title or "", lot.category or "", lot.description or "")
-                    lot_title = lot.title or ""
-                    search_title = e.enriched_title or lot_title
-                    retail = pricing.retail_from_title(lot_title)
-                    if retail is not None and retail < pricing.RETAIL_VERIFY_MIN:
-                        # Cheap claim: the zero-network path stands.
-                        comps = pricing.price_from_title(lot_title)
-                        # The halved retail already carries the discount, so
-                        # the stale AI verdict must not be applied on top of
-                        # it — a $729 shelf came back at $255 (x0.5 x0.7)
-                        # instead of $364. Re-read the grade from the same
-                        # title the price came from.
-                        if "verdict" not in marks:
-                            e.verdict = pricing.condition_from_title(lot_title)
-                    else:
-                        # Hand the connection back before going out to the
-                        # network. A comp lookup walks several query variants
-                        # at up to 40s each, and holding an open transaction
-                        # through all of it is what starved the pool: three
-                        # long jobs did this at once while every request
-                        # queued behind them. Expensive retail claims take
-                        # this path too now — their market cross-check is a
-                        # comp lookup like any other.
-                        db.commit()
-                        comps = (pricing.verified_title_price(lot_title, search_title)
-                                 if retail is not None
-                                 else pricing.lookup_comps(search_title))
-                        lot = (db.query(models.Lot)
-                                 .filter(models.Lot.id == lot_db_id).first())
-                        e = lot.enrichment if lot else None
-                        if retail is not None and e and "verdict" not in marks:
-                            e.verdict = pricing.condition_from_title(lot_title)
-                    if e is None:
-                        # Deleted while we were off querying comps. Fall
-                        # through to the checkpoint update rather than
-                        # `continue` — `current` has to advance on every
-                        # lot or resume replays this one forever.
-                        comps = None
-                    if comps is not None:
-                        prior_resale = e.est_resale
-                        mult = CONDITION_MULTIPLIER.get(e.verdict, 1.0)
-                        if not comps["est_resale"] and e.est_resale is not None:
-                            # Same guard as the comps block in _enrich, for
-                            # the same reason: every failure path in
-                            # lookup_comps returns this shape, and a bulk
-                            # re-price during an outage would erase every
-                            # value it touched. Keep it, leave a trace.
-                            price_log.record(
-                                lot.id, None, method="empty", chosen=False,
-                                note=(f"reprice lookup returned nothing; kept "
-                                      f"${float(e.est_resale):.2f} "
-                                      f"({e.price_source or 'unknown source'})"),
-                                query=search_title)
-                        else:
-                            e.est_resale = (round(float(comps["est_resale"]) * mult, 2)
-                                            if comps["est_resale"] else None)
-                            e.price_low = (round(float(comps["price_low"]) * mult, 2)
-                                           if comps["price_low"] else None)
-                            e.price_high = (round(float(comps["price_high"]) * mult, 2)
-                                            if comps["price_high"] else None)
-                            e.comp_count = comps["comp_count"]
-                            e.price_source = comps["price_source"]
-                            if e.est_resale is not None:
-                                price_log.record(
-                                    lot.id, float(e.est_resale), method="reprice",
-                                    price_source=e.price_source,
-                                    comp_count=e.comp_count, query=search_title)
-                            e.comps = comps.get("comps") or None
-                            if mult != 1.0 and comps["price_source"]:
-                                e.price_source += f" ×{mult:g} condition"
-                            _apply_estimate_cap(lot, e)
-                        # A changed value voids its old audit — the check
-                        # certified a number that no longer exists.
-                        if str(prior_resale) != str(e.est_resale):
-                            e.gold_check = None
-                            e.gold_check_note = None
-                        _apply_roi(lot, e)
-                        db.commit()
-                        repriced += 1
-                        try:
-                            # The one model spend in reprice: fresh golds get
-                            # their second opinion (~half a cent each).
-                            _verify_gold(db, lot, e)
-                        except Exception as exc:  # noqa: BLE001
-                            logger.warning("Gold check failed for lot %s: %s",
-                                           lot_db_id, exc)
+                    plans.append(_plan_reprice_lot(db, lot_db_id))
                 except Exception as exc:  # noqa: BLE001 — one bad lot must not stop the run
                     logger.warning("Reprice failed for lot %s: %s", lot_db_id, exc)
-            # `current` must advance on every lot — skipped ones included —
-            # because it's the resume checkpoint, not just the progress bar.
-            jobs.update(job, current=i,
-                        detail=(lot.title or "")[:40] if lot else None)
+                    db.rollback()
+                    plans.append({"lot_db_id": lot_db_id, "title": None, "kind": "failed"})
+            # Hand the connection back before going out to the network.
+            db.commit()
+
+            # --- B. fetch comps concurrently, with no session held
+            results = {}
+            network = [p for p in plans if p["kind"] == "network"]
+            if network:
+                with ThreadPoolExecutor(max_workers=min(width, len(network))) as pool:
+                    futures = {pool.submit(_fetch_reprice_comps, p): p["lot_db_id"]
+                               for p in network}
+                    for fut, lot_db_id in futures.items():
+                        try:
+                            results[lot_db_id] = fut.result()
+                        except Exception as exc:  # noqa: BLE001
+                            logger.warning("Reprice lookup failed for lot %s: %s",
+                                           lot_db_id, exc)
+                            results[lot_db_id] = None
+
+            # --- C. apply in order, one checkpoint per lot
+            for plan in plans:
+                i += 1
+                lot_db_id = plan["lot_db_id"]
+                if plan["kind"] == "override":
+                    skipped += 1
+                elif plan["kind"] in ("title", "network"):
+                    comps = (plan.get("comps") if plan["kind"] == "title"
+                             else results.get(lot_db_id))
+                    try:
+                        if _apply_reprice(db, plan, comps):
+                            repriced += 1
+                    except Exception as exc:  # noqa: BLE001
+                        logger.warning("Reprice failed for lot %s: %s", lot_db_id, exc)
+                        db.rollback()
+                # `current` must advance on every lot — skipped, missing and
+                # failed ones included — because it's the resume checkpoint,
+                # not just the progress bar.
+                jobs.update(job, current=i,
+                            detail=(plan.get("title") or "")[:40] or None)
     finally:
         jobs.finish(job)
         db.close()
