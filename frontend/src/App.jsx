@@ -1315,7 +1315,7 @@ Skipping ${hard} HARD-to-ship lots.`
             <button style={isMobile ? { flex: '1 1 45%', padding: 8 } : undefined}
                     onClick={handleInspectNoValue}
                     title="For every item still showing no value: AI reads the photo, identifies what is in it and prices it (asks first, shows cost)">
-              Price the unpriced
+              Price the unpriced with AI
             </button>
             <button className="danger"
                     style={isMobile ? { flex: '1 1 45%', padding: 8 } : undefined}

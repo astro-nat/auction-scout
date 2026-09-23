@@ -553,7 +553,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
       )}
       <button style={smallBtn} onClick={handleBulkPrice} disabled={queuing}
               title="AI pass plus comp lookup on the selected lots (asks first, shows cost)">
-        Price selected
+        Price selected with AI
       </button>
       <button style={smallBtn} onClick={handleBulkComps} disabled={queuing}
               title="Sold-comps lookup on the selected lots' titles as-is. No AI cost (asks first, shows the request count)">
@@ -632,7 +632,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                   title="Work out a value for every lot matching the current filters — the whole result, not just the rows on screen. Asks for confirmation with the exact cost first."
                   style={{ flex: '1 1 100%', padding: 10, fontSize: 15 }}>
             {queuing ? <><span className="spinner" />Queuing {enrichableCount} lots…</>
-                     : `Price all ${enrichableCount}`}
+                     : `Price all ${enrichableCount} with AI`}
           </button>
           {!selectedInView.length && sorted.length > 0 && (
             <button style={{ flex: '1 1 100%', padding: 6, fontSize: 13 }}
@@ -796,7 +796,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
               disabled={!enrichableCount || queuing}
               title="Work out a value for every lot matching the current filters — the whole result, not just the rows on screen. Asks for confirmation with the exact cost first.">
         {queuing ? <><span className="spinner" />Queuing {enrichableCount} lots…</>
-                 : `Price all ${enrichableCount}`}
+                 : `Price all ${enrichableCount} with AI`}
       </button>
       {anyQueued && <span style={{ marginLeft: '0.75rem' }}><span className="spinner" />{lots.filter((l) => l.enrichment?.status === 'queued').length} lots in the queue… auto-refreshing</span>}
       <span style={{ marginLeft: '0.75rem' }}>{countLine}</span>
