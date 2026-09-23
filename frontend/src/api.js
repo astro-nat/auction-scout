@@ -103,6 +103,14 @@ export function enrichCategory(category, { skipHard = false, dryRun = false } = 
   return request(`/lots/enrich-category?${params}`, { method: 'POST' })
 }
 
+// Comps-only first pass: every never-priced lot in an open auction, searched
+// on its raw title. No AI spend; about one SoldComps request per lot.
+export function repriceUnpriced({ dryRun = false } = {}) {
+  const params = new URLSearchParams({ unpriced_only: 'true' })
+  if (dryRun) params.set('dry_run', 'true')
+  return request(`/lots/reprice?${params}`, { method: 'POST' })
+}
+
 export function fetchStatus() {
   return request('/status')
 }

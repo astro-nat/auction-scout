@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, scanGovDeals, importGovDeals, scanPublicSurplus, importPublicSurplus, scanVinted, importLots, importAllAuctions, enrichAll, enrichCategory, flushClosed, refreshBids, reinspectNoComps, fetchSettings, saveTargetRoi, savePacing, fetchWeekStats, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
+import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, scanGovDeals, importGovDeals, scanPublicSurplus, importPublicSurplus, scanVinted, importLots, importAllAuctions, enrichAll, enrichCategory, flushClosed, refreshBids, reinspectNoComps, repriceUnpriced, fetchSettings, saveTargetRoi, savePacing, fetchWeekStats, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
 import { auctionClosed, clearsFloor, underFloor, goldBadge as pacingGoldBadge } from './lib/pacing'
 import { houseRatioLabel, houseRatioTitle } from './lib/calibration'
 import { initialView, saveView, viewFromHash, viewUrl } from './lib/view'
@@ -377,6 +377,28 @@ export default function App() {
       // Fully silent: the status bar is the feedback, and "nothing to
       // refresh" is not worth interrupting for either.
       await refreshBids()
+    } catch (e) { alertOnce(e.message) }
+  }
+
+  // The comps-only first pass. Every unpriced item in an open auction gets
+  // a sold-comps lookup on its title as-is - no AI, so no per-item charge;
+  // the cost is one SoldComps request per item against the plan. Items
+  // keep their pending status, so "Price the unpriced" can still add the
+  // condition judgement later, and only on the ones worth it.
+  async function handleCompsOnly() {
+    try {
+      const peek = await repriceUnpriced({ dryRun: true })
+      if (!peek.repricing) { alert('Every item in an open auction already has a value.'); return }
+      const msg = `Look up sold comps for ${peek.repricing} unpriced items, using their `
+        + `auction titles as-is?\n\nNo AI cost. About ${peek.requests_estimate ?? peek.repricing} `
+        + `SoldComps requests against your plan. Items stay marked pending, so `
+        + `"Price the unpriced" can still add a condition check later. `
+        + `Progress shows in the bar at the top.`
+      if (!window.confirm(msg)) return
+      const r = await repriceUnpriced()
+      if (r.already_running) { alert('A re-price is already running; let it finish first.'); return }
+      alert(`Queued ${r.repricing} items.`)
+      loadLots()
     } catch (e) { alertOnce(e.message) }
   }
 
@@ -1278,6 +1300,11 @@ Skipping ${hard} HARD-to-ship lots.`
                     onClick={handleRefreshBids}
                     title="Re-pull current bids from HiBid for every imported open auction and recompute ROI. Free — progress shows in the top bar.">
               Refresh bids
+            </button>
+            <button style={isMobile ? { flex: '1 1 45%', padding: 8 } : undefined}
+                    onClick={handleCompsOnly}
+                    title="For every unpriced item in an open auction: look up sold comps on its auction title as-is. No AI cost - about one SoldComps request per item (asks first, shows the count)">
+              Comps only, no AI
             </button>
             <button style={isMobile ? { flex: '1 1 45%', padding: 8 } : undefined}
                     onClick={handleInspectNoValue}

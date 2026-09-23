@@ -78,7 +78,8 @@ def enrich_batch(payload: schemas.EnrichBatchRequest, db: Session = Depends(get_
 
 @router.post("/reprice", status_code=202)
 def reprice(auction_id: int | None = None, weak_only: bool = False,
-            dry_run: bool = False, db: Session = Depends(get_db)):
+            unpriced_only: bool = False, dry_run: bool = False,
+            db: Session = Depends(get_db)):
     """Recompute comps + ROI for enriched lots using current pricing rules.
 
     Reuses the AI title and verdict already stored, so it's the right way to
@@ -95,8 +96,20 @@ def reprice(auction_id: int | None = None, weak_only: bool = False,
     from ..services import pricing
     q = (db.query(models.Lot.id)
            .join(models.Enrichment)
-           .filter(models.Enrichment.enriched_title.isnot(None))
            .filter(_not_hidden()))
+    if unpriced_only:
+        # Never-priced lots, searched on their raw auction titles: the
+        # comps-only first pass. No AI spend - the worker falls back to
+        # lot.title when there is no enriched one - so the only cost is one
+        # SoldComps request per lot. Open auctions only; a price on a closed
+        # lot buys nothing. The status stays pending, so the AI pass still
+        # knows these lots are owed a condition judgement.
+        q = (q.join(models.Auction, models.Lot.auction_id == models.Auction.id)
+               .filter(models.Enrichment.est_resale.is_(None),
+                       (models.Auction.closing_date.is_(None))
+                       | (models.Auction.closing_date >= datetime.now())))
+    else:
+        q = q.filter(models.Enrichment.enriched_title.isnot(None))
     if auction_id:
         q = q.filter(models.Lot.auction_id == auction_id)
     if weak_only:
@@ -104,7 +117,10 @@ def reprice(auction_id: int | None = None, weak_only: bool = False,
     lot_ids = [row[0] for row in q.all()]
     if dry_run:
         return {"repricing": len(lot_ids), "dry_run": True,
-                "cache_empties": pricing.count_empty_sold_cache() if weak_only else 0}
+                "cache_empties": pricing.count_empty_sold_cache() if weak_only else 0,
+                # About one request per lot: the first query variant answers
+                # nearly every time, and the durable cache absorbs repeats.
+                "requests_estimate": len(lot_ids) if unpriced_only else None}
     if not lot_ids:
         return {"repricing": 0}
     # Deploys resume orphaned reprices, so stacking a second one is easy to

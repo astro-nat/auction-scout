@@ -209,3 +209,28 @@ def test_a_changed_value_voids_its_old_audit_and_an_unchanged_one_keeps_it(lots,
     assert float(kept.est_resale) == 10 and kept.gold_check == "confirmed"
     assert float(changed.est_resale) == 60 and changed.gold_check is None
     assert changed.gold_check_note is None
+
+
+def test_a_never_priced_lot_is_searched_on_its_raw_title(lots, monkeypatch):
+    """The comps-only first pass. No AI title, so the search uses the
+    auction's own title; the row says so; the trail records it as comps,
+    not a re-price; and the status stays pending, because the AI pass
+    still owes this lot a condition judgement."""
+    db, ids, _ = lots
+    e = _rows(db, ids)[ids[0]]
+    e.enriched_title = None
+    e.est_resale = e.price_low = e.price_high = None
+    e.comp_count, e.price_source, e.status = 0, None, "pending"
+    db.commit()
+    seen = []
+    monkeypatch.setattr(pricing, "lookup_comps",
+                        lambda t: (seen.append(t), dict(FOUND))[1])
+    enrich.run_reprice([ids[0]])
+    e = _rows(db, ids)[ids[0]]
+    assert seen == ["Paths Test Widget 0"]             # lot.title, verbatim
+    assert float(e.est_resale) == 60
+    assert e.price_source.endswith("raw title, no AI")
+    assert e.status == "pending"
+    methods = {r.method for r in db.query(models.PriceObservation)
+               .filter(models.PriceObservation.lot_id == ids[0]).all()}
+    assert "comps" in methods and "reprice" not in methods

@@ -1463,6 +1463,12 @@ def _apply_reprice(db: Session, plan: dict, comps) -> bool:
     search_title = plan["search_title"]
     prior_resale = e.est_resale
     mult = CONDITION_MULTIPLIER.get(e.verdict, 1.0)
+    # No AI title means the AI never looked at this lot: this is the
+    # comps-only first pass, searched on the auction house's own title.
+    # The value it produces carries no condition judgement, and the later
+    # AI pass still owes it one - so say so on the row, and keep the
+    # status pending so that pass still knows to come.
+    raw_title = not e.enriched_title
     if not comps["est_resale"] and e.est_resale is not None:
         # Same guard as the comps block in _enrich, for the same reason:
         # every failure path in lookup_comps returns this shape, and a bulk
@@ -1482,8 +1488,11 @@ def _apply_reprice(db: Session, plan: dict, comps) -> bool:
                         if comps["price_high"] else None)
         e.comp_count = comps["comp_count"]
         e.price_source = comps["price_source"]
+        if raw_title and e.price_source:
+            e.price_source += " · raw title, no AI"
         if e.est_resale is not None:
-            price_log.record(lot.id, float(e.est_resale), method="reprice",
+            price_log.record(lot.id, float(e.est_resale),
+                             method="comps" if raw_title else "reprice",
                              price_source=e.price_source,
                              comp_count=e.comp_count, query=search_title)
         e.comps = comps.get("comps") or None
