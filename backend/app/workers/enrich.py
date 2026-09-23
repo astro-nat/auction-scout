@@ -190,6 +190,14 @@ _MULTI_ITEM_RE = re.compile(
     re.IGNORECASE)
 
 
+# A pre-inspection price this many times the counted total of a multi-item
+# lot is taken as evidence the comps described a bigger lot. Ten loose DVDs
+# at $2 each kept $44 from bulk-lot comps: 11x. A factor of three leaves
+# room for the count to be conservative (filler is realized at 20%) without
+# letting a wrong-size comp set stand.
+COUNTED_TOTAL_MAX_RATIO = float(os.environ.get("COUNTED_TOTAL_MAX_RATIO", "3"))
+
+
 def looks_multi_item(title: str) -> bool:
     return bool(_MULTI_ITEM_RE.search(title or ""))
 
@@ -1070,8 +1078,17 @@ def _inspect(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
     # biggest component's value stands in for the whole item. Multi-item
     # titles keep the sum, but keepers past the best one carry the part-out
     # discount — each extra item is another listing, fee, and parcel.
-    single_product = (not looks_multi_item(lot.title)
-                      and (len(keepers) + filler) > 1)
+    #
+    # "Multi-item" is judged from every description we have, not the
+    # source title alone. A Vinted listing titled just "dvd movies" - ten
+    # different films, counted one by one by this very pass - was ruled a
+    # single product because the bare title says nothing, and its total
+    # became the price of the dearest disc. The enriched title said "Lot"
+    # and the summary said "collection of assorted"; either one is enough.
+    summary = result.get("summary") or ""
+    multi = (looks_multi_item(lot.title) or looks_multi_item(e.enriched_title)
+             or looks_multi_item(summary))
+    single_product = not multi and (len(keepers) + filler) > 1
     if single_product:
         best = max(keepers) if keepers else filler_max
         total = best
@@ -1091,7 +1108,6 @@ def _inspect(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
         total = (keepers[0] if keepers else 0.0) + partout + bundled
 
     protected = set(e.user_overrides or [])
-    summary = result.get("summary") or ""
     # Inspection must never replace stronger evidence with weaker: a lot
     # already priced from more real comps than the itemized pass found keeps
     # its price (and its gold status) — the breakdown is still recorded.
@@ -1102,6 +1118,19 @@ def _inspect(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
                   and not (e.price_source or "").startswith("itemized")
                   and prior_comps > priced)
     kept = " · kept pre-inspection price (stronger comps)" if keep_prior else ""
+    # "Stronger" is judged by comp count, and count says nothing about
+    # whether the comps described THIS lot. Ten loose DVDs counted at $2
+    # each kept a $44 price from seven sold comps - all of them 135-to-650
+    # disc bulk lots matched by an enriched title that had invented "Huge
+    # Bulk Lot". When this pass has counted a multi-item lot and the prior
+    # price is several times what the count adds up to, the comps were for
+    # a bigger lot; the count stands.
+    if (keep_prior and not single_product and len(items) >= 3 and total > 0
+            and float(e.est_resale) > COUNTED_TOTAL_MAX_RATIO * total):
+        keep_prior = False
+        kept = (f" · pre-inspection price ${float(e.est_resale):g} from "
+                f"{prior_comps} comps is {float(e.est_resale) / total:.0f}x the "
+                f"counted total - comps were for a larger lot; count stands")
     if "notes" not in protected:
         head = (f"[inspected: {len(items)} items, {priced} comp-priced, "
                 f"{ai_priced} AI-estimated")

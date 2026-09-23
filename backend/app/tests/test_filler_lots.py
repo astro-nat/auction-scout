@@ -37,8 +37,12 @@ def inspect_with(monkeypatch):
                     "comp_count": 0, "price_source": None}
 
         monkeypatch.setattr(enrich, "_download_image", lambda *a, **k: b"jpeg")
+        # The summary is now a multi-item signal (see _inspect), so the
+        # placeholder must not say "lot" - it turned every single-product
+        # case here into a summed pile. Tests that want a multi-item lot
+        # say so in the title, as production titles do.
         monkeypatch.setattr(enrich, "_call_with_retry", lambda fn: {
-            "items": items, "summary": "a mixed lot", "ship": "NEUTRAL"})
+            "items": items, "summary": "what the photo shows", "ship": "NEUTRAL"})
         monkeypatch.setattr(pricing, "lookup_comps", fake_comps)
 
         lot = models.Lot(lot_id="1", title=title,
