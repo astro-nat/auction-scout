@@ -32,6 +32,9 @@ _MIGRATIONS = [
     "ALTER TABLE lots ADD COLUMN IF NOT EXISTS watched BOOLEAN DEFAULT FALSE",
     "ALTER TABLE lots ADD COLUMN IF NOT EXISTS closing_alert_sent_at TIMESTAMP",
     "ALTER TABLE lots ADD COLUMN IF NOT EXISTS hidden BOOLEAN DEFAULT FALSE",
+    # Which identifiers the AI title asserted that the listing never had -
+    # NULL when none. Set at enrichment and re-price; gates the gold badge.
+    "ALTER TABLE enrichment ADD COLUMN IF NOT EXISTS identity_note VARCHAR",
     "ALTER TABLE lots ADD COLUMN IF NOT EXISTS closes_at TIMESTAMP",
     "CREATE TABLE IF NOT EXISTS settings (key VARCHAR PRIMARY KEY, value VARCHAR)",
     "ALTER TABLE enrichment ADD COLUMN IF NOT EXISTS all_in_cost NUMERIC",

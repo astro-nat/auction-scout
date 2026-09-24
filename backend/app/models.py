@@ -165,6 +165,14 @@ class Enrichment(Base):
     # verdict fell back to PASS. Cleared whenever est_resale changes.
     gold_check = Column(String)
     gold_check_note = Column(String)
+    # Which identifiers the AI title asserted that the listing never had -
+    # a brand, a model number, a card number, a quantity - or NULL when none.
+    # Set at enrichment and re-price. When set, the comp search used the
+    # listing's own title, and the lot cannot be a gold mine: three lots
+    # were mispriced by ten times on an invented identity (Topps #221 for
+    # an Upper Deck card; DR-M11 for a DRM-555; "Huge Bulk Lot" for ten
+    # discs), each with full confidence.
+    identity_note = Column(String)
 
     # Which worker a 'queued' lot is waiting for ('enrich' | 'inspect') — how
     # the worker process knows what to run.

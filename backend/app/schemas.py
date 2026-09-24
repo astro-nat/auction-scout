@@ -37,6 +37,7 @@ class EnrichmentOut(BaseModel):
     roi_reason: Optional[str] = None
     gold_check: Optional[str] = None       # confirmed | corrected | demoted | null
     gold_check_note: Optional[str] = None
+    identity_note: Optional[str] = None
     progress: Optional[str] = None
     error_message: Optional[str] = None
     user_overrides: list[str] = []

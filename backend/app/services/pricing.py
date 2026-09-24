@@ -352,6 +352,73 @@ _ANCHOR_SKIP = frozenset({
 })
 
 
+# ------------------------------------------------ invented identifiers
+
+# A quantity the AI's title claims: bulk, wholesale, "lot of 12", "3 pack".
+# Separate from _BULK_RE (the comp filter) because this one has to catch
+# "Huge Bulk Lot" - the comp filter never will, because the query itself
+# claims bulk, so every bulk comp "matches".
+_QUANTITY_CLAIM_RE = re.compile(
+    r"\b(?:huge|bulk|wholesale|massive|large|big)\s+(?:lot|bundle|collection)\b"
+    r"|\blot of \d+\b|\b\d+\s*(?:pcs|pieces|pack|count)\b|\bset of \d+\b"
+    r"|\bpair of\b|\b\d+x\b|\bbundle\b|\bwholesale\b",
+    re.IGNORECASE)
+_IDENT_TOKEN_RE = re.compile(r"#\d{1,6}\b|\b[A-Za-z0-9][A-Za-z0-9-]{1,}\b")
+
+
+def _squash(s: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", (s or "").lower())
+
+
+def invented_identifiers(source_text: str, enriched_title: str, bolo=None) -> list[str]:
+    """Identifiers the AI's title asserts that the listing text never had.
+
+    Three families, each behind a real mispricing. A model or part number:
+    "DR-M11" for a deck whose badge read DRM-555, priced against three-head
+    decks worth four times as much. A card number: "#221", the Topps
+    number, on an Upper Deck card - $771 for a $56 card. A quantity claim:
+    "Huge Bulk Lot" for ten loose discs, which pulled comps for 650-disc
+    lots. A fourth, a brand the listing never named, is checked through the
+    BOLO matcher when one is passed.
+
+    Presence is judged on squashed text - case, spaces and punctuation
+    removed - so "DRM-555" in the title is covered by "DRM555" in the
+    listing. The description counts as listing text; pass title and
+    description together. Returns the claims as they appear in the AI
+    title, deduplicated, at most five.
+    """
+    if not enriched_title:
+        return []
+    src = _squash(source_text)
+    found: list[str] = []
+    for m in _IDENT_TOKEN_RE.finditer(enriched_title):
+        tok = m.group(0)
+        is_card_number = tok.startswith("#")
+        mixed = any(c.isdigit() for c in tok) and any(c.isalpha() for c in tok)
+        if not (is_card_number or mixed):
+            continue
+        if len(_squash(tok)) < 3:
+            continue
+        if _squash(tok) not in src:
+            found.append(tok)
+    claim = _QUANTITY_CLAIM_RE.search(enriched_title)
+    if claim and not _QUANTITY_CLAIM_RE.search(source_text or ""):
+        found.append(claim.group(0))
+    if bolo is not None:
+        try:
+            claimed = (bolo.match(enriched_title) or {}).get("brand")
+            actual = (bolo.match(source_text) or {}).get("brand")
+            if claimed and claimed != actual and _squash(claimed) not in src:
+                found.append(claimed)
+        except Exception:  # noqa: BLE001 - the matcher is a bonus signal, never a blocker
+            pass
+    out: list[str] = []
+    for f in found:
+        if f not in out:
+            out.append(f)
+    return out[:5]
+
+
 def query_variants(title: str) -> list[str]:
     """Progressively shorter queries. eBay returns zero results for very long
     queries; 4-6 words is the sweet spot. When truncating, always keep the

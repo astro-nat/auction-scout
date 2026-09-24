@@ -514,6 +514,26 @@ def _enrich(lot: models.Lot, e: models.Enrichment, db: Session,
         # Set before the branch: the retail-title path never assigns it, and
         # the price log wants to know what was searched either way.
         search_title = e.enriched_title or title
+        # The AI's title is only a better search than the listing's when it
+        # is TRUE. Three lots were mispriced by an order of magnitude on an
+        # identifier the vision pass asserted that the listing never had - a
+        # model number, a card number, a quantity - each with full
+        # confidence, and the comp filters cannot object to a claim the
+        # query itself makes. So: any identifier in the AI title that the
+        # listing text (title + description) does not contain means the
+        # search uses the listing's own title, the claim is recorded on the
+        # row, and the lot cannot be a gold mine until a human settles it.
+        # A title the user set by hand is authoritative - "Denon DRM-555"
+        # typed from the badge in the photo is exactly the correction this
+        # guard exists to prompt, not an invention to flag.
+        claims = ([] if "enriched_title" in protected
+                  else pricing.invented_identifiers(
+                      f"{title} {description or ''}", e.enriched_title, bolo_matcher))
+        if claims:
+            search_title = title
+            e.identity_note = ", ".join(claims)[:200]
+        else:
+            e.identity_note = None
         titled = pricing.verified_title_price(title, e.enriched_title)
         if titled:
             comps = titled
@@ -638,8 +658,13 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
         # resurrect the badge. Without this, every hourly bid refresh
         # re-minted golds the audit had already rejected.
         demoted = getattr(e, "gold_check", None) == "demoted"
+        # The AI title asserted an identifier the listing never had, so the
+        # value came from the listing's own title and nobody has confirmed
+        # what the item is. A gold badge is a claim about identity as much
+        # as price; it waits for a human (correcting the title lifts this).
+        identity_uncertain = bool(getattr(e, "identity_note", None))
         e.roi_status = ("PASS" if (red_flag or lot.unreachable_pickup
-                                   or titled_vehicle
+                                   or titled_vehicle or identity_uncertain
                                    or thin_evidence or demoted)
                         else lead.status)
         if demoted:
@@ -660,6 +685,10 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
             e.roi_reason = "pickup-only and outside your radius"
         elif titled_vehicle:
             e.roi_reason = "titled vehicle — excluded by your settings"
+        elif identity_uncertain:
+            e.roi_reason = (f"identity uncertain: AI added {e.identity_note} - not in "
+                            "the listing. Priced from the listing title; correct the "
+                            "title to confirm what it is")
         elif thin_evidence:
             n = e.comp_count or 0
             e.roi_reason = (f"only {n} comp{'s' if n != 1 else ''} — "
@@ -1421,7 +1450,15 @@ def _plan_reprice_lot(db: Session, lot_db_id: int) -> dict:
         lot.logistics_ease = classify_logistics(
             lot.title or "", lot.category or "", lot.description or "")
     lot_title = lot.title or ""
-    plan.update(title=lot_title, search_title=e.enriched_title or lot_title,
+    # Same guard as _enrich: an AI title that asserts an identifier the
+    # listing never had is not searched on. Re-evaluated here so a lot
+    # enriched before the guard existed is caught on its next re-price.
+    claims = ([] if "enriched_title" in marks         # hand-set titles are authoritative
+              else pricing.invented_identifiers(
+                  f"{lot_title} {lot.description or ''}", e.enriched_title, bolo_matcher))
+    e.identity_note = ", ".join(claims)[:200] if claims else None
+    plan.update(title=lot_title,
+                search_title=lot_title if claims else (e.enriched_title or lot_title),
                 retail=pricing.retail_from_title(lot_title), marks=marks)
     if plan["retail"] is not None and plan["retail"] < pricing.RETAIL_VERIFY_MIN:
         # Cheap claim: the zero-network path stands. The halved retail

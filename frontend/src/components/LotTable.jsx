@@ -725,6 +725,12 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
               {e.enriched_title && e.enriched_title !== lot.title && (
                 <div style={{ color: 'var(--muted)', fontSize: 13 }}>→ {e.enriched_title}</div>
               )}
+              {e.identity_note && (
+                <div style={{ color: 'var(--danger)', fontSize: 12 }}
+                     title="The AI's title asserts something the listing never said, so the value came from the listing's own title and the gold badge is withheld. Correct the title to confirm what it is.">
+                  identity uncertain: AI added {e.identity_note} — not in the listing
+                </div>
+              )}
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', fontSize: 14, margin: '6px 0' }}>
                 <span style={closesIn(lot.closes_at, now).urgent
                              ? { color: 'var(--danger)', fontWeight: 700 } : undefined}>
@@ -964,6 +970,12 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                     onSave={(v) => handleCorrect(lot.lot_id, 'enriched_title', v)}
                   />
                 </div>
+                {e.identity_note && (
+                  <div style={{ color: 'var(--danger)', fontSize: 12 }}
+                       title="The AI's title asserts something the listing never said, so the value came from the listing's own title and the gold badge is withheld. Click the title above to correct it and confirm what it is.">
+                    identity uncertain: AI added {e.identity_note} — not in the listing
+                  </div>
+                )}
                 {e.notes && e.ai_source === 'vision-itemized' && (
                   <details style={{ fontSize: 12, color: 'var(--muted)' }}>
                     <summary>itemized breakdown</summary>
