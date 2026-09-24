@@ -36,6 +36,11 @@ def lot(monkeypatch):
         "confident": True, "notes": "n", "ship": "EASY"})
     monkeypatch.setattr(enrich, "_download_image", lambda *a, **k: None)
     monkeypatch.setattr(enrich, "_verify_gold", lambda *a, **k: None)
+    # The listing is a real title; the dev database may hold its priced
+    # twin, which would be copied instead of searched. These tests are about
+    # the search.
+    monkeypatch.setattr(enrich, "_priced_twin", lambda *a, **k: None)
+    monkeypatch.setattr(enrich, "_share_with_twins", lambda *a, **k: 0)
     monkeypatch.setattr(pricing, "verified_title_price", lambda *a, **k: None)
     monkeypatch.setattr(pricing, "lookup_comps",
                         lambda t: (state["searched"].append(t), dict(FOUND))[1])

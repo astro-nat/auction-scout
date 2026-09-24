@@ -39,7 +39,7 @@ from sqlalchemy.orm import Session, joinedload
 from ..database import SessionLocal
 from .. import models, config
 from ..services import financials, gemini, hibid, jobs, price_log, pricing
-from ..services import funko, shipping
+from ..services import funko, shipping, twins
 from ..services import settings as settings_store
 from ..services.bolo import BoloMatcher
 from ..services.hibid import classify_logistics
@@ -303,6 +303,91 @@ def _progress(db: Session, e: models.Enrichment, text: str | None) -> None:
     db.commit()
 
 
+# --- Same title, one pricing (services/twins.py) ----------------------------
+
+# What an identical listing inherits: the identification and the value.
+# Bid guidance (max bid, ROI, profit) is recomputed per lot - bids differ.
+_TWIN_FIELDS = ("enriched_title", "verdict", "confidence", "ai_source", "notes",
+                "identity_note", "fraud_note", "auth_required")
+_TWIN_PRICE_FIELDS = ("est_resale", "price_low", "price_high", "comp_count", "comps",
+                      "gold_check", "gold_check_note")
+_TWIN_SUFFIX_RE = re.compile(r"\s*·\s*same title as lot .*$")
+
+
+def _priced_twin(db: Session, lot: models.Lot):
+    """(lot, enrichment) of the most recently priced lot with this lot's
+    title, or None - including when the title is too generic to group."""
+    key = twins.title_key(lot.title)
+    if key is None:
+        return None
+    return (db.query(models.Lot, models.Enrichment)
+              .join(models.Enrichment, models.Enrichment.lot_id == models.Lot.id)
+              .filter(twins.key_sql() == key, models.Lot.id != lot.id,
+                      models.Enrichment.status == "success",
+                      models.Enrichment.est_resale.isnot(None))
+              .order_by(models.Enrichment.last_attempted_at.desc().nullslast(),
+                        models.Lot.id)
+              .first())
+
+
+def _copy_from_twin(lot: models.Lot, e: models.Enrichment,
+                    src_lot: models.Lot, src_e: models.Enrichment) -> None:
+    """Price `lot` exactly as its same-title twin is priced. Anything the
+    user set by hand on this lot stays."""
+    marks = set(e.user_overrides or [])
+    for f in _TWIN_FIELDS:
+        # Never blank out what this lot already knows: a comps-only twin
+        # has no AI title to give.
+        if f not in marks and getattr(src_e, f) is not None:
+            setattr(e, f, getattr(src_e, f))
+    if "est_resale" not in marks:
+        for f in _TWIN_PRICE_FIELDS:
+            setattr(e, f, getattr(src_e, f))
+        base = _TWIN_SUFFIX_RE.sub("", src_e.price_source or "")
+        e.price_source = f"{base} · same title as lot {src_lot.lot_number or src_lot.lot_id}"
+    # A comps-only twin ('pending': priced, AI pass still owed) passes that
+    # state on; a lot the AI has already seen stays 'success'.
+    e.status = "success" if "success" in (src_e.status, e.status) else src_e.status
+    e.error_message = None
+    e.progress = None
+    _apply_roi(lot, e)
+
+
+def _share_with_twins(db: Session, lot: models.Lot, e: models.Enrichment) -> int:
+    """Copy a freshly priced lot onto every other lot with its title, so
+    none of them spends its own AI call or comp lookup. A twin the worker
+    is holding right now is left alone - it copies this one when it runs.
+    Returns how many were updated."""
+    key = twins.title_key(lot.title)
+    if key is None or e.est_resale is None:
+        return 0
+    q = (db.query(models.Lot, models.Enrichment)
+           .join(models.Enrichment, models.Enrichment.lot_id == models.Lot.id)
+           .filter(twins.key_sql() == key, models.Lot.id != lot.id))
+    if e.status == "success":
+        q = q.filter(or_(models.Enrichment.status != "queued",
+                         models.Enrichment.claimed_at.is_(None),
+                         models.Enrichment.claimed_at < jobs._stale_cutoff()))
+    else:
+        # A comps-only value goes only where nothing better is on its way:
+        # a twin queued for its AI pass keeps its place in the queue.
+        q = q.filter(models.Enrichment.status.in_(("pending", "failed")))
+    rows = q.all()
+    for sib_lot, sib_e in rows:
+        _copy_from_twin(sib_lot, sib_e, lot, e)
+    if rows:
+        db.commit()
+    return len(rows)
+
+
+def _share_quietly(db: Session, lot: models.Lot, e: models.Enrichment) -> None:
+    try:
+        _share_with_twins(db, lot, e)
+    except Exception as exc:  # noqa: BLE001 - sharing is a saving, never a failure
+        logger.warning("Sharing lot %s with same-title lots failed: %s", lot.id, exc)
+        db.rollback()
+
+
 def run_enrichment(lot_db_id: int) -> None:
     """Entry point called from the background task. Opens its own DB session
     since it runs outside the request/response cycle's session lifetime."""
@@ -317,6 +402,16 @@ def run_enrichment(lot_db_id: int) -> None:
         # Cancelling a batch flips queued lots back to 'pending'; anything
         # not still queued was cancelled before its turn came up.
         if e.status != "queued":
+            return
+        # Same title as a lot already priced: it is the same item. Copy, and
+        # spend nothing. Only on a lot's first pricing - re-running one that
+        # already has a value is a request for a fresh look, which then
+        # flows to its twins below.
+        twin = _priced_twin(db, lot) if e.est_resale is None else None
+        if twin:
+            e.last_attempted_at = datetime.now(timezone.utc)
+            _copy_from_twin(lot, e, *twin)
+            db.commit()
             return
 
         # Multi-item lots go to the itemized vision pass instead: pricing a
@@ -355,6 +450,7 @@ def run_enrichment(lot_db_id: int) -> None:
                 _verify_gold(db, lot, e)
             except Exception as exc:  # noqa: BLE001 — the audit must not fail the lot
                 logger.warning("Gold check failed for lot %s: %s", lot_db_id, exc)
+            _share_quietly(db, lot, e)
     finally:
         db.close()
 
@@ -1048,6 +1144,11 @@ def run_inspection(lot_db_id: int) -> None:
         if e.status != "queued":
             return
         e.last_attempted_at = datetime.now(timezone.utc)
+        twin = _priced_twin(db, lot) if e.est_resale is None else None
+        if twin:
+            _copy_from_twin(lot, e, *twin)
+            db.commit()
+            return
         try:
             _inspect(lot, e, db)
             e.status = "success"
@@ -1063,6 +1164,7 @@ def run_inspection(lot_db_id: int) -> None:
                 _verify_gold(db, lot, e)
             except Exception as exc:  # noqa: BLE001 — the audit must not fail the lot
                 logger.warning("Gold check failed for lot %s: %s", lot_db_id, exc)
+            _share_quietly(db, lot, e)
     finally:
         db.close()
 
@@ -1468,6 +1570,8 @@ def run_audit_sweep(resume_job_id: str | None = None) -> None:
             try:
                 _verify_gold(db, lot, lot.enrichment, candidate=is_candidate)
                 audited += 1
+                if lot.enrichment.gold_check:
+                    _share_quietly(db, lot, lot.enrichment)
             except Exception as exc:  # noqa: BLE001 — one lot must not stop the sweep
                 logger.warning("Audit sweep failed for lot %s: %s", lot.id, exc)
             jobs.update(job, current=i, detail=(lot.title or "")[:40])
@@ -1614,11 +1718,27 @@ def _apply_reprice(db: Session, plan: dict, comps, audits: list | None = None) -
         audit = _audit_plan(lot, e)
         if audit is not None:
             audits.append(audit)
+        _share_quietly(db, lot, e)
         return True
     try:
         _verify_gold(db, lot, e)
     except Exception as exc:  # noqa: BLE001
         logger.warning("Gold check failed for lot %s: %s", plan["lot_db_id"], exc)
+    _share_quietly(db, lot, e)
+    return True
+
+
+def _apply_twin(db: Session, plan: dict) -> bool:
+    """A re-price follower: copy the same-title lot this run already
+    priced. False when that lot came away with nothing to copy."""
+    lot = db.query(models.Lot).filter(models.Lot.id == plan["lot_db_id"]).first()
+    src = db.query(models.Lot).filter(models.Lot.id == plan["leader"]).first()
+    e = lot.enrichment if lot else None
+    src_e = src.enrichment if src else None
+    if e is None or src_e is None or src_e.est_resale is None:
+        return False
+    _copy_from_twin(lot, e, src, src_e)
+    db.commit()
     return True
 
 
@@ -1637,6 +1757,8 @@ def _settle_audit(db: Session, plan: dict, result: dict | None) -> None:
     except Exception as exc:  # noqa: BLE001
         logger.warning("Gold check failed for lot %s: %s", plan["lot_db_id"], exc)
         db.rollback()
+        return
+    _share_quietly(db, lot, e)
 
 
 def run_reprice(lot_db_ids: list[int], resume_job_id: str | None = None) -> None:
@@ -1677,6 +1799,9 @@ def run_reprice(lot_db_ids: list[int], resume_job_id: str | None = None) -> None
         start_at = 0
     repriced = skipped = 0
     width = max(1, REPRICE_CONCURRENCY)
+    # First lot of each title in this run: the one that gets looked up.
+    # Later same-title lots are copied from it (services/twins.py).
+    title_leader: dict[str, int] = {}
     # Wide enough for a batch of lookups and a batch of audits at once.
     pool = ThreadPoolExecutor(max_workers=width * 2)
     pending_audits: list[tuple[dict, object]] = []
@@ -1708,6 +1833,18 @@ def run_reprice(lot_db_ids: list[int], resume_job_id: str | None = None) -> None
                     logger.warning("Reprice failed for lot %s: %s", lot_db_id, exc)
                     db.rollback()
                     plans.append({"lot_db_id": lot_db_id, "title": None, "kind": "failed"})
+            # One lookup per title: a later lot with a title already in this
+            # run waits for that lot's result instead of searching again.
+            for p in plans:
+                if p["kind"] not in ("network", "title"):
+                    continue
+                key = twins.title_key(p.get("title"))
+                if key is None:
+                    continue
+                if key in title_leader:
+                    p["kind"], p["leader"] = "twin", title_leader[key]
+                else:
+                    title_leader[key] = p["lot_db_id"]
             # Hand the connection back before going out to the network.
             db.commit()
 
@@ -1732,6 +1869,13 @@ def run_reprice(lot_db_ids: list[int], resume_job_id: str | None = None) -> None
                 lot_db_id = plan["lot_db_id"]
                 if plan["kind"] == "override":
                     skipped += 1
+                elif plan["kind"] == "twin":
+                    try:
+                        if _apply_twin(db, plan):
+                            repriced += 1
+                    except Exception as exc:  # noqa: BLE001
+                        logger.warning("Reprice failed for lot %s: %s", lot_db_id, exc)
+                        db.rollback()
                 elif plan["kind"] in ("title", "network"):
                     comps = (plan.get("comps") if plan["kind"] == "title"
                              else results.get(lot_db_id))

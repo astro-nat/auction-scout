@@ -267,6 +267,25 @@ def claim_pending(kinds: Optional[list[str]] = None,
             db.close()
 
 
+def pick_claimable(candidates, busy: set, limit: int) -> list:
+    """From (row, title) pairs in queue order, the rows to claim: at most
+    one per title, and none whose title twin is already being worked
+    (`busy`, title keys). Lots too generic to group are always eligible."""
+    from . import twins
+    taken = set(busy)
+    rows = []
+    for r, title in candidates:
+        key = twins.title_key(title)
+        if key is not None:
+            if key in taken:
+                continue
+            taken.add(key)
+        rows.append(r)
+        if len(rows) == limit:
+            break
+    return rows
+
+
 def claim_lots(limit: int) -> list[tuple]:
     """Take up to `limit` queued lots, oldest batch first.
 
@@ -280,16 +299,32 @@ def claim_lots(limit: int) -> list[tuple]:
     db = None
     try:
         db = SessionLocal()
-        rows = (db.query(models.Enrichment)
+        from . import twins
+        # A lot whose title twin is being worked right now waits: when the
+        # twin finishes, its result is copied here for free.
+        busy = {twins.title_key(t) for (t,) in
+                db.query(models.Lot.title)
+                  .join(models.Enrichment, models.Enrichment.lot_id == models.Lot.id)
                   .filter(models.Enrichment.status == "queued",
-                          or_(models.Enrichment.claimed_at.is_(None),
-                              models.Enrichment.claimed_at < _stale_cutoff()))
-                  .order_by(models.Enrichment.queued_at.nullsfirst(),
-                            models.Enrichment.queue_rank.nullsfirst(),
-                            models.Enrichment.lot_id)
-                  .with_for_update(skip_locked=True)
-                  .limit(limit)
-                  .all())
+                          models.Enrichment.claimed_at.isnot(None),
+                          models.Enrichment.claimed_at >= _stale_cutoff())
+                  .all()}
+        busy.discard(None)
+        # Lock exactly `limit` rows, as before - locking more would starve
+        # a second claimer racing this one. Twins among them are simply not
+        # claimed this time; the commit below releases them.
+        candidates = (db.query(models.Enrichment, models.Lot.title)
+                        .join(models.Lot, models.Lot.id == models.Enrichment.lot_id)
+                        .filter(models.Enrichment.status == "queued",
+                                or_(models.Enrichment.claimed_at.is_(None),
+                                    models.Enrichment.claimed_at < _stale_cutoff()))
+                        .order_by(models.Enrichment.queued_at.nullsfirst(),
+                                  models.Enrichment.queue_rank.nullsfirst(),
+                                  models.Enrichment.lot_id)
+                        .with_for_update(of=models.Enrichment, skip_locked=True)
+                        .limit(limit)
+                        .all())
+        rows = pick_claimable(candidates, busy, limit)
         if not rows:
             db.rollback()
             return []
