@@ -85,10 +85,10 @@ export default function App() {
   // without this they'd render as "—" (looking unattached).
   const [auctionIndex, setAuctionIndex] = useState({})
   const [auctionLimit, setAuctionLimit] = useState(50)
-  // Collapsed section headers in the auctions list. Imported starts closed:
-  // that block only grows, and once it's a screen tall the scan results you
-  // came here to read start below the fold. Click the header to open it.
-  const [collapsedSections, setCollapsedSections] = useState(['imported'])
+  // Collapsed section headers in the auction search list (watched houses,
+  // discovered). Imported auctions have their own tab now, so the scan
+  // results you came here to read are never pushed below the fold.
+  const [collapsedSections, setCollapsedSections] = useState([])
   const toggleSection = useCallback((key) => {
     setCollapsedSections((prev) =>
       prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key])
@@ -127,6 +127,18 @@ export default function App() {
 
   const [lotTotal, setLotTotal] = useState(0)
   const [lotsLoadState, setLotsLoadState] = useState('loading')
+  // The two inventory tabs are one panel with one difference: Priced
+  // inventory asks the server for only the lots that carry a value.
+  const pricedOnly = view === 'priced'
+  // Unscoped totals for the tab labels - lotTotal follows the filters in
+  // view, and a tab label that changed with the filters read as a bug.
+  const [tabCounts, setTabCounts] = useState({ items: null, priced: null })
+  const loadTabCounts = useCallback(() => {
+    Promise.all([fetchLotCount({}), fetchLotCount({ pricedOnly: true })])
+      .then(([all, priced]) => setTabCounts({ items: all.total, priced: priced.total }))
+      .catch(console.error)
+  }, [])
+  useEffect(() => { loadTabCounts() }, [loadTabCounts])
   const loadGen = useRef(0)
   // lot_id -> timestamp of the user's last enrich/inspect on it; these rows
   // are exempt from hide filters so the result can actually be read.
@@ -141,6 +153,7 @@ export default function App() {
       category: categoryFilter || undefined,
       boloOnly: filters.boloOnly,
       roiStatus: filters.roiStatus || undefined,
+      pricedOnly,
     }
     // Pages of 2000 chain automatically until the set is complete: the
     // first page renders immediately, the rest stream in behind it. One
@@ -172,7 +185,7 @@ export default function App() {
     // The real total comes from the database so the UI never passes off a
     // page size as the whole set.
     fetchLotCount(args).then((r) => setLotTotal(r.total)).catch(console.error)
-  }, [selectedAuctions, categoryFilter, filters])
+  }, [selectedAuctions, categoryFilter, filters, pricedOnly])
 
   // Accumulate imported auctions as FULL rows, separately from the visible
   // list: scans replace `auctions` with whatever HiBid returned, and your
@@ -298,8 +311,9 @@ export default function App() {
     syncAuctionStats().catch(console.error)
     loadLotCategories()
     loadLots()
+    loadTabCounts()
     loadWeekStats()
-  }, [loadLots, loadLotCategories, syncAuctionStats, loadWeekStats])
+  }, [loadLots, loadLotCategories, syncAuctionStats, loadWeekStats, loadTabCounts])
 
   function setScanField(field, value) {
     setScan((prev) => ({ ...prev, [field]: value }))
@@ -735,11 +749,15 @@ Skipping ${hard} HARD-to-ship lots.`
   // before a stranger's that happens to close sooner.
   const watchedAuctions = notImported.filter((a) => a.favorite)
   const discoveredAuctions = notImported.filter((a) => !a.favorite)
-  const auctionSections = [
-    ...(importedAuctions.length ? [{ key: 'imported', label: `Imported (${importedAuctions.length})`, rows: importedAuctions }] : []),
-    ...(watchedAuctions.length ? [{ key: 'watched', label: `★ Watched houses (${watchedAuctions.length})`, rows: watchedAuctions }] : []),
-    ...(discoveredAuctions.length ? [{ key: 'discovered', label: (importedAuctions.length || watchedAuctions.length) ? `Discovered (${discoveredAuctions.length})` : null, rows: discoveredAuctions }] : []),
-  ]
+  // Saved auctions is the imported list on its own, headerless. The search
+  // tab shows what the scan found, watched houses first.
+  const auctionSections = view === 'saved'
+    ? (importedAuctions.length ? [{ key: 'imported', label: null, rows: importedAuctions }] : [])
+    : [
+      ...(watchedAuctions.length ? [{ key: 'watched', label: `★ Watched houses (${watchedAuctions.length})`, rows: watchedAuctions }] : []),
+      ...(discoveredAuctions.length ? [{ key: 'discovered', label: watchedAuctions.length ? `Discovered (${discoveredAuctions.length})` : null, rows: discoveredAuctions }] : []),
+    ]
+  const listedAuctions = auctionSections.reduce((n, sec) => n + sec.rows.length, 0)
   // A section only collapses when it has a header to click — the lone
   // Discovered section renders headerless, and hiding it would strand the
   // rows with no way to get them back.
@@ -809,11 +827,13 @@ Skipping ${hard} HARD-to-ship lots.`
         )}
       </h1>
 
-      <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--border)',
-                    marginBottom: '1rem' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4,
+                    borderBottom: '1px solid var(--border)', marginBottom: '1rem' }}>
         {[
-          { key: 'auctions', label: `Auctions (${auctions.length})` },
-          { key: 'items', label: `My inventory (${lotTotal || lots.length})` },
+          { key: 'auctions', label: 'Auction search' },
+          { key: 'saved', label: `Saved auctions (${importedAuctions.length})` },
+          { key: 'items', label: `All inventory (${(tabCounts.items ?? lotTotal).toLocaleString()})` },
+          { key: 'priced', label: `Priced inventory (${(tabCounts.priced ?? 0).toLocaleString()})` },
         ].map((t) => (
           <button
             key={t.key}
@@ -826,7 +846,7 @@ Skipping ${hard} HARD-to-ship lots.`
         ))}
       </div>
 
-      {view === 'auctions' && (
+      {(view === 'auctions' || view === 'saved') && (
       <section style={{ marginBottom: '1.5rem' }}>
         {/* Acquisition pacing: is this week on track, and how much trusted
             profit is still on the board. Wins enter via the Won mark. */}
@@ -871,6 +891,7 @@ Skipping ${hard} HARD-to-ship lots.`
           )
         })()}
         {/* Form wrapper: pressing Enter in any filter field runs the scan */}
+        {view === 'auctions' && (
         <form onSubmit={(ev) => { ev.preventDefault(); handleScan() }}
               style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {/* Row 1: what to look for */}
@@ -1012,7 +1033,19 @@ Skipping ${hard} HARD-to-ship lots.`
           )}
         </div>
         </form>
-        {(importedAuctions.length + discoveredAuctions.length) === 0 && !busy && (
+        )}
+        {listedAuctions === 0 && !busy && (view === 'saved' ? (
+          <div className="empty-state" style={{ marginTop: '0.75rem' }}>
+            <div><strong>No saved auctions yet.</strong></div>
+            <div style={{ marginTop: 4 }}>
+              An auction lands here once you've imported at least one item from it.
+            </div>
+            <button className="primary" style={{ marginTop: 12 }}
+                    onClick={() => setView('auctions')}>
+              Find auctions
+            </button>
+          </div>
+        ) : (
           <div className="empty-state" style={{ marginTop: '0.75rem' }}>
             <div><strong>No auctions on screen yet.</strong></div>
             <div style={{ marginTop: 4 }}>
@@ -1020,11 +1053,11 @@ Skipping ${hard} HARD-to-ship lots.`
               see what's closing near you.
             </div>
           </div>
-        )}
-        {(importedAuctions.length + discoveredAuctions.length) > 0 && (isMobile ? (
+        ))}
+        {listedAuctions > 0 && (isMobile ? (
           <details style={{ marginTop: '0.75rem' }} open={!selectedAuctions.length}>
             <summary style={{ fontWeight: 600, padding: '4px 0' }}>
-              Auctions ({importedAuctions.length + discoveredAuctions.length})
+              Auctions ({listedAuctions})
             </summary>
             {auctionRowsForDisplay.slice(0, auctionLimit).map((a) => a.header ? (
               <div key={`hdr-${a.header}`} style={{ marginTop: 12 }}>
@@ -1225,7 +1258,7 @@ Skipping ${hard} HARD-to-ship lots.`
       </section>
       )}
 
-      {view === 'items' && (<>
+      {(view === 'items' || view === 'priced') && (<>
       <section style={{ marginBottom: 6, display: 'flex',
                         flexDirection: 'column', gap: 6 }}>
         {/* Row 1: scope (auctions + category) on the left, bulk actions on
@@ -1296,7 +1329,7 @@ Skipping ${hard} HARD-to-ship lots.`
               <option key={c.category} value={c.category}>{c.category} ({c.lots})</option>
             ))}
           </select>
-          {categoryFilter && (() => {
+          {categoryFilter && !pricedOnly && (() => {
             const cat = lotCategories.find((c) => c.category === categoryFilter)
             return (
               <button
@@ -1316,6 +1349,7 @@ Skipping ${hard} HARD-to-ship lots.`
                     title="Re-pull current bids from HiBid for every imported open auction and recompute ROI. Free — progress shows in the top bar.">
               Refresh bids
             </button>
+            {!pricedOnly && (<>
             <button style={isMobile ? { flex: '1 1 45%', padding: 8 } : undefined}
                     onClick={handleCompsOnly}
                     title="For every unpriced item in an open auction: look up sold comps on its auction title as-is. No AI cost - about one SoldComps request per item (asks first, shows the count)">
@@ -1326,6 +1360,7 @@ Skipping ${hard} HARD-to-ship lots.`
                     title="For every item still showing no value: AI reads the photo, identifies what is in it and prices it (asks first, shows cost)">
               Price the unpriced with AI
             </button>
+            </>)}
             <button className="danger"
                     style={isMobile ? { flex: '1 1 45%', padding: 8 } : undefined}
                     onClick={handleFlushClosed}
@@ -1429,7 +1464,7 @@ Skipping ${hard} HARD-to-ship lots.`
                 ? <>Catalogue of <strong style={{ color: 'var(--text)' }}>{auctionIndex[selectedAuctions[0]] ?? 'this auction'}</strong></>
                 : <>Items from <strong style={{ color: 'var(--text)' }}>{selectedAuctions.length} selected auctions</strong></>}
               {categoryFilter && <> in <strong style={{ color: 'var(--text)' }}>{categoryFilter}</strong></>}
-              {' '}— {(lotTotal || lots.length).toLocaleString()} lot{(lotTotal || lots.length) === 1 ? '' : 's'} imported
+              {' '}— {(lotTotal || lots.length).toLocaleString()} lot{(lotTotal || lots.length) === 1 ? '' : 's'} {pricedOnly ? 'priced' : 'imported'}
             </span>
             <button style={{ fontSize: 12, padding: '2px 8px' }}
                     onClick={() => setSelectedAuctions([])}>
@@ -1438,7 +1473,8 @@ Skipping ${hard} HARD-to-ship lots.`
           </>
         ) : (
           <span>
-            <strong style={{ color: 'var(--text)' }}>{lotTotal.toLocaleString()} items</strong> imported across
+            <strong style={{ color: 'var(--text)' }}>{lotTotal.toLocaleString()} {pricedOnly ? 'priced ' : ''}items</strong>
+            {pricedOnly ? ' across' : ' imported across'}
             {' '}{new Set(lots.map((l) => l.auction_id)).size} auctions
             {lotTotal > lots.length && (
               <em>
@@ -1460,6 +1496,18 @@ Skipping ${hard} HARD-to-ship lots.`
               the server is probably busy with a big job right now.
             </div>
             <button onClick={loadLots} style={{ marginTop: 10 }}>Try again</button>
+          </div>
+        ) : pricedOnly ? (
+          <div className="empty-state">
+            <div><strong>Nothing priced yet.</strong></div>
+            <div style={{ marginTop: 4 }}>
+              Price items from <strong>All inventory</strong> — every lot that gets a
+              value shows up here.
+            </div>
+            <button className="primary" style={{ marginTop: 12 }}
+                    onClick={() => setView('items')}>
+              All inventory
+            </button>
           </div>
         ) : (
           <div className="empty-state">

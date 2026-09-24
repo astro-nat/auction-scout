@@ -41,7 +41,7 @@ export function alertOnce(msg) {
   window.alert(msg)
 }
 
-export function fetchLots({ auctionIds, category, status, roiStatus, boloOnly, offset } = {}) {
+export function fetchLots({ auctionIds, category, status, roiStatus, boloOnly, pricedOnly, offset } = {}) {
   const params = new URLSearchParams()
   // 2000 per page everywhere: a 6000-lot payload crashed phone tabs and
   // strained the backend. Big auctions page in with `offset` via the
@@ -54,6 +54,7 @@ export function fetchLots({ auctionIds, category, status, roiStatus, boloOnly, o
   if (status) params.set('status', status)
   if (roiStatus) params.set('roi_status', roiStatus)
   if (boloOnly) params.set('bolo_only', 'true')
+  if (pricedOnly) params.set('priced_only', 'true')
   return request(`/lots?${params}`)
 }
 
@@ -83,13 +84,14 @@ export function patchEnrichment(lotId, changes) {
   })
 }
 
-export function fetchLotCount({ auctionIds, category, status, roiStatus, boloOnly } = {}) {
+export function fetchLotCount({ auctionIds, category, status, roiStatus, boloOnly, pricedOnly } = {}) {
   const params = new URLSearchParams()
   for (const id of auctionIds || []) params.append('auction_id', id)
   if (category) params.set('category', category)
   if (status) params.set('status', status)
   if (roiStatus) params.set('roi_status', roiStatus)
   if (boloOnly) params.set('bolo_only', 'true')
+  if (pricedOnly) params.set('priced_only', 'true')
   return request(`/lots/count?${params}`)
 }
 

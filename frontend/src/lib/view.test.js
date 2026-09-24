@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  DEFAULT_VIEW, VIEW_KEY, initialView, saveView, viewFromHash, viewUrl,
+  DEFAULT_VIEW, VIEWS, VIEW_KEY, initialView, saveView, viewFromHash, viewUrl,
 } from './view'
 
 // A fake localStorage. The throwing variant is not hypothetical: Safari in
@@ -24,6 +24,8 @@ describe('viewFromHash', () => {
   it('reads a known view out of the hash', () => {
     expect(viewFromHash('#items')).toBe('items')
     expect(viewFromHash('#auctions')).toBe('auctions')
+    expect(viewFromHash('#saved')).toBe('saved')
+    expect(viewFromHash('#priced')).toBe('priced')
   })
 
   it('accepts a hash with no leading #', () => {
@@ -113,7 +115,7 @@ describe('viewUrl', () => {
   it('round-trips through viewFromHash', () => {
     // The two halves have to agree, or every render would see a mismatch
     // and push another history entry.
-    for (const v of ['auctions', 'items']) {
+    for (const v of VIEWS) {
       const url = viewUrl(v, { pathname: '/', search: '' })
       expect(viewFromHash(url.slice(url.indexOf('#')))).toBe(v)
     }

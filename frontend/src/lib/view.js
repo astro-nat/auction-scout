@@ -9,7 +9,9 @@
 // reaching for window themselves, so they can be tested without a DOM.
 
 export const VIEW_KEY = 'auctionscout.view'
-export const VIEWS = ['auctions', 'items']
+// Four tabs: find auctions, the auctions you have imported from, every
+// imported lot, and just the lots the app has put a value on.
+export const VIEWS = ['auctions', 'saved', 'items', 'priced']
 export const DEFAULT_VIEW = 'auctions'
 
 // Anyone can type anything after the #, and an unrecognised value would

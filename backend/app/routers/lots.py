@@ -20,6 +20,7 @@ def count_lots(
     auction_id: Optional[List[int]] = Query(None, description="repeatable — any of these auctions"),
     roi_status: Optional[str] = None,
     bolo_only: bool = False,
+    priced_only: bool = False,
     include_closed: bool = False,
     db: Session = Depends(get_db),
 ):
@@ -30,7 +31,14 @@ def count_lots(
         q = q.filter(models.Lot.category == category)
     if auction_id:
         q = q.filter(models.Lot.auction_id.in_(auction_id))
-    if status or roi_status or bolo_only:
+    q = _enrichment_filters(q, status, roi_status, bolo_only, priced_only)
+    return {"total": q.count()}
+
+
+def _enrichment_filters(q, status, roi_status, bolo_only, priced_only):
+    """The filters that live on the enrichment row, shared by the list and
+    its count so the two can never disagree about what is in view."""
+    if status or roi_status or bolo_only or priced_only:
         q = q.join(models.Enrichment)
     if status:
         q = q.filter(models.Enrichment.status == status)
@@ -38,7 +46,11 @@ def count_lots(
         q = q.filter(models.Enrichment.roi_status == roi_status)
     if bolo_only:
         q = q.filter(models.Enrichment.bolo_brand.isnot(None))
-    return {"total": q.count()}
+    if priced_only:
+        # "Priced" means a value exists, whatever tier produced it - the
+        # Priced inventory tab is every lot the app has an opinion on.
+        q = q.filter(models.Enrichment.est_resale.isnot(None))
+    return q
 
 
 @router.get("/categories")
@@ -75,6 +87,7 @@ def list_lots(
     auction_id: Optional[List[int]] = Query(None, description="repeatable — any of these auctions"),
     roi_status: Optional[str] = Query(None, description="GOLD MINE | PASS"),
     bolo_only: bool = False,
+    priced_only: bool = Query(False, description="only lots with an est_resale"),
     include_closed: bool = False,
     limit: int = 2000,
     offset: int = 0,
@@ -94,14 +107,7 @@ def list_lots(
         q = q.filter(models.Lot.category == category)
     if auction_id:
         q = q.filter(models.Lot.auction_id.in_(auction_id))
-    if status or roi_status or bolo_only:
-        q = q.join(models.Enrichment)
-    if status:
-        q = q.filter(models.Enrichment.status == status)
-    if roi_status:
-        q = q.filter(models.Enrichment.roi_status == roi_status)
-    if bolo_only:
-        q = q.filter(models.Enrichment.bolo_brand.isnot(None))
+    q = _enrichment_filters(q, status, roi_status, bolo_only, priced_only)
 
     from datetime import datetime
     from ..services import calibration
