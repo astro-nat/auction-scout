@@ -292,10 +292,6 @@ export function savePacing(changes) {
   return request('/settings', { method: 'PATCH', body: JSON.stringify(changes) })
 }
 
-export function fetchBoard() {
-  return request('/stats/board')
-}
-
 export function reinspectNoComps(dryRun = false) {
   const q = dryRun ? '?dry_run=true' : ''
   return request(`/lots/reinspect-no-comps${q}`, { method: 'POST' })

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, scanGovDeals, importGovDeals, scanPublicSurplus, importPublicSurplus, scanVinted, importLots, importAllAuctions, enrichAll, enrichCategory, flushClosed, refreshBids, reinspectNoComps, repriceUnpriced, fetchSettings, saveTargetRoi, savePacing, fetchBoard, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
+import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, scanGovDeals, importGovDeals, scanPublicSurplus, importPublicSurplus, scanVinted, importLots, importAllAuctions, enrichAll, enrichCategory, flushClosed, refreshBids, reinspectNoComps, repriceUnpriced, fetchSettings, saveTargetRoi, savePacing, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
 import { auctionClosed, clearsFloor, underFloor, goldBadge as pacingGoldBadge } from './lib/pacing'
 import { houseRatioLabel, houseRatioTitle } from './lib/calibration'
 import { initialView, saveView, viewFromHash, viewUrl } from './lib/view'
@@ -114,23 +114,21 @@ export default function App() {
   const [importedRows, setImportedRows] = useState({})
   // Target ROI % for the GOLD MINE verdict — DB-backed, editable inline.
   const [targetRoi, setTargetRoi] = useState('')
+  // The least audit-trusted profit an auction must put on the table before
+  // it's worth a shipping minimum or a pickup trip. Kept as typed text so
+  // the input can be edited freely; saved on blur.
+  const [floorInput, setFloorInput] = useState('200')
   useEffect(() => {
-    fetchSettings().then((s) => setTargetRoi(String(s.target_roi_pct))).catch(console.error)
+    fetchSettings().then((s) => {
+      setTargetRoi(String(s.target_roi_pct))
+      if (s.auction_floor_usd != null) setFloorInput(String(s.auction_floor_usd))
+    }).catch(console.error)
   }, [])
-  // The board: how much gold-mine profit is on the table across open
-  // auctions, and the least an auction can put there before it's worth a
-  // shipping minimum or a pickup trip.
-  const [board, setBoard] = useState(null)
-  const loadBoard = useCallback(() => {
-    fetchBoard().then(setBoard).catch(console.error)
-  }, [])
-  useEffect(() => { loadBoard() }, [loadBoard])
-  const auctionFloor = Number(board?.auction_floor_usd ?? 200)
+  const auctionFloor = Number(floorInput) || 0
 
   async function handleSavePacing(changes) {
     try {
       await savePacing(changes)
-      loadBoard()
     } catch (e) { alertOnce(e.message) }
   }
 
@@ -321,8 +319,7 @@ export default function App() {
     loadLotCategories()
     loadLots()
     loadTabCounts()
-    loadBoard()
-  }, [loadLots, loadLotCategories, syncAuctionStats, loadBoard, loadTabCounts])
+  }, [loadLots, loadLotCategories, syncAuctionStats, loadTabCounts])
 
   function setScanField(field, value) {
     setScan((prev) => ({ ...prev, [field]: value }))
@@ -879,30 +876,19 @@ Skipping ${hard} HARD-to-ship lots.`
 
       {(view === 'auctions' || view === 'saved') && (
       <section style={{ marginBottom: '1.5rem' }}>
-        {/* The board: how much trusted profit is on the table, and the floor
-            an auction has to clear to be worth touching. */}
-        {board && (
-          <div className="card" style={{ marginBottom: 10, padding: '8px 12px' }}>
-            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline',
-                          gap: '4px 14px', fontSize: 14 }}>
-              <strong>~${Number(board.available_gold_profit).toFixed(0)} on the board</strong>
-              <span style={{ color: 'var(--muted)' }}>
-                gold-mine profit across open auctions
-              </span>
-              <label style={{ marginLeft: 'auto', color: 'var(--muted)', fontSize: 13,
-                              whiteSpace: 'nowrap' }}
-                     title="An auction must put at least this much audit-trusted profit on the table to be worth a shipping minimum or a pickup trip">
-                floor $
-                <input
-                  value={board.auction_floor_usd}
-                  onChange={(ev) => setBoard((s) => ({ ...s, auction_floor_usd: ev.target.value }))}
-                  onBlur={(ev) => { const v = Number(ev.target.value); if (v >= 0) handleSavePacing({ auction_floor_usd: v }) }}
-                  style={{ width: 44, fontSize: 13, padding: '0 2px' }}
-                />/auction
-              </label>
-            </div>
-          </div>
-        )}
+        {/* The floor an auction has to clear to be worth touching. */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+          <label style={{ color: 'var(--muted)', fontSize: 13, whiteSpace: 'nowrap' }}
+                 title="An auction must put at least this much audit-trusted profit on the table to be worth a shipping minimum or a pickup trip">
+            floor $
+            <input
+              value={floorInput}
+              onChange={(ev) => setFloorInput(ev.target.value)}
+              onBlur={(ev) => { const v = Number(ev.target.value); if (v >= 0) handleSavePacing({ auction_floor_usd: v }) }}
+              style={{ width: 44, fontSize: 13, padding: '0 2px' }}
+            />/auction
+          </label>
+        </div>
         {/* Form wrapper: pressing Enter in any filter field runs the scan */}
         {view === 'auctions' && (
         <form onSubmit={(ev) => { ev.preventDefault(); handleScan() }}

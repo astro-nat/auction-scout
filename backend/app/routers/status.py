@@ -287,30 +287,6 @@ def patch_settings(payload: dict,
     return {**to_save, "regrading": n}
 
 
-@router.get("/stats/board")
-def board_stats(db: Session = Depends(get_db)):
-    """What's on the table right now, across open auctions: the summed
-    profit of lots the grader still calls GOLD MINE (post-audit, so
-    evidence-gated), and the per-auction floor it is judged against.
-    """
-    from datetime import datetime
-    from sqlalchemy import func
-    now = datetime.now()
-    available = float(
-        db.query(func.coalesce(func.sum(models.Enrichment.profit), 0))
-          .join(models.Lot, models.Lot.id == models.Enrichment.lot_id)
-          .join(models.Auction, models.Lot.auction_id == models.Auction.id)
-          .filter(models.Enrichment.roi_status == "GOLD MINE",
-                  models.Auction.closing_date.isnot(None),
-                  models.Auction.closing_date >= now)
-          .scalar())
-
-    from ..services import settings as settings_store
-    return {"available_gold_profit": round(available, 2),
-            "auction_floor_usd": settings_store.money(
-                "auction_floor_usd", settings_store.AUCTION_FLOOR_DEFAULT)}
-
-
 @router.post("/jobs/{job_id}/cancel")
 def cancel_job(job_id: str):
     """Ask a running scan/import/reprice to stop. Work already saved stays."""
