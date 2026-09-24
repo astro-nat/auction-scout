@@ -1,10 +1,9 @@
-"""Periodic housekeeping — the closed-item flush and the bid refresh.
+"""Periodic housekeeping — the closed-item flush and the stale-job reaper.
 
-Daemon threads on fixed cadences: bids (and per-lot closed statuses)
-re-pull from HiBid every BID_REFRESH_HOURS; un-biddable lots get deleted
-every FLUSH_CLOSED_HOURS. Each loop's first run fires shortly after boot
-(every deploy restarts the clock, so in practice both happen at least on
-their interval and often sooner). Setting either to 0 disables that loop.
+Daemon threads on fixed cadences: un-biddable lots get deleted every
+FLUSH_CLOSED_HOURS (0 disables). Bids are never refreshed automatically -
+only the Refresh bids button moves them - and there is deliberately no
+setting that turns an automatic refresh back on.
 """
 
 import logging
@@ -23,42 +22,7 @@ STARTUP_DELAY_SECONDS = 60
 
 def start_maintenance() -> None:
     _start_flush_loop()
-    _start_bid_refresh_loop()
-    _start_live_tracker()
     _start_reaper()
-
-
-def _start_live_tracker() -> None:
-    """Fast bid refresh while a webcast auction is live, so hammered lots
-    leave the screen near-live (the refresh marks everything below the lot
-    on the block as closed — see refresh.live_current_lot)."""
-    if config.LIVE_REFRESH_MINUTES <= 0:
-        logger.info("Live tracker disabled — LIVE_REFRESH_MINUTES is 0")
-        return
-
-    def loop():
-        from ..services import jobs
-        from .refresh import live_webcast_auction_ids
-        time.sleep(STARTUP_DELAY_SECONDS * 3)
-        while True:
-            try:
-                if not jobs.has_pending("bid-refresh"):
-                    db = SessionLocal()
-                    try:
-                        ids = live_webcast_auction_ids(db)
-                    finally:
-                        db.close()
-                    if ids:
-                        jobs.enqueue("bid-refresh",
-                                     "Live sale — tracking the current lot",
-                                     total=len(ids), payload={"auction_ids": ids})
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("Live tracker failed: %s", exc)
-            time.sleep(config.LIVE_REFRESH_MINUTES * 60)
-
-    threading.Thread(target=loop, daemon=True, name="maintenance-live").start()
-    logger.info("Live tracker on: every %.1f min while a webcast sale runs",
-                config.LIVE_REFRESH_MINUTES)
 
 
 def _start_flush_loop() -> None:
@@ -88,49 +52,6 @@ def _start_flush_loop() -> None:
     threading.Thread(target=loop, daemon=True, name="maintenance-flush").start()
     logger.info("Auto-flush on: every %.1fh", config.FLUSH_CLOSED_HOURS)
 
-
-def _start_bid_refresh_loop() -> None:
-    if config.BID_REFRESH_HOURS <= 0:
-        logger.info("Auto bid refresh disabled — BID_REFRESH_HOURS is 0")
-        return
-
-    def loop():
-        from ..services import jobs
-        from .refresh import auctions_due_for_bid_refresh, run_bid_refresh
-        # Offset from the flush loop's wakeup so they don't pile onto the
-        # DB at the same instant after a deploy.
-        time.sleep(STARTUP_DELAY_SECONDS * 2)
-        while True:
-            try:
-                # Skip this tick if ANY long job holds the pool — the hourly
-                # refresh is not worth crawling a reprice to a halt. The next
-                # tick picks it up.
-                # Enqueue rather than run: the worker loop serialises heavy
-                # jobs, so this no longer has to decide whether to skip.
-                if jobs.has_pending("bid-refresh"):
-                    logger.info("Auto bid refresh skipped — one is already queued")
-                else:
-                    db = SessionLocal()
-                    try:
-                        ids = auctions_due_for_bid_refresh(db)
-                    finally:
-                        db.close()
-                    if not ids:
-                        logger.info(
-                            "Auto bid refresh: nothing closing within %.1fh",
-                            config.BID_REFRESH_WINDOW_HOURS)
-                    if ids:
-                        # Queue it like any other caller would. Running it
-                        # inline here blocked this loop for the duration and
-                        # dodged the worker's one-heavy-job-at-a-time limit.
-                        jobs.enqueue("bid-refresh", "Refreshing current bids",
-                                     total=len(ids), payload={"auction_ids": ids})
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("Auto bid refresh failed: %s", exc)
-            time.sleep(config.BID_REFRESH_HOURS * 3600)
-
-    threading.Thread(target=loop, daemon=True, name="maintenance-bids").start()
-    logger.info("Auto bid refresh on: every %.1fh", config.BID_REFRESH_HOURS)
 
 REAPER_INTERVAL_SECONDS = int(os.environ.get("REAPER_INTERVAL_SECONDS", "120"))
 

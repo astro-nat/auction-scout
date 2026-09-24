@@ -141,38 +141,11 @@ def run_bid_refresh(auction_ids: list[int], resume_job_id: str | None = None) ->
     print(f"Bid refresh complete: {updated_total} lots updated")
 
 
-def live_webcast_auction_ids(db: Session) -> list[int]:
-    """Imported webcast auctions inside their live window.
-
-    Webcast signature: the auction has imported lots and NONE of them carry
-    a per-lot close time. closing_date is the posted END of the sale (HiBid
-    lists when bidding closes, not when the crier starts), so a webcast is
-    live in the LIVE_SALE_HOURS leading up to it — the first version had
-    this backwards and never considered a running sale live."""
-    now = _utcnow()
-    has_timed = (db.query(models.Lot.auction_id)
-                   .filter(models.Lot.auction_id.isnot(None),
-                           models.Lot.closes_at.isnot(None))
-                   .distinct())
-    imported = (db.query(models.Lot.auction_id)
-                  .filter(models.Lot.auction_id.isnot(None)).distinct())
-    q = (db.query(models.Auction.id)
-           .filter(models.Auction.hibid_id.isnot(None),
-                   models.Auction.id.in_(imported),
-                   models.Auction.id.notin_(has_timed),
-                   models.Auction.closing_date.isnot(None),
-                   models.Auction.closing_date >= now - timedelta(hours=1),
-                   models.Auction.closing_date
-                   <= now + timedelta(hours=config.LIVE_SALE_HOURS)))
-    return [row[0] for row in q.all()]
-
-
 def auctions_due_for_bid_refresh(db: Session,
                                  window_hours: float | None = None) -> list[int]:
     """Imported auctions with lots closing inside the window.
 
-    Shared by the hourly loop and the manual endpoint, which had drifted into
-    two copies of the same query.
+    Used by the manual Refresh bids endpoint.
 
     A lot's own `closes_at` decides when it is known — HiBid staggers
     closings, so an auction stays open for days while its lots finish in

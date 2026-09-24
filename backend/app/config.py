@@ -87,12 +87,6 @@ WATCH_ALERT_HOURS = float(os.environ.get("WATCH_ALERT_HOURS", "2"))
 # leaves cleanup to the manual "Flush closed items" button.
 FLUSH_CLOSED_HOURS = float(os.environ.get("FLUSH_CLOSED_HOURS", "12"))
 
-# Auto-refresh current bids (and per-lot closed status) from HiBid this
-# often (hours). Free — no AI calls. Off by default: every refresh is a full
-# re-fetch of every lot in the auctions it touches, and bids should move
-# only when the Refresh bids button is pressed. Set a value in hours to
-# turn the loop back on; the manual button works either way.
-BID_REFRESH_HOURS = float(os.environ.get("BID_REFRESH_HOURS", "0"))
 # Only refresh bids for auctions closing inside this window. Bids barely
 # move while a sale is days out, and every refresh is a full HiBid re-fetch
 # of every lot — so pulling a 500-lot auction hourly for a week costs a lot
@@ -102,17 +96,6 @@ BID_REFRESH_HOURS = float(os.environ.get("BID_REFRESH_HOURS", "0"))
 # value, so ROI on a lot closing in three days is computed against a bid
 # that may be hours old.
 BID_REFRESH_WINDOW_HOURS = float(os.environ.get("BID_REFRESH_WINDOW_HOURS", "1"))
-
-# While a webcast auction is LIVE (crier working the catalog in order),
-# refresh it this often so hammered lots leave the screen near-live. The
-# hourly loop is far too slow for a sale moving ~100 lots an hour.
-# 0 disables. A sale counts as live for LIVE_SALE_HOURS leading up to its
-# posted close (closing_date is the END of a webcast, and long sales run
-# most of a day) and one hour past it.
-# Off by default, like the hourly loop: bids move only when the Refresh
-# bids button is pressed. Set minutes to turn the tracker back on.
-LIVE_REFRESH_MINUTES = float(os.environ.get("LIVE_REFRESH_MINUTES", "0"))
-LIVE_SALE_HOURS = float(os.environ.get("LIVE_SALE_HOURS", "14"))
 
 # How many lots enrich/inspect in parallel. The work is HTTP-bound (Claude,
 # eBay, image downloads), so a few threads give a ~Nx queue speedup; keep
