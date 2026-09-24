@@ -824,31 +824,62 @@ def _verify_gold(db: Session, lot: models.Lot, e: models.Enrichment, *,
     no ROI signal. Only when the auditor offers no usable number does the
     lot fall to a plain demotion. Fail-open: if the call fails the lot
     stands unchanged, so the next sweep retries it. Hand-set prices are
-    never second-guessed."""
-    if not GOLD_CHECK or e.gold_check:
-        return
-    if e.roi_status != "GOLD MINE" and not candidate:
-        return
-    if "est_resale" in set(e.user_overrides or []):
+    never second-guessed.
+
+    Three halves so the bulk re-price can run the model call off-thread:
+    _audit_plan reads the row, _audit_call talks to the network with no
+    session in hand, _apply_audit writes the verdict. This is the three in
+    order for the single-lot callers."""
+    plan = _audit_plan(lot, e, candidate=candidate)
+    if plan is None:
         return
     # House rule: never hold a transaction across the network.
     db.commit()
-    image_bytes = _download_image(lot.fullsize_url or lot.hd_thumbnail_url
-                                  or lot.thumbnail_url)
+    result = _audit_call(plan)
+    if result is None:
+        return
+    _apply_audit(db, lot, e, result, candidate=candidate)
+
+
+def _audit_plan(lot: models.Lot, e: models.Enrichment, *,
+                candidate: bool = False) -> dict | None:
+    """The guards, and the prompt's inputs read off the row as plain values
+    so the model call can run on another thread with no session. None when
+    there is nothing to audit. est_resale rides along so a verdict that
+    arrives after the value moved on can be recognised and dropped."""
+    if not GOLD_CHECK or e.gold_check:
+        return None
+    if e.roi_status != "GOLD MINE" and not candidate:
+        return None
+    if "est_resale" in set(e.user_overrides or []):
+        return None
+    return {
+        "lot_db_id": lot.id,
+        "candidate": candidate,
+        "est_resale": e.est_resale,
+        "image_url": lot.fullsize_url or lot.hd_thumbnail_url or lot.thumbnail_url,
+        "fields": dict(
+            title=lot.title or "",
+            description=(lot.description or "")[:800] or "(none)",
+            enriched_title=e.enriched_title or "(none)",
+            verdict=e.verdict or "(none)",
+            est_resale=e.est_resale,
+            price_source=e.price_source or "?",
+            comp_count=e.comp_count or 0,
+            house_estimate=(f"${float(lot.estimate_low):g}-${float(lot.estimate_high):g} "
+                            f"(the auctioneer's own range — promotional, not market data)"
+                            if getattr(lot, "estimate_low", None) else "(none given)"),
+            bid=lot.current_bid or 0,
+            max_bid=e.max_bid or 0),
+    }
+
+
+def _audit_call(plan: dict) -> dict | None:
+    """The network half: the photo, then the model's verdict. No session.
+    None when the call failed or answered without a verdict (fail-open)."""
+    image_bytes = _download_image(plan["image_url"])
     prompt = GOLD_CHECK_PROMPT.format(
-        title=lot.title or "",
-        description=(lot.description or "")[:800] or "(none)",
-        enriched_title=e.enriched_title or "(none)",
-        verdict=e.verdict or "(none)",
-        est_resale=e.est_resale,
-        price_source=e.price_source or "?",
-        comp_count=e.comp_count or 0,
-        house_estimate=(f"${float(lot.estimate_low):g}-${float(lot.estimate_high):g} "
-                        f"(the auctioneer's own range — promotional, not market data)"
-                        if getattr(lot, "estimate_low", None) else "(none given)"),
-        bid=lot.current_bid or 0,
-        max_bid=e.max_bid or 0,
-        photo_note=", shown in the photo" if image_bytes else "")
+        **plan["fields"], photo_note=", shown in the photo" if image_bytes else "")
     content = [{"type": "text", "text": prompt}]
     if image_bytes:
         content.insert(0, {"type": "image",
@@ -859,7 +890,13 @@ def _verify_gold(db: Session, lot: models.Lot, e: models.Enrichment, *,
         model=MODEL, max_tokens=250,
         messages=[{"role": "user", "content": content}]).content[0].text)
     if result is None or not isinstance(result.get("plausible"), bool):
-        return
+        return None
+    return result
+
+
+def _apply_audit(db: Session, lot: models.Lot, e: models.Enrichment, result: dict, *,
+                 candidate: bool = False) -> None:
+    """The write half of the audit: confirm, correct or demote, and commit."""
     reason = str(result.get("reason") or "")[:300]
     if result["plausible"]:
         e.gold_check = "confirmed"
@@ -1486,10 +1523,14 @@ def _fetch_reprice_comps(plan: dict) -> dict:
     return pricing.lookup_comps(plan["search_title"])
 
 
-def _apply_reprice(db: Session, plan: dict, comps) -> bool:
+def _apply_reprice(db: Session, plan: dict, comps, audits: list | None = None) -> bool:
     """Phase C: write one result, on the main thread. Returns True when the
     lot was priced (or deliberately kept), False when there was nothing to
-    apply - the lot vanished mid-run, or its lookup failed."""
+    apply - the lot vanished mid-run, or its lookup failed.
+
+    A fresh gold needs its audit. With `audits` given, the audit's plan is
+    appended there for the caller to run off-thread; without it, the audit
+    runs inline."""
     lot = db.query(models.Lot).filter(models.Lot.id == plan["lot_db_id"]).first()
     e = lot.enrichment if lot else None
     if e is None:
@@ -1545,13 +1586,35 @@ def _apply_reprice(db: Session, plan: dict, comps) -> bool:
         e.gold_check_note = None
     _apply_roi(lot, e)
     db.commit()
+    # The one model spend in reprice: fresh golds get their second opinion
+    # (~half a cent each).
+    if audits is not None:
+        audit = _audit_plan(lot, e)
+        if audit is not None:
+            audits.append(audit)
+        return True
     try:
-        # The one model spend in reprice: fresh golds get their second
-        # opinion (~half a cent each).
         _verify_gold(db, lot, e)
     except Exception as exc:  # noqa: BLE001
         logger.warning("Gold check failed for lot %s: %s", plan["lot_db_id"], exc)
     return True
+
+
+def _settle_audit(db: Session, plan: dict, result: dict | None) -> None:
+    """Write an off-thread audit's verdict, if it still applies: the lot is
+    still there, nothing audited it meanwhile, and the value it judged is
+    the value on the row."""
+    if result is None:
+        return
+    lot = db.query(models.Lot).filter(models.Lot.id == plan["lot_db_id"]).first()
+    e = lot.enrichment if lot else None
+    if e is None or e.gold_check or str(e.est_resale) != str(plan["est_resale"]):
+        return
+    try:
+        _apply_audit(db, lot, e, result, candidate=plan["candidate"])
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Gold check failed for lot %s: %s", plan["lot_db_id"], exc)
+        db.rollback()
 
 
 def run_reprice(lot_db_ids: list[int], resume_job_id: str | None = None) -> None:
@@ -1562,6 +1625,15 @@ def run_reprice(lot_db_ids: list[int], resume_job_id: str | None = None) -> None
     session, commit, fetch their comps concurrently with no session held,
     then apply the results in order. Only the network fans out; every
     database write stays on this thread. Cancellation is checked per batch.
+
+    The gold audit is the other network wait, and it used to run inline,
+    one lot at a time, after the batch's comps were written. Now a batch's
+    audits are handed to the pool and their verdicts written after the NEXT
+    batch's comps come back - so the model calls overlap each other and the
+    following lookups. A verdict that lands after the value moved on is
+    dropped (_settle_audit), and a lot whose audit is still in flight when
+    the run stops simply has no gold_check yet, which the next sweep reads
+    as "audit me" - the same fail-open the audit always had.
 
     Pricing rules change (realization factor, condition multipliers, comp
     filters) far more often than an item's identity does — this applies them
@@ -1583,6 +1655,20 @@ def run_reprice(lot_db_ids: list[int], resume_job_id: str | None = None) -> None
         start_at = 0
     repriced = skipped = 0
     width = max(1, REPRICE_CONCURRENCY)
+    # Wide enough for a batch of lookups and a batch of audits at once.
+    pool = ThreadPoolExecutor(max_workers=width * 2)
+    pending_audits: list[tuple[dict, object]] = []
+
+    def settle_pending():
+        for audit, fut in pending_audits:
+            try:
+                verdict = fut.result()
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Gold check failed for lot %s: %s", audit["lot_db_id"], exc)
+                verdict = None
+            _settle_audit(db, audit, verdict)
+        pending_audits.clear()
+
     try:
         i = start_at
         while i < len(lot_db_ids):
@@ -1603,22 +1689,22 @@ def run_reprice(lot_db_ids: list[int], resume_job_id: str | None = None) -> None
             # Hand the connection back before going out to the network.
             db.commit()
 
-            # --- B. fetch comps concurrently, with no session held
+            # --- B. fetch comps concurrently, with no session held; the
+            # previous batch's audits are still running alongside
             results = {}
             network = [p for p in plans if p["kind"] == "network"]
-            if network:
-                with ThreadPoolExecutor(max_workers=min(width, len(network))) as pool:
-                    futures = {pool.submit(_fetch_reprice_comps, p): p["lot_db_id"]
-                               for p in network}
-                    for fut, lot_db_id in futures.items():
-                        try:
-                            results[lot_db_id] = fut.result()
-                        except Exception as exc:  # noqa: BLE001
-                            logger.warning("Reprice lookup failed for lot %s: %s",
-                                           lot_db_id, exc)
-                            results[lot_db_id] = None
+            futures = {pool.submit(_fetch_reprice_comps, p): p["lot_db_id"]
+                       for p in network}
+            for fut, lot_db_id in futures.items():
+                try:
+                    results[lot_db_id] = fut.result()
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("Reprice lookup failed for lot %s: %s",
+                                   lot_db_id, exc)
+                    results[lot_db_id] = None
 
             # --- C. apply in order, one checkpoint per lot
+            audits: list[dict] = []
             for plan in plans:
                 i += 1
                 lot_db_id = plan["lot_db_id"]
@@ -1628,7 +1714,7 @@ def run_reprice(lot_db_ids: list[int], resume_job_id: str | None = None) -> None
                     comps = (plan.get("comps") if plan["kind"] == "title"
                              else results.get(lot_db_id))
                     try:
-                        if _apply_reprice(db, plan, comps):
+                        if _apply_reprice(db, plan, comps, audits):
                             repriced += 1
                     except Exception as exc:  # noqa: BLE001
                         logger.warning("Reprice failed for lot %s: %s", lot_db_id, exc)
@@ -1638,7 +1724,14 @@ def run_reprice(lot_db_ids: list[int], resume_job_id: str | None = None) -> None
                 # not just the progress bar.
                 jobs.update(job, current=i,
                             detail=(plan.get("title") or "")[:40] or None)
+
+            # --- D. write last batch's verdicts, send this batch's audits out
+            settle_pending()
+            db.commit()
+            pending_audits = [(a, pool.submit(_audit_call, a)) for a in audits]
+        settle_pending()
     finally:
+        pool.shutdown(wait=True)
         jobs.finish(job)
         db.close()
     print(f"Reprice complete: {repriced} updated, {skipped} kept (hand-corrected)")
