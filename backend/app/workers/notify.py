@@ -8,9 +8,8 @@ pub/sub push: the phone app subscribes to a topic name, the server POSTs to
 it; the topic name is the only secret, so it should be unguessable).
 
 An auction earns a digest when it holds watched (★) lots — the user's own
-shortlist — or when its audit-trusted gold mines clear the per-auction
-floor, the same bar the auctions tab highlights. The body lists the lots
-worth showing up for: current bid vs the walk-away ceiling, best first.
+shortlist — or any audit-trusted gold mine. The body lists the lots worth
+showing up for: current bid vs the walk-away ceiling, best first.
 
 Disabled entirely when NTFY_TOPIC is unset. Each auction digests at most
 once (closing_digest_sent_at), so a restart never re-spams; the per-lot
@@ -100,14 +99,11 @@ def _digest_lots(db, auction_id: int) -> list:
 def check_closing_digests() -> int:
     """One pass: digest every qualifying auction that has entered the
     closing window. Returns how many digests went out (for tests/logs)."""
-    from ..services import settings as settings_store
     db = SessionLocal()
     sent = 0
     try:
         now = datetime.now()
         cutoff = now + timedelta(hours=config.WATCH_ALERT_HOURS)
-        floor = settings_store.money("auction_floor_usd",
-                                     settings_store.AUCTION_FLOOR_DEFAULT)
         auctions = (db.query(models.Auction)
                       .filter(models.Auction.closing_date.isnot(None),
                               models.Auction.closing_date > now,
@@ -122,10 +118,10 @@ def check_closing_digests() -> int:
                              if l.enrichment and l.enrichment.profit is not None
                              and l.enrichment.roi_status == "GOLD MINE"
                              and float(l.enrichment.profit) > 0)
-            # No shortlist and the board doesn't clear the floor: closing
-            # without you is the correct outcome. Stamp it anyway so the
-            # query stops revisiting a decided auction every five minutes.
-            if not watched and gold_total < floor:
+            # No shortlist and no gold: closing without you is the correct
+            # outcome. Stamp it anyway so the query stops revisiting a
+            # decided auction every five minutes.
+            if not watched and gold_total <= 0:
                 auction.closing_digest_sent_at = now
                 db.commit()
                 continue

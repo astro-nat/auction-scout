@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, scanGovDeals, importGovDeals, scanPublicSurplus, importPublicSurplus, scanVinted, importLots, importAllAuctions, enrichAll, enrichCategory, flushClosed, refreshBids, reinspectNoComps, repriceUnpriced, fetchSettings, saveTargetRoi, savePacing, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
-import { auctionClosed, clearsFloor, underFloor, goldBadge as pacingGoldBadge } from './lib/pacing'
+import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, scanGovDeals, importGovDeals, scanPublicSurplus, importPublicSurplus, scanVinted, importLots, importAllAuctions, enrichAll, enrichCategory, flushClosed, refreshBids, reinspectNoComps, repriceUnpriced, fetchSettings, saveTargetRoi, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
+import { auctionClosed, goldBadge } from './lib/pacing'
 import { houseRatioLabel, houseRatioTitle } from './lib/calibration'
 import { initialView, saveView, viewFromHash, viewUrl } from './lib/view'
 import { installTracking, track } from './lib/track'
@@ -114,23 +114,9 @@ export default function App() {
   const [importedRows, setImportedRows] = useState({})
   // Target ROI % for the GOLD MINE verdict — DB-backed, editable inline.
   const [targetRoi, setTargetRoi] = useState('')
-  // The least audit-trusted profit an auction must put on the table before
-  // it's worth a shipping minimum or a pickup trip. Kept as typed text so
-  // the input can be edited freely; saved on blur.
-  const [floorInput, setFloorInput] = useState('200')
   useEffect(() => {
-    fetchSettings().then((s) => {
-      setTargetRoi(String(s.target_roi_pct))
-      if (s.auction_floor_usd != null) setFloorInput(String(s.auction_floor_usd))
-    }).catch(console.error)
+    fetchSettings().then((s) => setTargetRoi(String(s.target_roi_pct))).catch(console.error)
   }, [])
-  const auctionFloor = Number(floorInput) || 0
-
-  async function handleSavePacing(changes) {
-    try {
-      await savePacing(changes)
-    } catch (e) { alertOnce(e.message) }
-  }
 
   const [lotTotal, setLotTotal] = useState(0)
   const [lotsLoadState, setLotsLoadState] = useState('loading')
@@ -787,12 +773,7 @@ Skipping ${hard} HARD-to-ship lots.`
     ]
   })
 
-  // Floor verdicts live in lib/pacing.js (pure, unit-tested); these wrappers
-  // just bind the user's configured floor.
   const isClosed = (a) => auctionClosed(a)
-  const isHotAuction = (a) => clearsFloor(a, auctionFloor)
-  const isUnderFloor = (a) => underFloor(a, auctionFloor)
-  const goldBadge = (a) => pacingGoldBadge(a, auctionFloor)
 
   // Stamp each lot with its auction's name so the table can show/filter it.
   // Memoized: with several thousand lots streamed in, rebuilding this array
@@ -876,19 +857,6 @@ Skipping ${hard} HARD-to-ship lots.`
 
       {(view === 'auctions' || view === 'saved') && (
       <section style={{ marginBottom: '1.5rem' }}>
-        {/* The floor an auction has to clear to be worth touching. */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-          <label style={{ color: 'var(--muted)', fontSize: 13, whiteSpace: 'nowrap' }}
-                 title="An auction must put at least this much audit-trusted profit on the table to be worth a shipping minimum or a pickup trip">
-            floor $
-            <input
-              value={floorInput}
-              onChange={(ev) => setFloorInput(ev.target.value)}
-              onBlur={(ev) => { const v = Number(ev.target.value); if (v >= 0) handleSavePacing({ auction_floor_usd: v }) }}
-              style={{ width: 44, fontSize: 13, padding: '0 2px' }}
-            />/auction
-          </label>
-        </div>
         {/* Form wrapper: pressing Enter in any filter field runs the scan */}
         {view === 'auctions' && (
         <form onSubmit={(ev) => { ev.preventDefault(); handleScan() }}
@@ -1070,10 +1038,9 @@ Skipping ${hard} HARD-to-ship lots.`
               </div>
             ) : (
               <div key={a.id}
-                   className={`card${isHotAuction(a) ? ' row-gold' : ''}`}
+                   className="card"
                    style={{ marginTop: 8,
-                            opacity: isUnderFloor(a) ? 0.55 : undefined,
-                            background: !isHotAuction(a) && selectedAuctions.includes(a.id)
+                            background: selectedAuctions.includes(a.id)
                               ? 'var(--highlight)' : undefined }}>
                 <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <button
@@ -1184,10 +1151,8 @@ Skipping ${hard} HARD-to-ship lots.`
                 </tr>
               ) : (
                 <tr key={a.id}
-                    className={isHotAuction(a) ? 'row-gold' : undefined}
                     style={{
-                      opacity: isUnderFloor(a) ? 0.55 : undefined,
-                      background: !isHotAuction(a) && selectedAuctions.includes(a.id)
+                      background: selectedAuctions.includes(a.id)
                         ? 'var(--highlight)' : undefined,
                     }}>
                   <td style={{ paddingRight: 12 }}>

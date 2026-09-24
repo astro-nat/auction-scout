@@ -36,9 +36,6 @@ def set(key: str, value: str) -> None:
     _CACHE[key] = (time.monotonic(), value)
 
 
-# The per-auction floor, shared by the settings API and the closing-digest
-# notifier — defined here so neither imports the other's module.
-AUCTION_FLOOR_DEFAULT = 200.0
 
 # Titled vehicles (cars, buses, boats) never earn the GOLD MINE badge while
 # this is on — the fleet listings on the government platforms price out

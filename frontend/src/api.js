@@ -286,11 +286,6 @@ export function saveTargetRoi(pct) {
   return request('/settings', { method: 'PATCH', body: JSON.stringify({ target_roi_pct: pct }) })
 }
 
-// The per-auction floor. Saving it never triggers a regrade — it only
-// changes what the auctions tab highlights.
-export function savePacing(changes) {
-  return request('/settings', { method: 'PATCH', body: JSON.stringify(changes) })
-}
 
 export function reinspectNoComps(dryRun = false) {
   const q = dryRun ? '?dry_run=true' : ''

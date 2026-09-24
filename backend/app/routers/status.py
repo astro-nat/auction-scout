@@ -219,14 +219,10 @@ def evidence_mix(hours: int = 720, db: Session = Depends(get_db)):
 
 @router.get("/settings")
 def get_settings():
-    """The tunables the UI can edit. target_roi_pct is served as a percent.
-    The per-auction floor lives in the settings service — the closing-digest
-    notifier reads it too."""
+    """The tunables the UI can edit. target_roi_pct is served as a percent."""
     from ..services import financials
     from ..services import settings as settings_store
     return {"target_roi_pct": round(financials.current_target_roi() * 100),
-            "auction_floor_usd": settings_store.money(
-                "auction_floor_usd", settings_store.AUCTION_FLOOR_DEFAULT),
             "exclude_titled_vehicles": settings_store.flag(
                 "exclude_titled_vehicles",
                 settings_store.EXCLUDE_VEHICLES_DEFAULT)}
@@ -236,20 +232,12 @@ def get_settings():
 def patch_settings(payload: dict,
                    db: Session = Depends(get_db)):
     """Save any of the tunables. A new ROI target immediately re-grades every
-    enriched lot (free — reuses stored AI results); the floor is
-    display-only, so saving it re-grades nothing. Each field optional."""
+    enriched lot (free — reuses stored AI results). Each field optional."""
     from ..services import settings as settings_store
     # Validate the WHOLE payload before writing any of it — a mixed request
     # with one bad field must not half-save (the 422 would read as "nothing
     # happened" while the valid half quietly stuck).
     to_save = {}
-    for key, low, high in (("auction_floor_usd", 0, 100000),):
-        if key in payload:
-            v = payload[key]
-            if not isinstance(v, (int, float)) or not (low <= v <= high):
-                raise HTTPException(status_code=422,
-                                    detail=f"{key} must be a number from {low} to {high}")
-            to_save[key] = v
     vehicles = None
     if "exclude_titled_vehicles" in payload:
         vehicles = payload["exclude_titled_vehicles"]

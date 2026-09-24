@@ -107,10 +107,10 @@ def test_one_digest_per_qualifying_auction(pushes, clean):
     assert len(pushes) == 1
 
 
-def test_below_floor_unwatched_closes_in_silence(pushes, clean):
+def test_no_gold_unwatched_closes_in_silence(pushes, clean):
     db = SessionLocal()
     a = _mk_auction(db, 1, "PYTEST thin sale", closes_in_hours=1)
-    _mk_lot(db, a, "thin-gold", profit=22, roi_status="GOLD MINE", max_bid=10)
+    _mk_lot(db, a, "thin-pass", profit=22, roi_status="PASS", max_bid=10)
     db.commit()
     db.close()
 
