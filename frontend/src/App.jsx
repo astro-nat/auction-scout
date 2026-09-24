@@ -33,8 +33,17 @@ export default function App() {
   useEffect(() => installTracking(document), [])
 
   const viewSynced = useRef(false)
+  // Two tabs, each holding a pair of views. Which pair is open is read off
+  // the view; the tab reopens on whichever of its views was used last.
+  const TABS = [
+    { key: 'auctions', label: 'Auctions', views: ['auctions', 'saved'] },
+    { key: 'inventory', label: 'Inventory', views: ['items', 'priced'] },
+  ]
+  const lastViewIn = useRef({ auctions: 'auctions', inventory: 'items' })
   useEffect(() => {
     saveView(view, window.localStorage)
+    const tab = TABS.find((t) => t.views.includes(view))
+    if (tab) lastViewIn.current[tab.key] = view
     // Only a real tab switch is worth a row. This effect also runs on mount
     // (twice, in dev) and that is not the user doing anything.
     if (viewSynced.current) track('view', { view })
@@ -846,20 +855,33 @@ Skipping ${hard} HARD-to-ship lots.`
       </h1>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4,
-                    borderBottom: '1px solid var(--border)', marginBottom: '1rem' }}>
-        {[
-          { key: 'auctions', label: 'Auction search' },
-          { key: 'saved', label: `Saved auctions (${importedAuctions.length})` },
-          { key: 'items', label: `All inventory (${(tabCounts.items ?? lotTotal).toLocaleString()})` },
-          { key: 'priced', label: `Priced inventory (${(tabCounts.priced ?? 0).toLocaleString()})` },
-        ].map((t) => (
+                    borderBottom: '1px solid var(--border)' }}>
+        {TABS.map((t) => (
           <button
             key={t.key}
-            className={`tab${view === t.key ? ' active' : ''}`}
-            onClick={() => setView(t.key)}
+            className={`tab${t.views.includes(view) ? ' active' : ''}`}
+            onClick={() => setView(lastViewIn.current[t.key])}
             style={isMobile ? { fontSize: 15, padding: '10px 12px' } : undefined}
           >
             {t.label}
+          </button>
+        ))}
+      </div>
+      {/* The view switch under the open tab */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '10px 0 1rem' }}>
+        {(TABS.find((t) => t.views.includes(view)) ?? TABS[0]).views.map((v) => (
+          <button
+            key={v}
+            className={`subtab${view === v ? ' active' : ''}`}
+            onClick={() => setView(v)}
+            style={isMobile ? { fontSize: 14, padding: '7px 14px' } : undefined}
+          >
+            {{
+              auctions: 'Search Auctions',
+              saved: `Imported Auctions (${importedAuctions.length})`,
+              items: `All Inventory (${(tabCounts.items ?? lotTotal).toLocaleString()})`,
+              priced: `Priced Inventory (${(tabCounts.priced ?? 0).toLocaleString()})`,
+            }[v]}
           </button>
         ))}
       </div>
@@ -1060,7 +1082,7 @@ Skipping ${hard} HARD-to-ship lots.`
             </div>
             <button className="primary" style={{ marginTop: 12 }}
                     onClick={() => setView('auctions')}>
-              Find auctions
+              Search auctions
             </button>
           </div>
         ) : (
@@ -1527,12 +1549,12 @@ Skipping ${hard} HARD-to-ship lots.`
           <div className="empty-state">
             <div><strong>Nothing priced yet.</strong></div>
             <div style={{ marginTop: 4 }}>
-              Price items from <strong>All inventory</strong> — every lot that gets a
+              Price items from <strong>All Inventory</strong> — every lot that gets a
               value shows up here.
             </div>
             <button className="primary" style={{ marginTop: 12 }}
                     onClick={() => setView('items')}>
-              All inventory
+              All Inventory
             </button>
           </div>
         ) : (

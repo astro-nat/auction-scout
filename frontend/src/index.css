@@ -180,6 +180,23 @@ label { user-select: none; }
   border-bottom-color: var(--accent);
 }
 
+/* The view switch under a tab: a row of pills, the open one filled. */
+.subtab {
+  font-size: 13px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  color: var(--muted);
+  background: none;
+  border: 1px solid var(--border);
+}
+.subtab:hover:not(:disabled) { color: var(--text); border-color: var(--border-strong); }
+.subtab.active {
+  color: var(--text);
+  background: var(--surface);
+  border-color: var(--border-strong);
+  font-weight: 600;
+}
+
 /* ============================== tables ============================== */
 
 /* NOTE: never wrap a .data-table in an overflow-x container — the sticky
