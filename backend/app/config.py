@@ -88,8 +88,11 @@ WATCH_ALERT_HOURS = float(os.environ.get("WATCH_ALERT_HOURS", "2"))
 FLUSH_CLOSED_HOURS = float(os.environ.get("FLUSH_CLOSED_HOURS", "12"))
 
 # Auto-refresh current bids (and per-lot closed status) from HiBid this
-# often (hours). Free — no AI calls. 0 disables; the manual button stays.
-BID_REFRESH_HOURS = float(os.environ.get("BID_REFRESH_HOURS", "1"))
+# often (hours). Free — no AI calls. Off by default: every refresh is a full
+# re-fetch of every lot in the auctions it touches, and bids should move
+# only when the Refresh bids button is pressed. Set a value in hours to
+# turn the loop back on; the manual button works either way.
+BID_REFRESH_HOURS = float(os.environ.get("BID_REFRESH_HOURS", "0"))
 # Only refresh bids for auctions closing inside this window. Bids barely
 # move while a sale is days out, and every refresh is a full HiBid re-fetch
 # of every lot — so pulling a 500-lot auction hourly for a week costs a lot
