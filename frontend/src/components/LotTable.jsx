@@ -703,10 +703,6 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                   <span style={{ color: 'var(--danger)' }}
                         title="This house has said it won't ship into the US">no US shipping · </span>
                 )}
-                {lot.unreachable_pickup && (
-                  <span style={{ color: 'var(--danger)' }}
-                        title="Pickup only, and the auction is outside your scan radius">pickup only · </span>
-                )}
                 <span onClick={() => onSelectAuction?.(lot.auction_id)}
                       title="Show only this auction's items"
                       style={{ cursor: 'pointer', textDecoration: 'underline dotted' }}>
@@ -968,10 +964,6 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                 {lot.auction_no_us_ship && (
                   <div style={{ color: 'var(--danger)' }}
                        title="This house has said it won't ship into the US">no US shipping</div>
-                )}
-                {lot.unreachable_pickup && (
-                  <div style={{ color: 'var(--danger)' }}
-                       title="Pickup only, and the auction is outside your scan radius">pickup only</div>
                 )}
                 <span onClick={() => onSelectAuction?.(lot.auction_id)}
                       title="Show only this auction's items"
