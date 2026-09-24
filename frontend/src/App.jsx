@@ -92,6 +92,9 @@ export default function App() {
   // A Canadian house that has said it won't ship into the US: its lots can
   // be won but never received. Hidden by default, one click to see them.
   const [hideNoUsShip, setHideNoUsShip] = useState(true)
+  // A pickup-only lot in an auction outside the scan radius: HiBid says it
+  // doesn't ship, and it's too far to collect. Hidden by default.
+  const [hideUnreachable, setHideUnreachable] = useState(true)
   // Closed auctions can't be bid on — hide their lots by default, but
   // keep them reachable: the enrichment work is still useful history.
   const [hideClosed, setHideClosed] = useState(true)
@@ -803,6 +806,7 @@ Skipping ${hard} HARD-to-ship lots.`
         if (hideLowValue && isConfirmedLowValue(l)) return false
         if (hideHardShip && l.logistics_ease === 'HARD') return false
         if (hideNoUsShip && l.auction_no_us_ship) return false
+        if (hideUnreachable && l.unreachable_pickup) return false
         if (hideClosed && isClosedItem(l)) return false
         return true
       })
@@ -810,7 +814,7 @@ Skipping ${hard} HARD-to-ship lots.`
                      auction_name: l.auction_name ?? auctionNames[l.auction_id] ?? '—',
                      item_closed: isClosedItem(l) }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lots, auctions, auctionIndex, showHiddenLots, hideLowValue, lowValueCutoff, hideHardShip, hideNoUsShip, hideClosed])
+  }, [lots, auctions, auctionIndex, showHiddenLots, hideLowValue, lowValueCutoff, hideHardShip, hideNoUsShip, hideUnreachable, hideClosed])
   const hiddenCount = lots.length - visibleLots.length
 
   return (
@@ -1402,6 +1406,14 @@ Skipping ${hard} HARD-to-ship lots.`
               onChange={(ev) => setHideNoUsShip(ev.target.checked)}
             /> Hide no US shipping
           </label>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
+                 title="Lots HiBid marks pickup-only, in auctions outside your scan radius — you can't collect them and they won't be shipped">
+            <input
+              type="checkbox"
+              checked={hideUnreachable}
+              onChange={(ev) => setHideUnreachable(ev.target.checked)}
+            /> Hide pickup-only outside my radius
+          </label>
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
             <input
               type="checkbox"
@@ -1417,7 +1429,7 @@ Skipping ${hard} HARD-to-ship lots.`
               onChange={(ev) => setShowHiddenLots(ev.target.checked)}
             /> Show hidden ({lots.filter((l) => l.hidden).length})
           </label>
-          {(hideLowValue || hideHardShip || hideNoUsShip || hideClosed || !showHiddenLots) && hiddenCount > 0 && (
+          {(hideLowValue || hideHardShip || hideNoUsShip || hideUnreachable || hideClosed || !showHiddenLots) && hiddenCount > 0 && (
             <span style={{ color: 'var(--muted)', whiteSpace: 'nowrap' }}>
               {hiddenCount} hidden
             </span>
