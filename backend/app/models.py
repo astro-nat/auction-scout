@@ -169,6 +169,10 @@ class Enrichment(Base):
     # an Upper Deck card; DR-M11 for a DRM-555; "Huge Bulk Lot" for ten
     # discs), each with full confidence.
     identity_note = Column(String)
+    # Funko fraud and mispricing guards (services/funko.py): what the
+    # listing's own words changed about how the lot was priced - an
+    # unauthenticated signature, a custom/bootleg, a loose pop.
+    fraud_note = Column(String)
 
     # Which worker a 'queued' lot is waiting for ('enrich' | 'inspect') — how
     # the worker process knows what to run.

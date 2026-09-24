@@ -712,6 +712,12 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
               {e.enriched_title && e.enriched_title !== lot.title && (
                 <div style={{ color: 'var(--muted)', fontSize: 13 }}>→ {e.enriched_title}</div>
               )}
+              {e.fraud_note && (
+                <div style={{ color: 'var(--warn)', fontSize: 12 }}
+                     title="Funko fraud check: how the listing's own words changed the pricing">
+                  fraud check: {e.fraud_note}
+                </div>
+              )}
               {e.identity_note && (
                 <div style={{ color: 'var(--danger)', fontSize: 12 }}
                      title="The AI's title asserts something the listing never said, so the value came from the listing's own title and the gold badge is withheld. Correct the title to confirm what it is.">
@@ -946,6 +952,12 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                     onSave={(v) => handleCorrect(lot.lot_id, 'enriched_title', v)}
                   />
                 </div>
+                {e.fraud_note && (
+                  <div style={{ color: 'var(--warn)', fontSize: 12 }}
+                       title="Funko fraud check: how the listing's own words changed the pricing">
+                    fraud check: {e.fraud_note}
+                  </div>
+                )}
                 {e.identity_note && (
                   <div style={{ color: 'var(--danger)', fontSize: 12 }}
                        title="The AI's title asserts something the listing never said, so the value came from the listing's own title and the gold badge is withheld. Click the title above to correct it and confirm what it is.">

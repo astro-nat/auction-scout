@@ -39,7 +39,7 @@ from sqlalchemy.orm import Session, joinedload
 from ..database import SessionLocal
 from .. import models, config
 from ..services import financials, gemini, hibid, jobs, price_log, pricing
-from ..services import shipping
+from ..services import funko, shipping
 from ..services import settings as settings_store
 from ..services.bolo import BoloMatcher
 from ..services.hibid import classify_logistics
@@ -536,6 +536,15 @@ def _enrich(lot: models.Lot, e: models.Enrichment, db: Session,
             e.identity_note = ", ".join(claims)[:200]
         else:
             e.identity_note = None
+        # Funko fraud guards: an unauthenticated signature is searched as
+        # the plain pop, a loose one against loose pops. A hand-set title is
+        # the user's call and is searched as typed.
+        fk = funko.assess(f"{title} {description or ''}")
+        if "enriched_title" not in protected:
+            search_title = funko.search_query(search_title, fk)
+        e.fraud_note = fk["note"] if fk else None
+        if fk and fk["authenticator"]:
+            e.auth_required = True
         titled = pricing.verified_title_price(title, e.enriched_title)
         if titled:
             comps = titled
@@ -665,8 +674,13 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
         # what the item is. A gold badge is a claim about identity as much
         # as price; it waits for a human (correcting the title lifts this).
         identity_uncertain = bool(getattr(e, "identity_note", None))
+        # A listing that calls its Funko custom, bootleg or fan-made is not
+        # the item the comps describe, whatever they say it's worth.
+        fk = funko.assess(f"{lot.title or ''} {lot.description or ''}")
+        not_genuine = bool(fk and fk["block"])
         e.roi_status = ("PASS" if (red_flag or lot.unreachable_pickup
-                                   or titled_vehicle or identity_uncertain
+                                   or titled_vehicle or not_genuine
+                                   or identity_uncertain
                                    or thin_evidence or demoted)
                         else lead.status)
         if demoted:
@@ -687,6 +701,8 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
             e.roi_reason = "pickup-only and outside your radius"
         elif titled_vehicle:
             e.roi_reason = "titled vehicle — excluded by your settings"
+        elif not_genuine:
+            e.roi_reason = f"fraud check: listing says \"{fk['bootleg']}\" - not a genuine Funko"
         elif identity_uncertain:
             e.roi_reason = (f"identity uncertain: AI added {e.identity_note} - not in "
                             "the listing. Priced from the listing title; correct the "
@@ -1496,8 +1512,14 @@ def _plan_reprice_lot(db: Session, lot_db_id: int) -> dict:
               else pricing.invented_identifiers(
                   f"{lot_title} {lot.description or ''}", e.enriched_title, bolo_matcher))
     e.identity_note = ", ".join(claims)[:200] if claims else None
-    plan.update(title=lot_title,
-                search_title=lot_title if claims else (e.enriched_title or lot_title),
+    search_title = lot_title if claims else (e.enriched_title or lot_title)
+    fk = funko.assess(f"{lot_title} {lot.description or ''}")
+    if "enriched_title" not in marks:
+        search_title = funko.search_query(search_title, fk)
+    e.fraud_note = fk["note"] if fk else None
+    if fk and fk["authenticator"]:
+        e.auth_required = True
+    plan.update(title=lot_title, search_title=search_title,
                 retail=pricing.retail_from_title(lot_title), marks=marks)
     if plan["retail"] is not None and plan["retail"] < pricing.RETAIL_VERIFY_MIN:
         # Cheap claim: the zero-network path stands. The halved retail

@@ -25,7 +25,7 @@ from datetime import datetime, timedelta, timezone
 
 import httpx
 
-from . import ebay
+from . import ebay, funko
 
 logger = logging.getLogger(__name__)
 
@@ -404,6 +404,9 @@ def invented_identifiers(source_text: str, enriched_title: str, bolo=None) -> li
     claim = _QUANTITY_CLAIM_RE.search(enriched_title)
     if claim and not _QUANTITY_CLAIM_RE.search(source_text or ""):
         found.append(claim.group(0))
+    # A Funko variant the listing never claimed - "Chase", "Signed", "SDCC"
+    # multiply a pop's value and are exactly what a vision pass guesses.
+    found.extend(funko.variant_claims(source_text, enriched_title))
     if bolo is not None:
         try:
             claimed = (bolo.match(enriched_title) or {}).get("brand")
@@ -1058,7 +1061,8 @@ def lookup_comps(title: str) -> dict:
                  if _relevant(query, c["title"]) and _quantity_match(title, c["title"])
                  and _model_match(query, c["title"])
                  and _audience_match(title, c["title"])
-                 and _promo_match(title, c["title"])]
+                 and _promo_match(title, c["title"])
+                 and funko.comp_fits(title, c["title"])]
         kept = _iqr_records(comps)
         if len(kept) >= _MIN_FULL_COMPS:
             return _finalize(title, kept, source, result)
@@ -1081,7 +1085,8 @@ def lookup_comps(title: str) -> dict:
                  if _relevant(query, c["title"]) and _quantity_match(title, c["title"])
                  and _model_match(title, c["title"])
                  and _audience_match(title, c["title"])
-                 and _promo_match(title, c["title"])]
+                 and _promo_match(title, c["title"])
+                 and funko.comp_fits(title, c["title"])]
         kept = _iqr_records(comps)
         if not kept:
             continue
