@@ -81,12 +81,6 @@ _MIGRATIONS = [
     "ALTER TABLE lots ADD COLUMN IF NOT EXISTS lot_number VARCHAR",
     "ALTER TABLE lots ADD COLUMN IF NOT EXISTS estimate_low NUMERIC",
     "ALTER TABLE lots ADD COLUMN IF NOT EXISTS estimate_high NUMERIC",
-    "ALTER TABLE lots ADD COLUMN IF NOT EXISTS won BOOLEAN DEFAULT FALSE",
-    "ALTER TABLE lots ADD COLUMN IF NOT EXISTS won_at TIMESTAMP",
-    # Wins marked before won_at existed start their retention clock at this
-    # deploy rather than sitting unflushable forever. Idempotent: matches
-    # nothing once every won row has a timestamp.
-    "UPDATE lots SET won_at = NOW() WHERE won IS TRUE AND won_at IS NULL",
     "CREATE TABLE IF NOT EXISTS dismissed_auctions ("
     "hibid_id INTEGER PRIMARY KEY, name VARCHAR, "
     "created_at TIMESTAMP DEFAULT now())",

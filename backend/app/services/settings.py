@@ -36,9 +36,8 @@ def set(key: str, value: str) -> None:
     _CACHE[key] = (time.monotonic(), value)
 
 
-# Acquisition pacing knobs, shared by the settings API and the closing-digest
+# The per-auction floor, shared by the settings API and the closing-digest
 # notifier — defined here so neither imports the other's module.
-WEEKLY_GOAL_DEFAULT = 500.0
 AUCTION_FLOOR_DEFAULT = 200.0
 
 # Titled vehicles (cars, buses, boats) never earn the GOLD MINE badge while

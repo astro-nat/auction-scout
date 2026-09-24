@@ -220,13 +220,11 @@ def evidence_mix(hours: int = 720, db: Session = Depends(get_db)):
 @router.get("/settings")
 def get_settings():
     """The tunables the UI can edit. target_roi_pct is served as a percent.
-    The pacing knobs (weekly goal, per-auction floor) live in the settings
-    service — the closing-digest notifier reads the floor too."""
+    The per-auction floor lives in the settings service — the closing-digest
+    notifier reads it too."""
     from ..services import financials
     from ..services import settings as settings_store
     return {"target_roi_pct": round(financials.current_target_roi() * 100),
-            "weekly_goal_usd": settings_store.money(
-                "weekly_goal_usd", settings_store.WEEKLY_GOAL_DEFAULT),
             "auction_floor_usd": settings_store.money(
                 "auction_floor_usd", settings_store.AUCTION_FLOOR_DEFAULT),
             "exclude_titled_vehicles": settings_store.flag(
@@ -238,15 +236,14 @@ def get_settings():
 def patch_settings(payload: dict,
                    db: Session = Depends(get_db)):
     """Save any of the tunables. A new ROI target immediately re-grades every
-    enriched lot (free — reuses stored AI results); the pacing numbers are
-    display-only, so saving them re-grades nothing. Each field optional."""
+    enriched lot (free — reuses stored AI results); the floor is
+    display-only, so saving it re-grades nothing. Each field optional."""
     from ..services import settings as settings_store
     # Validate the WHOLE payload before writing any of it — a mixed request
     # with one bad field must not half-save (the 422 would read as "nothing
     # happened" while the valid half quietly stuck).
     to_save = {}
-    for key, low, high in (("weekly_goal_usd", 0, 100000),
-                           ("auction_floor_usd", 0, 100000)):
+    for key, low, high in (("auction_floor_usd", 0, 100000),):
         if key in payload:
             v = payload[key]
             if not isinstance(v, (int, float)) or not (low <= v <= high):
@@ -290,49 +287,15 @@ def patch_settings(payload: dict,
     return {**to_save, "regrading": n}
 
 
-def week_start_utc(now):
-    """Start of `now`'s acquisition week: Monday ~midnight Central, expressed
-    in the naive UTC the database stores (05:00 UTC).
-
-    A plain UTC Monday would reset the tracker on Sunday evening for the
-    user; anchoring five hours back keeps Sunday-night bidding in the week
-    it feels like it belongs to. Pure so the boundary is testable at fixed
-    datetimes — DST drifts the true midnight an hour, which is accepted:
-    the reset lands between midnight and 1am rather than mid-evening.
-    """
-    from datetime import timedelta
-    anchor = now - timedelta(hours=5)
-    start = (anchor - timedelta(days=anchor.weekday())).replace(
-        hour=0, minute=0, second=0, microsecond=0)
-    return start + timedelta(hours=5)
-
-
-@router.get("/stats/week")
-def week_stats(db: Session = Depends(get_db)):
-    """Acquisition pacing: trusted profit won so far this week vs the goal.
-
-    "Trusted" mirrors the settlement reconciliations: a won lot counts at its
-    stored profit unless the AI audit demoted its value, and losses count
-    against the week — the same arithmetic that priced the Sterling haul at
-    $223 guaranteed. Wins enter via the Won mark (won_at), so the number is
-    only as complete as the marking; the available figure needs no marking
-    at all, it is the summed profit of live GOLD MINE lots.
+@router.get("/stats/board")
+def board_stats(db: Session = Depends(get_db)):
+    """What's on the table right now, across open auctions: the summed
+    profit of lots the grader still calls GOLD MINE (post-audit, so
+    evidence-gated), and the per-auction floor it is judged against.
     """
     from datetime import datetime
     from sqlalchemy import func
     now = datetime.now()
-    week_start = week_start_utc(now)
-
-    rows = (db.query(models.Enrichment.profit, models.Enrichment.gold_check)
-              .join(models.Lot, models.Lot.id == models.Enrichment.lot_id)
-              .filter(models.Lot.won.is_(True),
-                      models.Lot.won_at >= week_start,
-                      models.Enrichment.profit.isnot(None))
-              .all())
-    won_profit = float(sum(p for p, check in rows if check != "demoted"))
-
-    # What's on the table right now, across open auctions: profit of lots the
-    # grader still calls GOLD MINE (post-audit, so evidence-gated).
     available = float(
         db.query(func.coalesce(func.sum(models.Enrichment.profit), 0))
           .join(models.Lot, models.Lot.id == models.Enrichment.lot_id)
@@ -343,12 +306,7 @@ def week_stats(db: Session = Depends(get_db)):
           .scalar())
 
     from ..services import settings as settings_store
-    return {"week_start": week_start.isoformat(),
-            "won_trusted_profit": round(won_profit, 2),
-            "won_count": len(rows),
-            "available_gold_profit": round(available, 2),
-            "weekly_goal_usd": settings_store.money(
-                "weekly_goal_usd", settings_store.WEEKLY_GOAL_DEFAULT),
+    return {"available_gold_profit": round(available, 2),
             "auction_floor_usd": settings_store.money(
                 "auction_floor_usd", settings_store.AUCTION_FLOOR_DEFAULT)}
 

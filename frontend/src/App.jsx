@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, scanGovDeals, importGovDeals, scanPublicSurplus, importPublicSurplus, scanVinted, importLots, importAllAuctions, enrichAll, enrichCategory, flushClosed, refreshBids, reinspectNoComps, repriceUnpriced, fetchSettings, saveTargetRoi, savePacing, fetchWeekStats, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
+import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, scanGovDeals, importGovDeals, scanPublicSurplus, importPublicSurplus, scanVinted, importLots, importAllAuctions, enrichAll, enrichCategory, flushClosed, refreshBids, reinspectNoComps, repriceUnpriced, fetchSettings, saveTargetRoi, savePacing, fetchBoard, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
 import { auctionClosed, clearsFloor, underFloor, goldBadge as pacingGoldBadge } from './lib/pacing'
 import { houseRatioLabel, houseRatioTitle } from './lib/calibration'
 import { initialView, saveView, viewFromHash, viewUrl } from './lib/view'
@@ -111,29 +111,26 @@ export default function App() {
   })
   const [hideUnshippable, setHideUnshippable] = useState(true)
   const [showHiddenLots, setShowHiddenLots] = useState(false)
-  // Show only lots marked won — the resale-inventory view. Won lots
-  // are always exempt from "Hide closed": winning is what closes a lot.
-  const [wonOnly, setWonOnly] = useState(false)
   const [importedRows, setImportedRows] = useState({})
   // Target ROI % for the GOLD MINE verdict — DB-backed, editable inline.
   const [targetRoi, setTargetRoi] = useState('')
   useEffect(() => {
     fetchSettings().then((s) => setTargetRoi(String(s.target_roi_pct))).catch(console.error)
   }, [])
-  // Acquisition pacing: what the auction channel should contribute per week,
-  // and the least an auction can put on the table before it's worth a
-  // shipping minimum or a pickup trip. weekStats carries won-vs-goal.
-  const [weekStats, setWeekStats] = useState(null)
-  const loadWeekStats = useCallback(() => {
-    fetchWeekStats().then(setWeekStats).catch(console.error)
+  // The board: how much gold-mine profit is on the table across open
+  // auctions, and the least an auction can put there before it's worth a
+  // shipping minimum or a pickup trip.
+  const [board, setBoard] = useState(null)
+  const loadBoard = useCallback(() => {
+    fetchBoard().then(setBoard).catch(console.error)
   }, [])
-  useEffect(() => { loadWeekStats() }, [loadWeekStats])
-  const auctionFloor = Number(weekStats?.auction_floor_usd ?? 200)
+  useEffect(() => { loadBoard() }, [loadBoard])
+  const auctionFloor = Number(board?.auction_floor_usd ?? 200)
 
   async function handleSavePacing(changes) {
     try {
       await savePacing(changes)
-      loadWeekStats()
+      loadBoard()
     } catch (e) { alertOnce(e.message) }
   }
 
@@ -324,8 +321,8 @@ export default function App() {
     loadLotCategories()
     loadLots()
     loadTabCounts()
-    loadWeekStats()
-  }, [loadLots, loadLotCategories, syncAuctionStats, loadWeekStats, loadTabCounts])
+    loadBoard()
+  }, [loadLots, loadLotCategories, syncAuctionStats, loadBoard, loadTabCounts])
 
   function setScanField(field, value) {
     setScan((prev) => ({ ...prev, [field]: value }))
@@ -468,9 +465,7 @@ export default function App() {
       const msg = `Permanently delete ${peek.lots} items from closed auctions?\n\n`
         + `Their enrichment results (the AI calls you paid for) are deleted `
         + `with them. This can't be undone.\n\n`
-        + `Lots marked watched are kept, and lots marked won are `
-        + `kept for 7 days after marking — mark anything you won before `
-        + `flushing.`
+        + `Lots marked watched are kept.`
       if (!window.confirm(msg)) return
       setBusy('Flushing closed items…')
       const r = await flushClosed()
@@ -815,11 +810,7 @@ Skipping ${hard} HARD-to-ship lots.`
     const auctionNames = { ...auctionIndex, ...Object.fromEntries(auctions.map((a) => [a.id, a.name])) }
     return lots
       .filter((l) => {
-        if (wonOnly && !l.won) return false
         if (!showHiddenLots && l.hidden) return false
-        // Won lots ignore the hide rules below — they're inventory now, and
-        // the enrichment is what gets them listed on eBay.
-        if (l.won) return true
         // Lots the user just enriched/inspected are exempt from the hide
         // rules for a while — a fresh result that instantly trips a filter
         // vanishes before it can be read. (The manual hide still wins.)
@@ -835,7 +826,7 @@ Skipping ${hard} HARD-to-ship lots.`
                      auction_name: l.auction_name ?? auctionNames[l.auction_id] ?? '—',
                      item_closed: isClosedItem(l) }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lots, auctions, auctionIndex, showHiddenLots, wonOnly, hideLowValue, lowValueCutoff, hideHardShip, hideNoUsShip, hideClosed])
+  }, [lots, auctions, auctionIndex, showHiddenLots, hideLowValue, lowValueCutoff, hideHardShip, hideNoUsShip, hideClosed])
   const hiddenCount = lots.length - visibleLots.length
 
   return (
@@ -888,48 +879,30 @@ Skipping ${hard} HARD-to-ship lots.`
 
       {(view === 'auctions' || view === 'saved') && (
       <section style={{ marginBottom: '1.5rem' }}>
-        {/* Acquisition pacing: is this week on track, and how much trusted
-            profit is still on the board. Wins enter via the Won mark. */}
-        {weekStats && (() => {
-          const goal = Number(weekStats.weekly_goal_usd)
-          const won = Number(weekStats.won_trusted_profit)
-          const avail = Number(weekStats.available_gold_profit)
-          const pct = goal > 0 ? Math.max(0, Math.min(100, (won / goal) * 100)) : 0
-          return (
-            <div className="card" style={{ marginBottom: 10, padding: '8px 12px' }}>
-              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline',
-                            gap: '4px 14px', fontSize: 14 }}>
-                <strong>This week: ${won.toFixed(0)} of $
-                  <input
-                    value={weekStats.weekly_goal_usd}
-                    onChange={(ev) => setWeekStats((s) => ({ ...s, weekly_goal_usd: ev.target.value }))}
-                    onBlur={(ev) => { const v = Number(ev.target.value); if (v >= 0) handleSavePacing({ weekly_goal_usd: v }) }}
-                    title="Weekly guaranteed-profit goal for the auction channel"
-                    style={{ width: 52, fontSize: 14, fontWeight: 700, padding: '0 2px' }}
-                  /> goal</strong>
-                <span style={{ color: 'var(--muted)' }}>
-                  {weekStats.won_count ? `${weekStats.won_count} marked won` : 'nothing marked won yet'}
-                  {' · '}~${avail.toFixed(0)} still on the board
-                </span>
-                <label style={{ marginLeft: 'auto', color: 'var(--muted)', fontSize: 13,
-                                whiteSpace: 'nowrap' }}
-                       title="An auction must put at least this much audit-trusted profit on the table to be worth a shipping minimum or a pickup trip">
-                  floor $
-                  <input
-                    value={weekStats.auction_floor_usd}
-                    onChange={(ev) => setWeekStats((s) => ({ ...s, auction_floor_usd: ev.target.value }))}
-                    onBlur={(ev) => { const v = Number(ev.target.value); if (v >= 0) handleSavePacing({ auction_floor_usd: v }) }}
-                    style={{ width: 44, fontSize: 13, padding: '0 2px' }}
-                  />/auction
-                </label>
-              </div>
-              <div style={{ height: 6, borderRadius: 3, background: 'var(--badge-bg)',
-                            overflow: 'hidden', marginTop: 6 }}>
-                <div style={{ height: '100%', width: `${pct}%`, background: 'var(--link)' }} />
-              </div>
+        {/* The board: how much trusted profit is on the table, and the floor
+            an auction has to clear to be worth touching. */}
+        {board && (
+          <div className="card" style={{ marginBottom: 10, padding: '8px 12px' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline',
+                          gap: '4px 14px', fontSize: 14 }}>
+              <strong>~${Number(board.available_gold_profit).toFixed(0)} on the board</strong>
+              <span style={{ color: 'var(--muted)' }}>
+                gold-mine profit across open auctions
+              </span>
+              <label style={{ marginLeft: 'auto', color: 'var(--muted)', fontSize: 13,
+                              whiteSpace: 'nowrap' }}
+                     title="An auction must put at least this much audit-trusted profit on the table to be worth a shipping minimum or a pickup trip">
+                floor $
+                <input
+                  value={board.auction_floor_usd}
+                  onChange={(ev) => setBoard((s) => ({ ...s, auction_floor_usd: ev.target.value }))}
+                  onBlur={(ev) => { const v = Number(ev.target.value); if (v >= 0) handleSavePacing({ auction_floor_usd: v }) }}
+                  style={{ width: 44, fontSize: 13, padding: '0 2px' }}
+                />/auction
+              </label>
             </div>
-          )
-        })()}
+          </div>
+        )}
         {/* Form wrapper: pressing Enter in any filter field runs the scan */}
         {view === 'auctions' && (
         <form onSubmit={(ev) => { ev.preventDefault(); handleScan() }}
@@ -1483,14 +1456,6 @@ Skipping ${hard} HARD-to-ship lots.`
               checked={showHiddenLots}
               onChange={(ev) => setShowHiddenLots(ev.target.checked)}
             /> Show hidden ({lots.filter((l) => l.hidden).length})
-          </label>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
-                 title="Only lots you marked won — your resale inventory">
-            <input
-              type="checkbox"
-              checked={wonOnly}
-              onChange={(ev) => setWonOnly(ev.target.checked)}
-            /> Won only ({lots.filter((l) => l.won).length})
           </label>
           {(hideLowValue || hideHardShip || hideNoUsShip || hideClosed || !showHiddenLots) && hiddenCount > 0 && (
             <span style={{ color: 'var(--muted)', whiteSpace: 'nowrap' }}>

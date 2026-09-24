@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { enrichLot, inspectLot, fetchLot, patchEnrichment, enrichBatch, repriceSelected, setWatch, setHidden, setWon, alertOnce, parseUtc } from '../api'
+import { enrichLot, inspectLot, fetchLot, patchEnrichment, enrichBatch, repriceSelected, setWatch, setHidden, alertOnce, parseUtc } from '../api'
 import { compRows, ebaySoldUrl } from '../lib/comps'
 import { houseRatioLabel, houseRatioTitle } from '../lib/calibration'
 import { CLOSING_RANGES, ROI_RANGES, hoursUntil, matchesFilter, presetsFor, roiPercent } from '../lib/filters'
@@ -437,13 +437,6 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
     } catch (e) { alertOnce(e.message) }
   }
 
-  async function handleWon(lotId, won) {
-    try {
-      const updated = await setWon(lotId, won)
-      onLotUpdated(updated)
-    } catch (e) { alertOnce(e.message) }
-  }
-
   function poll(lotId) {
     // Self-scheduling (setTimeout after each response), NOT setInterval:
     // an interval keeps firing while the server is slow — which it is
@@ -696,16 +689,6 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                            opacity: lot.hidden ? 1 : 0.4 }}>
                   {lot.hidden ? 'show' : 'hide'}
                 </button>
-                <button
-                  className="bare"
-                  onClick={() => handleWon(lot.lot_id, !lot.won)}
-                  title={lot.won ? 'Won — kept as inventory for 7 days (tap to unmark)'
-                                 : 'Mark as won: keeps this lot and its enrichment for 7 days when closed items are flushed'}
-                  style={{ fontSize: 14, padding: '0 4px 0 0',
-                           opacity: lot.won ? 1 : 0.4,
-                           filter: lot.won ? undefined : 'grayscale(1)' }}>
-                  won
-                </button>
                 {lot.lot_number && (
                   <span style={{ color: 'var(--muted)', fontSize: 13, marginRight: 4 }}>
                     #{lot.lot_number}
@@ -943,17 +926,6 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                   style={{ fontSize: 13, padding: '0 4px 0 0',
                            opacity: lot.hidden ? 1 : 0.4 }}>
                   {lot.hidden ? 'show' : 'hide'}
-                </button>
-                <button
-                  className="bare"
-                  onClick={() => handleWon(lot.lot_id, !lot.won)}
-                  title={lot.won
-                    ? 'Won at auction — kept as inventory for 7 days: stays visible and survives the flush (click to unmark)'
-                    : 'Mark as won: this lot and its enrichment survive the closed-items flush for 7 days — time to list the item'}
-                  style={{ fontSize: 13, padding: '0 4px 0 0',
-                           opacity: lot.won ? 1 : 0.4,
-                           filter: lot.won ? undefined : 'grayscale(1)' }}>
-                  won
                 </button>
                 {e.bolo_brand && (
                   <span style={{ cursor: 'help', marginRight: 4 }}

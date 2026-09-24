@@ -273,9 +273,6 @@ export function setHidden(lotId, hidden) {
   return request(`/lots/${lotId}/hide?hidden=${hidden}`, { method: 'POST' })
 }
 
-export function setWon(lotId, won) {
-  return request(`/lots/${lotId}/won?won=${won}`, { method: 'POST' })
-}
 
 export function refreshBids() {
   return request('/auctions/refresh-bids', { method: 'POST' })
@@ -289,14 +286,14 @@ export function saveTargetRoi(pct) {
   return request('/settings', { method: 'PATCH', body: JSON.stringify({ target_roi_pct: pct }) })
 }
 
-// Acquisition pacing (weekly goal + per-auction floor). Saving these never
-// triggers a regrade — they only change what the auctions tab highlights.
+// The per-auction floor. Saving it never triggers a regrade — it only
+// changes what the auctions tab highlights.
 export function savePacing(changes) {
   return request('/settings', { method: 'PATCH', body: JSON.stringify(changes) })
 }
 
-export function fetchWeekStats() {
-  return request('/stats/week')
+export function fetchBoard() {
+  return request('/stats/board')
 }
 
 export function reinspectNoComps(dryRun = false) {
