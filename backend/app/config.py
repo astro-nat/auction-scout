@@ -109,7 +109,9 @@ BID_REFRESH_WINDOW_HOURS = float(os.environ.get("BID_REFRESH_WINDOW_HOURS", "1")
 # 0 disables. A sale counts as live for LIVE_SALE_HOURS leading up to its
 # posted close (closing_date is the END of a webcast, and long sales run
 # most of a day) and one hour past it.
-LIVE_REFRESH_MINUTES = float(os.environ.get("LIVE_REFRESH_MINUTES", "3"))
+# Off by default, like the hourly loop: bids move only when the Refresh
+# bids button is pressed. Set minutes to turn the tracker back on.
+LIVE_REFRESH_MINUTES = float(os.environ.get("LIVE_REFRESH_MINUTES", "0"))
 LIVE_SALE_HOURS = float(os.environ.get("LIVE_SALE_HOURS", "14"))
 
 # How many lots enrich/inspect in parallel. The work is HTTP-bound (Claude,
