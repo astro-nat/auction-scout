@@ -3,6 +3,8 @@ import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCateg
 import { auctionClosed, goldBadge } from './lib/pacing'
 import { houseRatioLabel, houseRatioTitle } from './lib/calibration'
 import { initialView, saveView, viewFromHash, viewUrl } from './lib/view'
+import { queueCount } from './lib/queue'
+import QueueView from './components/QueueView'
 import { installTracking, track } from './lib/track'
 import LotTable from './components/LotTable'
 import StatusBar from './components/StatusBar'
@@ -37,9 +39,13 @@ export default function App() {
   // the view; the tab reopens on whichever of its views was used last.
   const TABS = [
     { key: 'auctions', label: 'Auctions', views: ['auctions', 'saved'] },
-    { key: 'inventory', label: 'Inventory', views: ['items', 'priced'] },
+    { key: 'inventory', label: 'Inventory', views: ['items', 'priced', 'queue'] },
   ]
   const lastViewIn = useRef({ auctions: 'auctions', inventory: 'items' })
+  // How much is in the queue, for its pill. The status bar already polls
+  // every second; setting the same number again doesn't re-render.
+  const [queueN, setQueueN] = useState(0)
+  const onStatus = useCallback((s) => setQueueN(queueCount(s)), [])
   useEffect(() => {
     saveView(view, window.localStorage)
     const tab = TABS.find((t) => t.views.includes(view))
@@ -809,7 +815,7 @@ Skipping ${hard} HARD-to-ship lots.`
 
   return (
     <div style={{ fontFamily: 'system-ui' }}>
-      <StatusBar onQuiet={refreshAll} />
+      <StatusBar onQuiet={refreshAll} onStatus={onStatus} />
       <div style={{ padding: isMobile ? '0.75rem' : '1.5rem 2rem',
                     maxWidth: 1500, margin: '0 auto' }}>
       <h1 style={{ fontSize: isMobile ? 22 : 26, margin: '0 0 2px',
@@ -850,6 +856,7 @@ Skipping ${hard} HARD-to-ship lots.`
               saved: `Imported Auctions (${importedAuctions.length})`,
               items: `All Inventory (${(tabCounts.items ?? lotTotal).toLocaleString()})`,
               priced: `Priced Inventory (${(tabCounts.priced ?? 0).toLocaleString()})`,
+              queue: queueN ? `Queue (${queueN.toLocaleString()})` : 'Queue',
             }[v]}
           </button>
         ))}
@@ -1221,6 +1228,8 @@ Skipping ${hard} HARD-to-ship lots.`
         )}
       </section>
       )}
+
+      {view === 'queue' && <QueueView isMobile={isMobile} />}
 
       {(view === 'items' || view === 'priced') && (<>
       <section style={{ marginBottom: 6, display: 'flex',

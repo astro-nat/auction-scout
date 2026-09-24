@@ -149,6 +149,11 @@ export function cancelEnrichment() {
   return request('/enrichment/cancel', { method: 'POST' })
 }
 
+// Everything started and not yet finished, with what is left of each.
+export function fetchQueue() {
+  return request('/queue')
+}
+
 export function fetchAuctions() {
   return request('/auctions')
 }

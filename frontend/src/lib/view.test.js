@@ -26,6 +26,7 @@ describe('viewFromHash', () => {
     expect(viewFromHash('#auctions')).toBe('auctions')
     expect(viewFromHash('#saved')).toBe('saved')
     expect(viewFromHash('#priced')).toBe('priced')
+    expect(viewFromHash('#queue')).toBe('queue')
   })
 
   it('accepts a hash with no leading #', () => {

@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .database import Base, engine
 from . import models  # noqa: F401 — import registers models on Base before create_all
 from .routers import (lots, enrichment, auctions, govdeals, publicsurplus,
-                      status, vinted, events)
+                      status, vinted, events, queue)
 
 # Dev convenience only — creates tables from models if they don't exist.
 # Once this is a real app with data you care about, replace this with Alembic
@@ -261,6 +261,7 @@ app.include_router(publicsurplus.router)
 app.include_router(vinted.router)
 app.include_router(status.router)
 app.include_router(events.router)
+app.include_router(queue.router)
 
 
 @app.get("/health")

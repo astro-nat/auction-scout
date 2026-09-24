@@ -19,12 +19,15 @@ function useStatusBarHeightVar() {
 // Fixed bar across the very top: what the server is doing right now, with
 // real counts ("Importing 29 of 212"). Hidden entirely when nothing is
 // running, so it never steals space from the app.
-export default function StatusBar({ onQuiet }) {
+export default function StatusBar({ onQuiet, onStatus }) {
   const [status, setStatus] = useState(null)
   const barRef = useStatusBarHeightVar()
   // Per-job progress samples (jobId → [{t, current}...]) so each row can
   // show a measured pace and time-remaining, same as the enrichment queue.
   const progressRef = useRef(new Map())
+  // Read through a ref so a new callback never restarts the poll.
+  const onStatusRef = useRef(onStatus)
+  onStatusRef.current = onStatus
 
 
   useEffect(() => {
@@ -37,6 +40,7 @@ export default function StatusBar({ onQuiet }) {
         if (!alive) return
         sampleProgress(progressRef.current, s.jobs || [])
         setStatus(s)
+        onStatusRef.current?.(s)
         const busy = s.jobs.length > 0 || s.enrichment.queued > 0
         // Fire once on the busy → idle edge so the page can refresh itself.
         if (wasBusy && !busy) onQuiet?.()
