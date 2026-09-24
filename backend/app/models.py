@@ -44,6 +44,10 @@ class Auction(Base):
     ship_cost_estimate = Column(Float)
     ship_summary = Column(String)
     ship_analyzed_at = Column(DateTime)
+    # For a house outside the US (province in `state`): will it ship into
+    # the US? None = not known; always None for a US house. Read from the
+    # terms text at import and by the shipping analysis (services/shipping).
+    ships_to_us = Column(Boolean)
     # The closing-window digest (workers/notify.py) fires once per auction as
     # it enters the final WATCH_ALERT_HOURS — this is the once.
     closing_digest_sent_at = Column(DateTime)

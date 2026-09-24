@@ -74,6 +74,9 @@ export default function App() {
   // HARD-ship lots (furniture, appliances) rarely clear the ROI bar and
   // cost the most to move — hidden by default, one click to see them.
   const [hideHardShip, setHideHardShip] = useState(true)
+  // A Canadian house that has said it won't ship into the US: its lots can
+  // be won but never received. Hidden by default, one click to see them.
+  const [hideNoUsShip, setHideNoUsShip] = useState(true)
   // Closed auctions can't be bid on — hide their lots by default, but
   // keep them reachable: the enrichment work is still useful history.
   const [hideClosed, setHideClosed] = useState(true)
@@ -350,6 +353,9 @@ export default function App() {
     // GovDeals / PublicSurplus import through their own endpoints:
     // synchronous and small (one search response), lots there on the spot.
     const target = auctions.find((a) => a.id === auctionId)
+    if (target?.ships_to_us === false
+        && !window.confirm(`${target.name} has said it doesn't ship to the US — anything `
+                           + 'won there can\'t be received. Import anyway?')) return
     const platformImport = target?.external_id?.startsWith('gd-') ? importGovDeals
       : target?.external_id?.startsWith('ps-') ? importPublicSurplus
       // A Vinted card's "import" is just its scan run again: same query,
@@ -591,22 +597,31 @@ Skipping ${hard} HARD-to-ship lots.`
   // AI-read shipping estimate, as a compact row tag. Tooltip carries the
   // full policy sentence.
   function shipBadge(a) {
+    // The border question comes first: a Canadian house that won't ship
+    // into the US makes its fee schedule irrelevant.
+    if (a.ships_to_us === false) {
+      return { text: 'no US shipping',
+               tip: a.ship_summary || 'This house has said it ships within Canada only' }
+    }
+    const border = a.ships_to_us === true ? ' · ships to US' : ''
     if (a.ship_cost_estimate != null) {
-      return { text: `~$${Math.round(a.ship_cost_estimate)}/item ship`, tip: a.ship_summary }
+      return { text: `~$${Math.round(a.ship_cost_estimate)}/item ship${border}`, tip: a.ship_summary }
     }
     if (a.ship_summary) {
       const noShip = /pickup only|no shipping/i.test(a.ship_summary)
-      return { text: noShip ? 'no ship' : 'ship: see terms', tip: a.ship_summary }
+      return { text: (noShip ? 'no ship' : 'ship: see terms') + border, tip: a.ship_summary }
     }
+    if (border) return { text: 'ships to US', tip: a.ship_summary }
     return null
   }
 
   // Shipping analysis said "no shipping" — worthless unless it's local
   // enough to pick up (source tells us which scan geography found it).
   const isUnshippable = (a) =>
-    a.ship_summary && a.ship_cost_estimate == null
-    && /pickup only|no shipping/i.test(a.ship_summary)
-    && a.source !== 'Local Pickup'
+    a.ships_to_us === false
+    || (a.ship_summary && a.ship_cost_estimate == null
+        && /pickup only|no shipping/i.test(a.ship_summary)
+        && a.source !== 'Local Pickup')
 
   // What the auction actually does, not which scan found it. `source` only
   // records scan geography ("Local Pickup" = inside your radius), so a
@@ -628,6 +643,8 @@ Skipping ${hard} HARD-to-ship lots.`
   const importAllCandidates = visibleAuctions.filter((a) =>
     !(a.closing_date && parseUtc(a.closing_date) < new Date())
     && !(hasCategoryCount(a) && a.category_lot_count === 0)
+    // A house that won't ship into the US: nothing there can be received.
+    && a.ships_to_us !== false
     // GovDeals/PublicSurplus import one at a time through their own
     // endpoints — the HiBid bulk job would silently skip them anyway.
     && !a.external_id)
@@ -801,6 +818,7 @@ Skipping ${hard} HARD-to-ship lots.`
             Date.now() - touchedRef.current[l.lot_id] < 15 * 60 * 1000) return true
         if (hideLowValue && isConfirmedLowValue(l)) return false
         if (hideHardShip && l.logistics_ease === 'HARD') return false
+        if (hideNoUsShip && l.auction_no_us_ship) return false
         if (hideClosed && isClosedItem(l)) return false
         return true
       })
@@ -808,7 +826,7 @@ Skipping ${hard} HARD-to-ship lots.`
                      auction_name: l.auction_name ?? auctionNames[l.auction_id] ?? '—',
                      item_closed: isClosedItem(l) }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lots, auctions, auctionIndex, showHiddenLots, wonOnly, hideLowValue, lowValueCutoff, hideHardShip, hideClosed])
+  }, [lots, auctions, auctionIndex, showHiddenLots, wonOnly, hideLowValue, lowValueCutoff, hideHardShip, hideNoUsShip, hideClosed])
   const hiddenCount = lots.length - visibleLots.length
 
   return (
@@ -992,7 +1010,7 @@ Skipping ${hard} HARD-to-ship lots.`
           )}
           {busy && <span>{busy}</span>}
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, whiteSpace: 'nowrap' }}
-                 title="Shipping analysis found these don't ship, and they're outside your pickup radius — nothing you could actually buy">
+                 title="Shipping analysis found these don't ship (or won't ship into the US), and they're outside your pickup radius — nothing you could actually buy">
             <input
               type="checkbox"
               checked={hideUnshippable}
@@ -1421,6 +1439,14 @@ Skipping ${hard} HARD-to-ship lots.`
               onChange={(ev) => setHideHardShip(ev.target.checked)}
             /> Hide HARD ship
           </label>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
+                 title="Lots from a Canadian house that has said it won't ship into the US — winnable, never receivable">
+            <input
+              type="checkbox"
+              checked={hideNoUsShip}
+              onChange={(ev) => setHideNoUsShip(ev.target.checked)}
+            /> Hide no US shipping
+          </label>
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
             <input
               type="checkbox"
@@ -1444,7 +1470,7 @@ Skipping ${hard} HARD-to-ship lots.`
               onChange={(ev) => setWonOnly(ev.target.checked)}
             /> Won only ({lots.filter((l) => l.won).length})
           </label>
-          {(hideLowValue || hideHardShip || hideClosed || !showHiddenLots) && hiddenCount > 0 && (
+          {(hideLowValue || hideHardShip || hideNoUsShip || hideClosed || !showHiddenLots) && hiddenCount > 0 && (
             <span style={{ color: 'var(--muted)', whiteSpace: 'nowrap' }}>
               {hiddenCount} hidden
             </span>

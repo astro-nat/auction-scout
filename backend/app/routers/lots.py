@@ -128,6 +128,9 @@ def list_lots(
         lot.auction_closed = bool(
             lot.auction and lot.auction.closing_date
             and lot.auction.closing_date < now)
+        # A Canadian house that won't cross the border: the lot can be won
+        # but never received. Served per lot so the items view can hide it.
+        lot.auction_no_us_ship = bool(lot.auction and lot.auction.ships_to_us is False)
         # The house's estimate calibration, right where its estimate shows —
         # the anchor loses its pull when its track record sits beside it.
         cal = house_ratios.get(lot.auction.auctioneer_id) if lot.auction else None

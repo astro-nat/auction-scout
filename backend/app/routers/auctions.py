@@ -14,6 +14,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from .. import models, schemas
 from ..database import get_db
 from ..services import dismissed, favorites, hibid, jobs
+from ..services import shipping
+from sqlalchemy import or_, and_, func
 from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/auctions", tags=["auctions"])
@@ -203,7 +205,12 @@ async def analyze_shipping(dry_run: bool = False,
            .filter((models.Auction.closing_date.is_(None))
                    | (models.Auction.closing_date >= datetime.now())))
     if not force:
-        q = q.filter(models.Auction.ship_analyzed_at.is_(None))
+        # Never read: read it. A Canadian house read before the border
+        # question existed, or whose terms left it open: ask again.
+        q = q.filter(or_(
+            models.Auction.ship_analyzed_at.is_(None),
+            and_(func.upper(models.Auction.state).in_(shipping.CANADIAN_PROVINCES),
+                 models.Auction.ships_to_us.is_(None))))
     targets = q.all()
     if dry_run:
         return {"auctions": len(targets), "dry_run": True}
@@ -318,7 +325,12 @@ async def scan_auctions(payload: schemas.ScanRequest,
     # AI read up front. ship_analyzed_at gates it — an auction is only ever
     # paid for once, no matter how many scans re-surface it.
     to_analyze = [r.id for r in stored
-                  if r.source == "Ship" and r.ship_analyzed_at is None]
+                  if r.source == "Ship"
+                  and (r.ship_analyzed_at is None
+                       # A Canadian house whose terms never settled the
+                       # border question is asked again - cents per scan,
+                       # against lots that could never arrive.
+                       or (shipping.is_canadian(r.state) and r.ships_to_us is None))]
     if to_analyze:
         jobs.enqueue("ship-analysis", "Reading shipping policies",
                      total=len(to_analyze), payload={"auction_ids": to_analyze})

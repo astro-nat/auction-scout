@@ -716,6 +716,10 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
               </div>
               <div style={{ color: 'var(--muted)', fontSize: 12 }}>
                 {(lot.item_closed ?? lot.auction_closed) ? 'closed · ' : ''}
+                {lot.auction_no_us_ship && (
+                  <span style={{ color: 'var(--danger)' }}
+                        title="This house has said it won't ship into the US">no US shipping · </span>
+                )}
                 <span onClick={() => onSelectAuction?.(lot.auction_id)}
                       title="Show only this auction's items"
                       style={{ cursor: 'pointer', textDecoration: 'underline dotted' }}>
@@ -985,6 +989,10 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
               </td>
               <td style={{ ...cell, fontSize: 12, maxWidth: 140 }}>
                 {(lot.item_closed ?? lot.auction_closed) && <div><strong>closed</strong></div>}
+                {lot.auction_no_us_ship && (
+                  <div style={{ color: 'var(--danger)' }}
+                       title="This house has said it won't ship into the US">no US shipping</div>
+                )}
                 <span onClick={() => onSelectAuction?.(lot.auction_id)}
                       title="Show only this auction's items"
                       style={{ cursor: 'pointer', textDecoration: 'underline dotted' }}>

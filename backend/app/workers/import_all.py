@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 from ..database import SessionLocal
 from .. import models
 from ..services import hibid, jobs
+from ..services import shipping
 from ..services.timing import timed
 from .enrich import _apply_roi, apply_bolo_match, looks_multi_item
 from ..services.bolo import category_hint
@@ -206,6 +207,11 @@ def run_import_all(auction_ids: list[int], resume_job_id: str | None = None,
                     if m.get("premium_mult"):
                         auction.buyer_premium_mult = m["premium_mult"]
                         auction.cond_ship = m.get("cond_ship", False)
+                    # A Canadian house's plainly worded border policy is
+                    # free to read here; the AI pass covers the rest.
+                    if auction.ships_to_us is None and shipping.is_canadian(auction.state):
+                        auction.ships_to_us = shipping.ships_to_us_from_text(
+                            m.get("ship_text", ""), m.get("terms_text", ""))
                     ctx = {"premium_mult": auction.buyer_premium_mult,
                            "source": auction.source}
                     return await hibid.fetch_lots(

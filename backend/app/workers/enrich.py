@@ -39,6 +39,7 @@ from sqlalchemy.orm import Session, joinedload
 from ..database import SessionLocal
 from .. import models, config
 from ..services import financials, gemini, hibid, jobs, price_log, pricing
+from ..services import shipping
 from ..services import settings as settings_store
 from ..services.bolo import BoloMatcher
 from ..services.hibid import classify_logistics
@@ -249,8 +250,9 @@ Produce:
 - ships: true if the auctioneer or a third party will ship, false if pickup-only, null if the text doesn't say
 - cost_estimate: your rough TOTAL cost in USD to ship one typical small-to-medium item (a shoebox-sized package): carrier postage + any handling/packing/per-item/flat fees mentioned. Use mid-range carrier rates (~$10-15 postage for such a package) when the text only gives fees on top. null ONLY when ships is false or null — if shipping exists but the fees are vague or "determined after packing", still commit to your best mid-range guess rather than null.
 - summary: one plain-English sentence a reseller can act on, e.g. "Ships in-house: $5/item handling + carrier rate, so roughly $18 for a small box" or "Third-party UPS Store — expect $25+ minimum" or "Pickup only, no shipping"
+- ships_to_us: the buyer is in the United States. true if the text says items can be shipped to a US address (or to international / worldwide destinations), false if shipping is limited to Canada or domestic addresses or the text rules out international shipping, null if the text does not say. A US-based house that ships at all is true.
 
-Return ONLY valid JSON: {{"ships": boolean or null, "cost_estimate": number or null, "summary": string}}
+Return ONLY valid JSON: {{"ships": boolean or null, "cost_estimate": number or null, "summary": string, "ships_to_us": boolean or null}}
 """
 
 VISION_PROMPT = """Identify this auction lot from its photo for an eBay search.
@@ -1697,6 +1699,7 @@ def run_ship_analysis(auction_ids: list[int], resume_job_id: str | None = None) 
                 if not ship_text and not terms_text:
                     auction.ship_summary = "No shipping details posted"
                     auction.ship_cost_estimate = None
+                    auction.ships_to_us = shipping.resolve(auction.state, "", "", None)
                     no_info += 1
                 else:
                     result = _call_with_retry(lambda: client.messages.create(
@@ -1713,6 +1716,8 @@ def run_ship_analysis(auction_ids: list[int], resume_job_id: str | None = None) 
                     auction.ship_cost_estimate = (round(float(cost), 2)
                                                   if isinstance(cost, (int, float)) else None)
                     auction.ship_summary = (result.get("summary") or "")[:500] or None
+                    auction.ships_to_us = shipping.resolve(
+                        auction.state, ship_text, terms_text, result)
                     analyzed += 1
                 auction.ship_analyzed_at = datetime.now(timezone.utc).replace(tzinfo=None)
                 db.commit()

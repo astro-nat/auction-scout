@@ -35,6 +35,7 @@ _MIGRATIONS = [
     # Which identifiers the AI title asserted that the listing never had -
     # NULL when none. Set at enrichment and re-price; gates the gold badge.
     "ALTER TABLE enrichment ADD COLUMN IF NOT EXISTS identity_note VARCHAR",
+    "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS ships_to_us BOOLEAN",
     "ALTER TABLE lots ADD COLUMN IF NOT EXISTS closes_at TIMESTAMP",
     "CREATE TABLE IF NOT EXISTS settings (key VARCHAR PRIMARY KEY, value VARCHAR)",
     "ALTER TABLE enrichment ADD COLUMN IF NOT EXISTS all_in_cost NUMERIC",

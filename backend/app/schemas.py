@@ -85,6 +85,7 @@ class LotOut(BaseModel):
     created_at: datetime
     auction_name: Optional[str] = None
     auction_closed: bool = False
+    auction_no_us_ship: bool = False   # the house has said it won't ship into the US
     # The auction house's estimate-to-hammer calibration (median ratio over
     # its observed closed sales, and how many back it) — shown beside the
     # house estimate so the anchor carries its track record with it.
@@ -131,6 +132,7 @@ class AuctionOut(BaseModel):
     category_count_for: Optional[int] = None  # which category that count is for
     ship_cost_estimate: Optional[float] = None  # AI-read rough $ to ship a small/medium item
     ship_summary: Optional[str] = None          # one-line shipping-policy summary
+    ships_to_us: Optional[bool] = None          # Canadian house: ships into the US? None = unknown
     # What's actually in the database for this auction
     lots_imported: int = 0
     lots_enriched: int = 0
