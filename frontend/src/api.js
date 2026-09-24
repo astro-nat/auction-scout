@@ -1,8 +1,11 @@
 // Deployed builds bake in the backend's public URL via VITE_API_BASE.
 // In dev there's no env var, so fall back to whatever host the page was
 // loaded from — localhost on the laptop, the laptop's LAN IP from a phone.
-const API_BASE =
-  import.meta.env.VITE_API_BASE || `http://${window.location.hostname}:8000`
+// Guarded so the module loads under vitest (node, no window): the tracker's
+// pure core imports this file for postEvents, and the tests import the core.
+export const API_BASE =
+  import.meta.env.VITE_API_BASE
+  || `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:8000`
 
 async function request(path, options = {}) {
   const what = `${options.method || 'GET'} ${path}`
@@ -120,6 +123,16 @@ export function repriceSelected(lotIds, { dryRun = false } = {}) {
     method: 'POST',
     body: JSON.stringify({ lot_ids: lotIds }),
   })
+}
+
+// Usage events, a few seconds' worth per call. Fire-and-forget: the
+// tracker swallows failures, so losing a batch never surfaces as an error.
+export function postEvents(events) {
+  return request('/events', { method: 'POST', body: JSON.stringify({ events }) })
+}
+
+export function fetchEventSummary(days = 7) {
+  return request(`/events/summary?days=${days}`)
 }
 
 export function fetchStatus() {

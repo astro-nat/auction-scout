@@ -150,6 +150,18 @@ class RepriceRequest(BaseModel):
     lot_ids: list[str]
 
 
+class UiEventIn(BaseModel):
+    name: str
+    props: dict | None = None
+    view: str | None = None
+
+
+class UiEventBatch(BaseModel):
+    """A few seconds of UI activity, sent together so a click never waits
+    on the network."""
+    events: list[UiEventIn]
+
+
 class ImportAllRequest(BaseModel):
     """Bulk import: which auctions, in display order, and how much of each.
 

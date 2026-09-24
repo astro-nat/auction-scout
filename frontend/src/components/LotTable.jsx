@@ -4,6 +4,7 @@ import { compRows, ebaySoldUrl } from '../lib/comps'
 import { houseRatioLabel, houseRatioTitle } from '../lib/calibration'
 import { CLOSING_RANGES, ROI_RANGES, hoursUntil, matchesFilter, presetsFor, roiPercent } from '../lib/filters'
 import { allSelected, chunked, inView, selectAll, toggle } from '../lib/selection'
+import { track } from '../lib/track'
 import useMediaQuery from '../useMediaQuery'
 
 // The homework behind a resale number: the comp records the pricer actually
@@ -385,11 +386,15 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
 
   function handleSort(key) {
     pinnedPos.current.clear()
+    track('sort', { key })
     setSort((prev) => (prev.key === key ? { key, dir: -prev.dir } : { key, dir: 1 }))
   }
 
   function setFilter(key, value) {
     pinnedPos.current.clear()
+    // Cleared filters are not worth a row; a value is - "ROI >100" forty
+    // times a week says what the app is for.
+    if (value?.trim()) track('filter', { key, value: String(value).slice(0, 40) })
     setColFilters((prev) => ({ ...prev, [key]: value }))
   }
 

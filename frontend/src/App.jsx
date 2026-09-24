@@ -3,6 +3,7 @@ import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCateg
 import { auctionClosed, clearsFloor, underFloor, goldBadge as pacingGoldBadge } from './lib/pacing'
 import { houseRatioLabel, houseRatioTitle } from './lib/calibration'
 import { initialView, saveView, viewFromHash, viewUrl } from './lib/view'
+import { installTracking, track } from './lib/track'
 import LotTable from './components/LotTable'
 import StatusBar from './components/StatusBar'
 import useMediaQuery from './useMediaQuery'
@@ -26,9 +27,17 @@ export default function App() {
   // First sync REPLACES the history entry; later ones push. Pushing on
   // mount would put the hash-less URL behind us, so the first Back press
   // would appear to do nothing instead of leaving the page.
+  // Usage tracking: one delegated listener counts every button and
+  // checkbox by label; filters, sorts and view changes report themselves.
+  // Recorded to this app's own backend, never a third party.
+  useEffect(() => installTracking(document), [])
+
   const viewSynced = useRef(false)
   useEffect(() => {
     saveView(view, window.localStorage)
+    // Only a real tab switch is worth a row. This effect also runs on mount
+    // (twice, in dev) and that is not the user doing anything.
+    if (viewSynced.current) track('view', { view })
     if (viewFromHash(window.location.hash) !== view) {
       const url = viewUrl(view, window.location)
       if (viewSynced.current) window.history.pushState(null, '', url)

@@ -401,3 +401,22 @@ class ApiReply(Base):
     parsed = Column(Integer)          # how many carried a usable price
     note = Column(String)
     created_at = Column(DateTime, server_default=func.now(), index=True)
+
+
+class UiEvent(Base):
+    """One thing the user did in the UI - a button, a filter, a sort, a view.
+
+    Kept in the app's own Postgres and never sent anywhere else. The question
+    it exists to answer is "which features get used, and which never do", so
+    the UI can be shaped around the real workflow instead of guesses. Names
+    are short and stable (button, filter, sort, view, check); the specifics
+    ride in props - the button's label with digits normalised, the filter's
+    column and value - so counts aggregate instead of fragmenting.
+    """
+    __tablename__ = "ui_events"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String, nullable=False, index=True)
+    view = Column(String)             # auctions | items - where it happened
+    props = Column(JSONB)
+    created_at = Column(DateTime, server_default=func.now(), index=True)
