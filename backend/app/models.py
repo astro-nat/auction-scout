@@ -101,6 +101,10 @@ class Lot(Base):
     # catalogue shot, and condition judged from that is condition judged
     # from someone else's product. The deliberate AI look reads several.
     image_urls = Column(JSONB)
+    # Who is selling it, where the platform has a seller rather than a
+    # house (Vinted). Clicking the name pulls up their whole closet.
+    seller_id = Column(String, index=True)
+    seller_name = Column(String)
     created_at = Column(DateTime, server_default=func.now())
 
     auction = relationship("Auction", back_populates="lots")

@@ -85,6 +85,8 @@ class LotOut(BaseModel):
     auction_name: Optional[str] = None
     auction_closed: bool = False
     auction_no_us_ship: bool = False   # the house has said it won't ship into the US
+    seller_id: Optional[str] = None     # Vinted: whose closet this came from
+    seller_name: Optional[str] = None
     # The auction house's estimate-to-hammer calibration (median ratio over
     # its observed closed sales, and how many back it) — shown beside the
     # house estimate so the anchor carries its track record with it.

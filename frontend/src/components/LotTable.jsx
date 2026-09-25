@@ -309,7 +309,8 @@ const MOBILE_SORTS = [
   { label: 'Title (A→Z)', key: 'title', dir: 1 },
 ]
 
-export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, onSelectAuction }) {
+export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
+                                  onSelectAuction, onOpenCloset }) {
   const isMobile = useMediaQuery('(max-width: 768px)')
   const [pollingIds, setPollingIds] = useState(new Set())
   // Countdown clock — a 30s tick keeps every "closes in" cell live.
@@ -470,6 +471,24 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
 
   // The row's one button: comps if unpriced, AI if comps-priced, locked
   // once AI has priced it.
+  // Vinted lots have a seller rather than an auction house. Their name
+  // opens the whole closet - every item they have listed, not just the
+  // ones a keyword search happened to surface.
+  function sellerLine(lot) {
+    if (!lot.seller_id) return null
+    return (
+      <div style={{ color: 'var(--muted)', fontSize: 12 }}>
+        seller{' '}
+        <button type="button" className="link-like"
+                onClick={() => onOpenCloset?.(lot.seller_id, lot.seller_name)}
+                data-track="Seller name (open closet)"
+                title="Import and show this seller's whole closet">
+          {lot.seller_name || `#${lot.seller_id}`}
+        </button>
+      </div>
+    )
+  }
+
   function rowButton(lot, style) {
     const a = rowAction(lot.enrichment || {}, pollingIds.has(lot.lot_id))
     const onClick = a.step === 'comps' ? () => handleComps(lot.lot_id)
@@ -856,6 +875,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                   {lot.auction_name}
                 </button>
               </div>
+              {sellerLine(lot)}
               {e.enriched_title && e.enriched_title !== lot.title && (
                 <div style={{ color: 'var(--muted)', fontSize: 13 }}>→ {e.enriched_title}</div>
               )}
@@ -1136,6 +1156,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                         title="Show only this auction's items">
                   {lot.auction_name}
                 </button>
+                {sellerLine(lot)}
               </td>
               <td style={{ ...cell, whiteSpace: 'nowrap' }}>{lot.category}</td>
               <td style={{ ...cell, whiteSpace: 'nowrap',

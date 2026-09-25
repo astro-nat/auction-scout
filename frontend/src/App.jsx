@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, scanGovDeals, importGovDeals, scanPublicSurplus, importPublicSurplus, scanVinted, importLots, importAllAuctions, flushClosed, refreshBids, reinspectNoComps, repriceUnpriced, fetchSettings, saveTargetRoi, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
+import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, scanGovDeals, importGovDeals, scanPublicSurplus, importPublicSurplus, scanVinted, importLots, importAllAuctions, importVintedSeller, flushClosed, refreshBids, reinspectNoComps, repriceUnpriced, fetchSettings, saveTargetRoi, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
 import { auctionClosed } from './lib/pacing'
 import { houseRatioLabel, houseRatioTitle } from './lib/calibration'
 import { initialView, saveView, viewFromHash, viewUrl } from './lib/view'
@@ -508,6 +508,27 @@ export default function App() {
             + '.')
       refreshAll()
     } catch (e) { alertOnce(e.message); setBusy('') }
+  }
+
+  // A Vinted seller's whole closet: import everything they have listed
+  // (the search only ever showed the slice that matched a keyword), then
+  // show it like any other auction.
+  async function handleOpenCloset(sellerId, sellerName) {
+    if (!sellerId || starting) return
+    setStarting(`Fetching ${sellerName || 'the seller'}'s closet…`)
+    try {
+      const [auction] = await importVintedSeller(sellerId)
+      rememberAuctions([auction])
+      setSelectedAuctions([auction.id])
+      setView('items')
+      window.scrollTo?.({ top: 0, behavior: 'smooth' })
+      loadLots()
+      syncAuctionStats().catch(console.error)
+    } catch (e) {
+      alertOnce(e.message)
+    } finally {
+      setStarting('')
+    }
   }
 
   function openAuctionItems(auctionId) {
@@ -1480,6 +1501,7 @@ export default function App() {
         )
       ) : (
         <LotTable lots={visibleLots} onLotUpdated={handleLotUpdated} onRefresh={loadLots}
+                  onOpenCloset={handleOpenCloset}
                   onSelectAuction={(id) => {
                     // Jump back to the top: the change happens above the
                     // rows, and from halfway down a list it looked like

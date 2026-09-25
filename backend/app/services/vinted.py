@@ -17,6 +17,7 @@ from its anchored tail, not by splitting.
 
 import logging
 import re
+import json
 from html import unescape
 
 import httpx
@@ -27,6 +28,8 @@ BASE = "https://www.vinted.com"
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/152.0 Safari/537.36")
 PAGES_MAX = 2   # newest-first: two pages of ~96 is the whole "fresh" window
+WARDROBE_PAGE = 96      # the API's own maximum
+WARDROBE_PAGES_MAX = 12 # ~1150 items; a guard against a shop account
 
 _CARD_RE = re.compile(
     r'<img src="(https://images\d*\.vinted\.net/[^"]+)" '
@@ -42,11 +45,29 @@ _ALT_PLAIN_RE = re.compile(
     r"(?P<price>[\d.,]+) \$(?:, [\d.,]+ \$)?$")
 
 
+# The catalog page ships its item objects as escaped JSON inside the Next.js
+# hydration payload, and each one carries the seller the card itself never
+# shows: "url":"/items/<id>-slug" ... "user":{"id":<seller>}. Bounded so a
+# card without a user can never borrow the next card's.
+_ITEM_SELLER_RE = re.compile(
+    r'\\"url\\":\\"/items/(\d+)-[^"]{0,300}?\\".{0,2000}?\\"user\\":\{\\"id\\":(\d+)')
+
+
+def sellers_by_item(html: str) -> dict[int, int]:
+    """item id -> seller id, from the catalog page's hydration payload."""
+    return {int(i): int(u) for i, u in _ITEM_SELLER_RE.findall(html or "")}
+
+
+def member_link(user_id: int) -> str:
+    return f"{BASE}/member/{user_id}"
+
+
 def item_link(item_id: int, slug_hint: str = "") -> str:
     return f"{BASE}/items/{item_id}"
 
 
 def parse_catalog(html: str) -> list[dict]:
+    sellers = sellers_by_item(html)
     items = []
     for thumb, alt, item_id in _CARD_RE.findall(html):
         alt = unescape(alt)
@@ -72,6 +93,7 @@ def parse_catalog(html: str) -> list[dict]:
             "price": price,
             "thumbnail_url": thumb,
             "lot_link": item_link(int(item_id)),
+            "seller_id": sellers.get(int(item_id)),
         })
     return items
 
@@ -99,3 +121,71 @@ def search_items(query: str, max_price: float | None = None) -> list[dict]:
             if len(seen) == before:
                 break
     return list(seen.values())
+
+
+def _session(client: httpx.Client) -> None:
+    """Vinted's API answers 401 without the cookies the home page sets."""
+    client.get(f"{BASE}/")
+
+
+def _wardrobe_item(raw: dict) -> dict | None:
+    """One API item in the shape the importer already understands."""
+    try:
+        item_id = int(raw["id"])
+        price = float((raw.get("price") or {}).get("amount"))
+    except (KeyError, TypeError, ValueError):
+        return None
+    photos = raw.get("photos") or []
+    thumb = (photos[0].get("url") if photos and isinstance(photos[0], dict) else None)
+    return {
+        "item_id": item_id,
+        "lot_id": f"vt-{item_id}",
+        "title": (raw.get("title") or "").strip()[:400],
+        "brand": (raw.get("brand_title") or (raw.get("brand") or {}).get("title")
+                  if isinstance(raw.get("brand"), dict) else raw.get("brand_title")) or None,
+        "condition": (raw.get("status") or "").strip() or None,
+        "price": price,
+        "thumbnail_url": thumb,
+        "lot_link": raw.get("url") or item_link(item_id),
+        "seller_id": (raw.get("user") or {}).get("id"),
+    }
+
+
+def fetch_wardrobe(user_id: int, max_pages: int = WARDROBE_PAGES_MAX) -> dict:
+    """Everything a seller currently has for sale.
+
+    The member page renders its closet in the browser, so there is nothing
+    to scrape there; the page calls /api/v2/wardrobe/<id>/items and so does
+    this. Returns {"seller": {"id", "login"}, "items": [...], "total": N}.
+    Items already sold, reserved or hidden are left out - they cannot be
+    bought.
+    """
+    items: dict[int, dict] = {}
+    login = None
+    total = 0
+    with httpx.Client(headers={"User-Agent": UA, "Accept": "application/json"},
+                      follow_redirects=True, timeout=60) as client:
+        _session(client)
+        for page in range(1, max_pages + 1):
+            r = client.get(f"{BASE}/api/v2/wardrobe/{user_id}/items",
+                           params={"page": page, "per_page": WARDROBE_PAGE,
+                                   "order": "relevance"})
+            r.raise_for_status()
+            payload = r.json()
+            raws = payload.get("items") or []
+            if not raws:
+                break
+            pag = payload.get("pagination") or {}
+            total = pag.get("total_entries") or total
+            for raw in raws:
+                login = login or ((raw.get("user") or {}).get("login"))
+                if raw.get("is_closed") or raw.get("is_hidden") or raw.get("is_reserved"):
+                    continue
+                it = _wardrobe_item(raw)
+                if it:
+                    it["seller_id"] = it["seller_id"] or user_id
+                    items[it["item_id"]] = it
+            if page >= (pag.get("total_pages") or 1):
+                break
+    return {"seller": {"id": int(user_id), "login": login},
+            "items": list(items.values()), "total": total}
