@@ -262,7 +262,18 @@ A vintage/unbranded item is still confident if you can name 3+ visual specifics 
 Mixed/bundled lots are never confident.
 
 Original listing title: {title}
-Listing description (may be empty or boilerplate — trust the photo over it, but use its sizes/model numbers): {description}{photo_note}
+Listing description (may be empty): {description}
+
+Weigh the words and the photo by what each can actually show:
+- WHAT IT IS: the photo leads. Descriptions are often generic or boilerplate.
+  Take model numbers, sizes, counts and brands from the words when they give them.
+- WHAT CONDITION IT IS IN: the words lead. "No hard drive", "no power cord",
+  "missing parts", "untested", "as-is", "for parts", "cracked", "no key",
+  "sold as found" are disclosures about things a photo CANNOT show - an absent
+  internal part, a motor nobody plugged in. A tidy photo never overrides them.
+  Grade the lot by the worst thing the words or the photos disclose, and say in
+  notes which one it came from.
+{photo_note}
 
 Return ONLY valid JSON: {{"enriched_title": string, "verdict": string, "confident": boolean, "notes": string, "ship": string}}
 verdict must be exactly one of "broken, damaged, or for parts" | "untested or unknown condition" | "mint condition or working perfectly" | "normal wear and tear"
@@ -973,6 +984,11 @@ plate priced as sterling; broken/for-parts items priced as working; one
 item carrying a whole-pile total; hype or asking prices nowhere near what
 actually sells.
 
+Read the description before you answer. When it discloses something the
+value ignores - missing parts, no power supply or key, untested, as-is,
+damage - the realistic price is the one such a listing actually fetches,
+which is usually far below the working-item comps.
+
 Return ONLY valid JSON:
 {{"plausible": true or false, "reason": string, "realistic_value": number}}
 reason = one short sentence a reseller can act on.
@@ -1200,9 +1216,19 @@ def _apply_audit(db: Session, lot: models.Lot, e: models.Enrichment, result: dic
 
 INSPECT_PROMPT = """These are photos of ONE multi-item auction lot titled: {title}
 
-The listing description (may be empty or boilerplate — trust the photo over
-it, but use its sizes, model numbers, and quantities):
+The listing description (may be empty):
 {description}
+
+Weigh the words and the photo by what each can actually show:
+- WHAT IT IS: the photo leads. Descriptions are often generic or boilerplate.
+  Take model numbers, sizes, counts and brands from the words when they give them.
+- WHAT CONDITION IT IS IN: the words lead. "No hard drive", "no power cord",
+  "missing parts", "untested", "as-is", "for parts", "cracked", "no key",
+  "sold as found" are disclosures about things a photo CANNOT show - an absent
+  internal part, a motor nobody plugged in. A tidy photo never overrides them.
+  Grade the lot by the worst thing the words or the photos disclose, and say in
+  notes which one it came from.
+
 
 Identify each INDIVIDUALLY SELLABLE item you can actually read or recognize in
 the photos - the SAME item seen in two photos is ONE item, never two — CD/DVD/book spines, game boxes, branded products, etc. For each,
