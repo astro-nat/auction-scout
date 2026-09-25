@@ -65,3 +65,58 @@ def test_the_count_agrees_with_the_list(auction):
 def test_without_the_flag_nothing_changes(auction):
     r = client.get("/lots", params={"auction_id": auction})
     assert sorted(l["lot_id"] for l in r.json()) == ["po-pending", "po-priced", "po-unpriced"]
+
+
+def _set_comps(value):
+    db = SessionLocal()
+    try:
+        e = (db.query(models.Enrichment)
+               .join(models.Lot, models.Lot.id == models.Enrichment.lot_id)
+               .filter(models.Lot.lot_id == "po-priced").one())
+        e.comps = value
+        e.comp_count = len(value or [])
+        db.commit()
+    finally:
+        db.close()
+
+
+def _stored_comps():
+    db = SessionLocal()
+    try:
+        return (db.query(models.Enrichment)
+                  .join(models.Lot, models.Lot.id == models.Enrichment.lot_id)
+                  .filter(models.Lot.lot_id == "po-priced").one()).comps
+    finally:
+        db.close()
+
+
+COMP = [{"kind": "sold", "price": 40.0, "title": "a real comp"}]
+
+
+def test_the_list_leaves_comp_records_behind_but_one_lot_still_carries_them(auction):
+    """The comp records were 60% of the list payload - 2.8 MB a page - and
+    are read only when one row's evidence panel is opened, which fetches
+    that lot on its own."""
+    _set_comps(COMP)
+    listed = client.get("/lots", params={"auction_id": auction}).json()
+    priced = next(l for l in listed if l["lot_id"] == "po-priced")
+    assert priced["enrichment"]["comps"] is None
+    # The count still rides along, so a row can say how many it will fetch.
+    assert priced["enrichment"]["comp_count"] == len(COMP)
+
+    with_comps = client.get("/lots", params={"auction_id": auction,
+                                             "include_comps": "true"}).json()
+    asked = next(l for l in with_comps if l["lot_id"] == "po-priced")
+    assert asked["enrichment"]["comps"][0]["title"] == "a real comp"
+
+    one = client.get("/lots/po-priced").json()
+    assert one["enrichment"]["comps"][0]["title"] == "a real comp"
+
+
+def test_clearing_the_comps_for_the_response_never_reaches_the_database(auction):
+    """The whole risk of the optimisation: the rows come out of the session,
+    so blanking a field on them must not be written back."""
+    _set_comps(COMP)
+    for _ in range(3):
+        client.get("/lots", params={"auction_id": auction})
+    assert _stored_comps() == COMP

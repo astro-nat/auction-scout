@@ -15,12 +15,32 @@ import useMediaQuery from '../useMediaQuery'
 // Google detour. Rows enriched before comps were stored still get the link.
 function CompsPeek({ lot, e }) {
   const search = ebaySoldUrl(e.enriched_title || lot.title)
-  const rows = compRows(e.comps)
-  if (!search && !rows.length) return null
+  // The list endpoint leaves the comp records out - they were 60% of its
+  // payload and are read only here - so the first open fetches this one
+  // lot, which always carries them.
+  const [comps, setComps] = useState(e.comps ?? null)
+  const [loading, setLoading] = useState(false)
+  const rows = compRows(comps)
+  const expected = e.comp_count ?? 0
+  if (!search && !rows.length && !expected) return null
+
+  async function fill(ev) {
+    if (!ev.target.open || comps || loading || !expected) return
+    setLoading(true)
+    try {
+      const full = await fetchLot(lot.lot_id)
+      setComps(full.enrichment?.comps ?? [])
+    } catch {
+      setComps([])          // the link below still works
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
-    <details style={{ marginTop: 2 }}>
+    <details style={{ marginTop: 2 }} onToggle={fill}>
       <summary style={{ color: 'var(--muted)', fontSize: 11, cursor: 'pointer' }}>
-        evidence{rows.length ? ` (${rows.length})` : ''}
+        evidence{(rows.length || expected) ? ` (${rows.length || expected})` : ''}
       </summary>
       <div style={{ fontSize: 11, textAlign: 'left', maxWidth: 360, padding: '4px 0' }}>
         {e.roi_reason && (
@@ -40,7 +60,12 @@ function CompsPeek({ lot, e }) {
               : r.title}
           </div>
         ))}
-        {!rows.length && (
+        {loading && (
+          <div style={{ color: 'var(--muted)', marginBottom: 2 }}>
+            <span className="spinner" /> loading the comps…
+          </div>
+        )}
+        {!rows.length && !loading && (
           <div style={{ color: 'var(--muted)', marginBottom: 2 }}>
             no comp records stored (priced before they were kept)
           </div>

@@ -154,36 +154,52 @@ export default function App() {
       roiStatus: filters.roiStatus || undefined,
       pricedOnly,
     }
-    // Pages of 2000 chain automatically until the set is complete: the
-    // first page renders immediately, the rest stream in behind it. One
-    // 6000-row payload crashed phone tabs; four 2000-row parses don't.
-    // The generation counter aborts a stale chain when the user switches
-    // auction or filters mid-load. A failed page retries twice with
+    // Pages of 2000, fetched AT ONCE rather than one after another. One
+    // 6000-row payload crashed phone tabs, so the paging stays; chaining it
+    // did not have to - 4,661 lots took three round trips end to end, five
+    // seconds before the list was whole. The count says how many pages
+    // there are, so they all go out together and land in order.
+    // The generation counter aborts a stale load when the user switches
+    // auction or filters mid-flight. A failed page retries twice with
     // backoff (the server can be busy mid-enrichment); only then does the
     // view admit defeat — silently showing an empty list read as
     // "Nothing imported yet", which was a lie.
     const gen = ++loadGen.current
     setLotsLoadState('loading')
-    const loadPage = (offset, acc, attempt = 0) =>
-      fetchLots({ ...args, offset }).then((page) => {
-        if (gen !== loadGen.current) return
-        const all = offset ? [...acc, ...page] : page
-        setLots(all)
-        setLotsLoadState('ok')
-        if (page.length === 2000) loadPage(all.length, all)
-      }).catch((e) => {
-        if (gen !== loadGen.current) return
+    const PAGE = 2000
+    const fetchPage = (offset, attempt = 0) =>
+      fetchLots({ ...args, offset }).catch((e) => {
+        if (gen !== loadGen.current) return []
         if (attempt < 2) {
-          setTimeout(() => loadPage(offset, acc, attempt + 1), 4000 * (attempt + 1))
-        } else {
-          console.error(e)
-          if (offset === 0) setLotsLoadState('error')
+          return new Promise((res) => setTimeout(
+            () => res(fetchPage(offset, attempt + 1)), 4000 * (attempt + 1)))
         }
+        console.error(e)
+        throw e
       })
-    loadPage(0, [])
-    // The real total comes from the database so the UI never passes off a
-    // page size as the whole set.
-    fetchLotCount(args).then((r) => setLotTotal(r.total)).catch(console.error)
+
+    fetchLotCount(args).then((r) => {
+      if (gen !== loadGen.current) return
+      setLotTotal(r.total)
+      const pages = Math.max(1, Math.ceil(r.total / PAGE))
+      const slots = new Array(pages).fill(null)
+      let failedFirst = false
+      return Promise.all(Array.from({ length: pages }, (_, i) =>
+        fetchPage(i * PAGE).then((rows) => {
+          if (gen !== loadGen.current) return
+          slots[i] = rows
+          // Paint what has landed, in page order, as it lands.
+          setLots(slots.filter(Boolean).flat())
+          setLotsLoadState('ok')
+        }).catch(() => { if (i === 0) failedFirst = true })))
+        .then(() => {
+          if (gen === loadGen.current && failedFirst) setLotsLoadState('error')
+        })
+    }).catch((e) => {
+      if (gen !== loadGen.current) return
+      console.error(e)
+      setLotsLoadState('error')
+    })
   }, [selectedAuctions, categoryFilter, filters, pricedOnly])
 
   // Accumulate imported auctions as FULL rows, separately from the visible

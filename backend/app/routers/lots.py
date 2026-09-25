@@ -87,6 +87,7 @@ def list_lots(
     roi_status: Optional[str] = Query(None, description="GOLD MINE | PASS"),
     bolo_only: bool = False,
     priced_only: bool = Query(False, description="only lots with an est_resale"),
+    include_comps: bool = Query(False, description="send each lot's comp records too"),
     include_closed: bool = False,
     limit: int = 2000,
     offset: int = 0,
@@ -135,6 +136,15 @@ def list_lots(
         cal = house_ratios.get(lot.auction.auctioneer_id) if lot.auction else None
         lot.house_ratio = cal["ratio"] if cal else None
         lot.house_ratio_n = cal["n"] if cal else 0
+    if not include_comps:
+        # The comp records are 60% of this response - 2.8 MB a page - and
+        # they are only read when one row's evidence panel is opened, which
+        # fetches that lot on its own (GET /lots/{lot_id} always carries
+        # them). Cleared last, after every query above, and never committed:
+        # the session is rolled back and closed when the request ends.
+        for lot in rows:
+            if lot.enrichment is not None:
+                lot.enrichment.comps = None
     return rows
 
 
