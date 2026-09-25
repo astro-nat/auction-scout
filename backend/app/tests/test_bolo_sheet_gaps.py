@@ -22,10 +22,8 @@ def _match(title, description=""):
 @pytest.mark.parametrize("title,expected", [
     ("McIntosh MC275 Tube Amplifier", "Vintage hi-fi separates"),
     ("Technics SL-1200 MK2 Turntable", "Vintage hi-fi separates"),
-    ("Makita XPH12Z Hammer Driver Drill", "Premium hand and power tools"),
-    ("Festool TS 55 Track Saw with Rail", "Premium hand and power tools"),
-    ("Starrett 12 inch Combination Square", "Premium hand and power tools"),
-    ("Stanley Bailey No. 4 Hand Plane Type 11", "Premium hand and power tools"),
+    ("Starrett 12 inch Combination Square", "Premium hand tools"),
+    ("Stanley Bailey No. 4 Hand Plane Type 11", "Premium hand tools"),
     ("Vacuum Hose Attachment Crevice Tool Set", "Small replacement parts"),
     ("Presser Foot and Bobbin Case Assortment", "Small replacement parts"),
     ("Sony PS5 Console Disc Edition", "Modern gaming consoles"),
@@ -57,7 +55,7 @@ def test_adidas_sneakers_were_missing_entirely():
 
 @pytest.mark.parametrize("title,forbidden", [
     # Stanley is a drinks tumbler in lightweight_collectibles.
-    ("Stanley 40oz Quencher Tumbler Pink", "Premium hand and power tools"),
+    ("Stanley 40oz Quencher Tumbler Pink", "Premium hand tools"),
     # Pioneer alone belongs to the vintage audio parts entry.
     ("Pioneer Car Stereo Head Unit", "Vintage hi-fi separates"),
     # Retro consoles must stay with the retro entry.

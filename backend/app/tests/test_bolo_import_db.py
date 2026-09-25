@@ -41,7 +41,7 @@ def _lot(lot_id, title):
 FETCHED = [
     _lot("bi-1", "McIntosh MC275 Tube Amplifier"),        # BOLO
     _lot("bi-2", "Assorted Plastic Storage Totes Lot"),   # not
-    _lot("bi-3", "Makita XPH12Z Hammer Drill"),           # BOLO
+    _lot("bi-3", "Starrett 12 inch Combination Square"),  # BOLO
     _lot("bi-4", "Box of Used Coat Hangers"),             # not
     _lot("bi-5", "Griswold No 8 Cast Iron Skillet"),      # BOLO
 ]
@@ -110,8 +110,9 @@ def test_an_unfiltered_import_also_records_the_match(auction):
     save_lots(db, a, FETCHED)
     brand = (db.query(models.Enrichment.bolo_brand)
                .join(models.Lot, models.Lot.id == models.Enrichment.lot_id)
-               .filter(models.Lot.title == "Makita XPH12Z Hammer Drill").scalar())
-    assert brand == "Premium hand and power tools"
+               .filter(models.Lot.title
+                       == "Starrett 12 inch Combination Square").scalar())
+    assert brand == "Premium hand tools"
 
 
 def test_existing_lots_are_updated_even_when_they_fail_the_filter(auction):

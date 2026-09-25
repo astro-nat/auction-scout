@@ -1700,12 +1700,10 @@
       "condition_critical": true
     },
     {
-      "brand": "Premium hand and power tools",
+      "brand": "Premium hand tools",
       "category": "tools",
       "tier": 2,
       "models": [
-        "Makita",
-        "Festool",
         "Starrett",
         "Stanley Bailey",
         "Stanley No. 4",
@@ -1717,16 +1715,9 @@
       ],
       "era_markers": [
         "Starrett machinist tools are marked with the name on the beam",
-        "Vintage Stanley planes: type study by the lateral lever and logo",
-        "Festool green and Makita teal are recognisable at a glance",
-        "Original box and inserts matter for Festool"
+        "Vintage Stanley planes: type study by the lateral lever and logo"
       ],
       "comp_ranges_usd": [
-        {
-          "item": "Festool track saws and routers",
-          "low": 200,
-          "high": 700
-        },
         {
           "item": "Starrett precision measuring tools",
           "low": 60,
@@ -1744,11 +1735,10 @@
       },
       "platform_primary": "eBay",
       "platform_secondary": "Mercari",
-      "comp_query_template": "Premium hand and power tools {model} sold",
-      "ship_class": "medium_box",
-      "notes": "The sheet lists these alongside DeWalt and Milwaukee, which were already here as battery entries only. Hand tools do not need batteries tested, which makes them the easier buy.",
+      "comp_query_template": "Premium hand tools {model} sold",
+      "ship_class": "small_box",
+      "notes": "User preference: no power tools - heavy, awkward to ship, and the same reason DeWalt and Milwaukee are battery entries only. Makita and Festool were removed with them. What is left needs no batteries tested and ships flat: squares, planes, a hammer.",
       "condition_critical": [
-        "Check motors for sparking under load",
         "Verify makers marks; Starrett and Stanley are widely faked",
         "Plane soles must be flat and the iron must not be pitted through"
       ]

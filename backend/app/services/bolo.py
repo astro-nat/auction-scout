@@ -362,10 +362,15 @@ _BRAND_ALIASES: Dict[str, List[str]] = {
         "akai gx-", "luxman", "teac reel", "reel to reel deck",
         "silver face receiver", "vintage stereo receiver",
     ],
-    "Premium hand and power tools": [
+    # User preference: NO power tools - heavy, awkward to ship, and the
+    # same reason the Dewalt and Milwaukee entries below are batteries only.
+    # Makita and Festool are gone with them. What is left is hand tools,
+    # which are light, flat and hold their value: machinist squares, bench
+    # planes, a hammer.
+    "Premium hand tools": [
         # common misspellings and spacing variants
-        "mikita", "makkita", "makita drill", "fes tool", "festtool", "starret", "starett", "sterrett", "stanley baily", "bailey plane", "hand plane vintage",
-        "makita", "festool", "starrett", "lie-nielsen", "veritas plane",
+        "starret", "starett", "sterrett", "stanley baily", "bailey plane", "hand plane vintage",
+        "starrett", "lie-nielsen", "veritas plane",
         "stanley bailey", "stanley no. 4", "stanley no. 5", "stanley no 4",
         "stanley plane", "stanley sweetheart", "estwing",
     ],
@@ -3920,7 +3925,7 @@ _CATEGORY_STOPWORDS = frozenset({
 # Multi-word signals the single-token derivation cannot express.
 _CATEGORY_PHRASES = (
     "cast iron", "trading cards", "sports cards", "costume jewelry",
-    "sterling silver", "vinyl records", "power tools", "hand tools",
+    "sterling silver", "vinyl records", "hand tools",
     "video games", "board games", "fountain pens", "pocket knives",
     "fishing tackle", "fishing lures", "hot wheels", "model trains",
 )
@@ -3954,14 +3959,26 @@ def _category_tokens() -> tuple:
     return tuple(sorted(tokens, key=lambda t: (-len(t), t)))
 
 
+# Piles the user does not want opened, whatever category the words derive
+# to. "Power tools" is the case this exists for: the wanted category is
+# hand tools, and both piles reduce to the token "tools", so dropping the
+# token would lose the planes and squares along with the drills.
+_UNWANTED_PHRASES = (
+    "power tools", "power tool", "cordless tools", "cordless tool",
+)
+
+
 def category_hint(title: str) -> Optional[str]:
     """The BOLO category a box lot appears to sit in, or None.
 
     Whole-word only, so "cardboard" is not "cards" and "cameras" still
     matches "camera". Phrases are checked first because they are the
-    stronger signal.
+    stronger signal, and an unwanted phrase answers before any of them.
     """
     haystack = " " + re.sub(r"[^a-z0-9]+", " ", (title or "").lower()) + " "
+    for phrase in _UNWANTED_PHRASES:
+        if " " + phrase + " " in haystack:
+            return None
     for phrase in _CATEGORY_PHRASES:
         if " " + phrase + " " in haystack:
             return phrase

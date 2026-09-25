@@ -31,9 +31,8 @@ def _match(title):
     ("Roland Juno106 Vintage Synth", "Vintage synthesizers"),
     ("Logitec Harmony Remote Controll", "Universal and OEM remote controls"),
     ("GE Spacemaster Under Cabinet Radio", "GE Spacemaker under-cabinet appliances"),
-    ("Mikita Cordless Drill 18v", "Premium hand and power tools"),
-    ("Starret Machinist Square 6 inch", "Premium hand and power tools"),
-    ("Stanley Baily No 5 Hand Plane", "Premium hand and power tools"),
+    ("Starret Machinist Square 6 inch", "Premium hand tools"),
+    ("Stanley Baily No 5 Hand Plane", "Premium hand tools"),
     ("Vaccum Attachment Set Hose Tools", "Small replacement parts"),
     ("Play Station 5 Console Bundle", "Modern gaming consoles"),
     ("Nintendo Swich OLED Console", "Modern gaming consoles"),
@@ -74,7 +73,7 @@ def test_real_words_are_not_treated_as_typos(title):
         assert m["brand"] not in {
             "Curta mechanical calculator",
             "Vintage hi-fi separates",
-            "Premium hand and power tools",
+            "Premium hand tools",
         }, f"{title!r} was claimed by {m['brand']!r}"
 
 
@@ -90,7 +89,7 @@ def test_the_correct_spellings_still_work():
     """Misspellings are additive; they must not disturb the originals."""
     for title, brand in [
         ("McIntosh MC275 Tube Amplifier", "Vintage hi-fi separates"),
-        ("Makita XPH12Z Hammer Drill", "Premium hand and power tools"),
+        ("Starrett 12 inch Combination Square", "Premium hand tools"),
         ("Sony Walkman WM-DC2", "Sony Walkman"),
         ("Adidas Samba OG White", None),
     ]:
