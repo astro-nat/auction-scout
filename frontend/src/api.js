@@ -7,28 +7,44 @@ export const API_BASE =
   import.meta.env.VITE_API_BASE
   || `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:8000`
 
+// A deploy restart or a brief overload is gone in a few seconds — the old
+// behaviour surfaced it as a dead-end popup telling the person to click
+// again themselves. Retrying quietly here does that for them: three tries,
+// short backoff, and the popup only fires if the server is still
+// unreachable after ~7 seconds of real trying.
+const RETRY_DELAYS_MS = [1000, 2000, 4000]
+const RETRYABLE_STATUSES = new Set([502, 503, 504])   // a live gateway saying "not yet"
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
 async function request(path, options = {}) {
   const what = `${options.method || 'GET'} ${path}`
-  let res
-  try {
-    res = await fetch(`${API_BASE}${path}`, {
-      headers: { 'Content-Type': 'application/json' },
-      ...options,
-    })
-  } catch {
-    // fetch() rejects with a bare "Failed to fetch" on any network-level
-    // problem — say what was being attempted and the likely cause instead.
-    throw new Error(`Can't reach the server right now (${what}). `
-      + `It's probably restarting after a deploy or briefly overloaded — `
-      + `wait a few seconds and try again.`)
+  for (let attempt = 0; ; attempt++) {
+    const isLastAttempt = attempt === RETRY_DELAYS_MS.length
+    let res
+    try {
+      res = await fetch(`${API_BASE}${path}`, {
+        headers: { 'Content-Type': 'application/json' },
+        ...options,
+      })
+    } catch {
+      // fetch() rejects with a bare "Failed to fetch" on any network-level
+      // problem — say what was being attempted and the likely cause instead.
+      if (!isLastAttempt) { await sleep(RETRY_DELAYS_MS[attempt]); continue }
+      throw new Error(`Can't reach the server right now (${what}). `
+        + `It's probably restarting after a deploy or briefly overloaded — `
+        + `wait a few seconds and try again.`)
+    }
+    if (!res.ok) {
+      if (RETRYABLE_STATUSES.has(res.status) && !isLastAttempt) {
+        await sleep(RETRY_DELAYS_MS[attempt]); continue
+      }
+      // FastAPI puts the human-readable reason in {"detail": ...}.
+      let detail = ''
+      try { detail = (await res.json()).detail || '' } catch { /* not JSON */ }
+      throw new Error(`${what} failed (${res.status})${detail ? `: ${detail}` : ''}`)
+    }
+    return res.json()
   }
-  if (!res.ok) {
-    // FastAPI puts the human-readable reason in {"detail": ...}.
-    let detail = ''
-    try { detail = (await res.json()).detail || '' } catch { /* not JSON */ }
-    throw new Error(`${what} failed (${res.status})${detail ? `: ${detail}` : ''}`)
-  }
-  return res.json()
 }
 
 // Deduped alert — repeated identical errors within a few seconds (e.g. a
@@ -259,23 +275,30 @@ export function scanVinted(query, maxPrice) {
   })
 }
 
-export function importLots(auctionId, categoryId = -1) {
-  const q = categoryId && categoryId !== -1 ? `?category_id=${categoryId}` : ''
-  return request(`/auctions/${auctionId}/import${q}`, { method: 'POST' })
+export function importLots(auctionId, categoryId = -1, searchText = '') {
+  const params = new URLSearchParams()
+  if (categoryId && categoryId !== -1) params.set('category_id', categoryId)
+  if (searchText) params.set('search_text', searchText)
+  const q = params.toString()
+  return request(`/auctions/${auctionId}/import${q ? `?${q}` : ''}`, { method: 'POST' })
 }
 
 // One background job that imports every listed auction, in the order sent.
-// Three shapes through one call: everything, one HiBid category, or only
-// lots whose title matches the BOLO brand list. The two filters compose.
-// The BOLO match runs at import and is free - regex over the title the
-// fetch already returned, no AI - so the filter costs nothing.
-export function importAllAuctions(auctionIds, categoryId = -1, boloOnly = false) {
+// Four shapes through one call: everything, one HiBid category, only lots
+// whose title matches the BOLO brand list, or only lots matching a keyword
+// - and they compose. The BOLO match runs at import and is free - regex
+// over the title the fetch already returned, no AI - so the filter costs
+// nothing; the keyword filter is applied by HiBid's own lot search, the
+// same query the scan used to count matches.
+export function importAllAuctions(auctionIds, categoryId = -1, boloOnly = false,
+                                  searchText = '') {
   return request('/auctions/import-all', {
     method: 'POST',
     body: JSON.stringify({
       auction_ids: auctionIds,
       category_id: categoryId,
       bolo_only: boloOnly,
+      search_text: searchText,
     }),
   })
 }

@@ -4,6 +4,7 @@ import { auctionClosed } from './lib/pacing'
 import { houseRatioLabel, houseRatioTitle } from './lib/calibration'
 import { initialView, saveView, viewFromHash, viewUrl } from './lib/view'
 import { queueCount } from './lib/queue'
+import { matchCountFor, importLabel as matchLabel } from './lib/matching'
 import QueueView from './components/QueueView'
 import { installTracking, track } from './lib/track'
 import LotTable from './components/LotTable'
@@ -95,7 +96,35 @@ export default function App() {
   // Closed auctions can't be bid on — hide their lots by default, but
   // keep them reachable: the enrichment work is still useful history.
   const [hideClosed, setHideClosed] = useState(true)
-  const [busy, setBusy] = useState('')
+  // Every in-flight action (a scan, a flush, a "how many?" count-before-
+  // confirm) gets its OWN key here, so one running action never disables
+  // an unrelated button — clicking "Import" while a scan is still going,
+  // or starting a second scan on a different platform, just queues both.
+  // Only re-clicking the SAME key while it's already running is a no-op.
+  // busy is the map (key -> label, for the status list); busyRef is its
+  // synchronous mirror, because state updates land too late to stop a
+  // fast double-click that fires before the first render commits.
+  const [busy, setBusy] = useState({})
+  const busyRef = useRef({})
+  const beginBusy = (key, label) => {
+    busyRef.current = { ...busyRef.current, [key]: label }
+    setBusy(busyRef.current)
+  }
+  const endBusy = (key) => {
+    const { [key]: _drop, ...rest } = busyRef.current
+    busyRef.current = rest
+    setBusy(busyRef.current)
+  }
+  const runBusy = (key, label, fn) => async (...args) => {
+    if (busyRef.current[key]) return
+    beginBusy(key, label)
+    try {
+      return await fn(...args)
+    } finally {
+      endBusy(key)
+    }
+  }
+  const anyBusy = Object.keys(busy).length > 0
   // Scan filters — mirrors hibid.com's own search options
   const [categories, setCategories] = useState([])
   // Names of every auction we've seen this session. The visible `auctions`
@@ -241,8 +270,7 @@ export default function App() {
 
   const scanIsAnywhere = Number(scan.radius_miles) === -1
 
-  async function handleScan() {
-    setBusy('Scanning HiBid…')
+  const handleScan = runBusy('scan-hibid', 'Scanning HiBid…', async () => {
     try {
       const found = await scanAuctions({
         ...scan,
@@ -256,11 +284,10 @@ export default function App() {
       rememberAuctions(found)
       setAuctions(found)
       setAuctionLimit(50)
-    } catch (e) { alertOnce(e.message) } finally { setBusy('') }
-  }
+    } catch (e) { alertOnce(e.message) }
+  })
 
-  async function handleScanGovDeals() {
-    setBusy('Scanning GovDeals…')
+  const handleScanGovDeals = runBusy('scan-govdeals', 'Scanning GovDeals…', async () => {
     try {
       const found = await scanGovDeals({
         zip: scan.zip || undefined,
@@ -271,11 +298,10 @@ export default function App() {
       rememberAuctions(found)
       setAuctions(found)
       setAuctionLimit(50)
-    } catch (e) { alertOnce(e.message) } finally { setBusy('') }
-  }
+    } catch (e) { alertOnce(e.message) }
+  })
 
-  async function handleScanPublicSurplus() {
-    setBusy('Scanning PublicSurplus…')
+  const handleScanPublicSurplus = runBusy('scan-publicsurplus', 'Scanning PublicSurplus…', async () => {
     try {
       const found = await scanPublicSurplus({
         zip: scan.zip || undefined,
@@ -285,9 +311,11 @@ export default function App() {
       rememberAuctions(found)
       setAuctions(found)
       setAuctionLimit(50)
-    } catch (e) { alertOnce(e.message) } finally { setBusy('') }
-  }
+    } catch (e) { alertOnce(e.message) }
+  })
 
+  // Not built with runBusy: the label names the query, which isn't known
+  // until the empty-input check below has already run.
   async function handleScanVinted() {
     const query = scan.search_text.trim()
     if (!query) {
@@ -295,13 +323,15 @@ export default function App() {
             + 'search ("pyrex", "coach bag"), not an area.')
       return
     }
-    setBusy(`Scanning Vinted for "${query}"…`)
+    const key = 'scan-vinted'
+    if (busyRef.current[key]) return
+    beginBusy(key, `Scanning Vinted for "${query}"…`)
     try {
       const found = await scanVinted(query)
       rememberAuctions(found)
       setAuctions(found)
       setAuctionLimit(50)
-    } catch (e) { alertOnce(e.message) } finally { setBusy('') }
+    } catch (e) { alertOnce(e.message) } finally { endBusy(key) }
   }
 
   // Called when the status bar sees the server go idle — pull fresh data so
@@ -333,34 +363,46 @@ export default function App() {
     setScan((prev) => ({ ...prev, [field]: value }))
   }
 
-  // When the scan had a category filter, Import pulls only matching lots.
+  // When the scan had a category and/or a keyword active, Import pulls
+  // only matching lots — matchCountFor/importLabel (lib/matching.js) know
+  // when a stored count still applies to the filter combo on screen.
   const scanCategoryId = Number(scan.category_id)
   const scanCategoryName = categories.find((c) => c.id === scanCategoryId)?.name
+  const scanSearchText = scan.search_text.trim()
 
-  // The stored count is only meaningful for the category it was counted for.
+  // The stored count is only meaningful for the exact filter it was
+  // counted under — used to gate "Import all" past auctions known empty.
   const hasCategoryCount = (a) =>
     scanCategoryId !== -1 &&
-    a.category_lot_count != null &&
-    a.category_count_for === scanCategoryId
+    matchCountFor(a, scanCategoryId, '') != null
 
   function importLabel(a) {
-    if (hasCategoryCount(a)) {
-      // Keep it short on phones — the full category name blew the button
-      // out of the card and pushed it off screen.
-      return isMobile
-        ? `Import ${a.category_lot_count}`
-        : `Import ${a.category_lot_count} ${scanCategoryName ?? 'matching'}`
-    }
-    return 'Import'
+    return matchLabel(a, {
+      categoryId: scanCategoryId, categoryName: scanCategoryName,
+      searchText: scanSearchText, mobile: isMobile,
+    })
   }
 
-  // categoryId defaults to the last scan's category (the auctions-tab flow);
-  // pass -1 to import the full catalog regardless — the items-tab "import
-  // the rest" button must not silently inherit a stale category filter.
+  // The auction row's own summary line: "· 4 matching "pyrex"", "· 9 in
+  // Antiques", both, or nothing when no count applies right now.
+  function matchCaption(a) {
+    const count = matchCountFor(a, scanCategoryId, scanSearchText)
+    if (count == null) return ''
+    const parts = []
+    if (scanCategoryId !== -1) parts.push(`in ${scanCategoryName ?? 'category'}`)
+    if (scanSearchText) parts.push(`matching "${scanSearchText}"`)
+    return ` · ${count} ${parts.join(' ')}`
+  }
+
+  // categoryId/searchText default to the last scan's filters (the
+  // auctions-tab flow); pass categoryId=-1 to import the full catalog
+  // regardless — the items-tab "import the rest" button must not silently
+  // inherit a stale category or keyword filter.
   // Imports run on the worker now: holding the request open while HiBid
   // paged through a 1,200-lot catalog was a timeout with a progress bar,
   // and closing the tab cancelled the import mid-save.
-  async function handleImport(auctionId, categoryId = scanCategoryId) {
+  async function handleImport(auctionId, categoryId = scanCategoryId,
+                              searchText = scanSearchText) {
     // GovDeals / PublicSurplus import through their own endpoints:
     // synchronous and small (one search response), lots there on the spot.
     const target = auctions.find((a) => a.id === auctionId)
@@ -389,11 +431,7 @@ export default function App() {
       return
     }
     try {
-      const r = await importLots(auctionId, categoryId)
-      if (r.already_running) {
-        alert('An import is already running — let it finish first. Progress shows in the top bar.')
-        return
-      }
+      await importLots(auctionId, categoryId, searchText)
       setSelectedAuctions([auctionId])
       setView('items')
       alert(`Importing in the background — progress shows in the top bar, `
@@ -408,23 +446,6 @@ export default function App() {
       const r = await saveTargetRoi(pct)
       alert(`Target ROI set to ${r.target_roi_pct}%. Re-grading ${r.regrading} items — takes a few seconds.`)
     } catch (e) { alertOnce(e.message) }
-  }
-
-  // One pricing action at a time, and say so the moment it's pressed. The
-  // count behind each button takes a few seconds before its confirm box
-  // appears; with nothing on screen in between, buttons got pressed twice.
-  // The ref blocks a second click synchronously - state alone updates too
-  // late to stop a quick double-click.
-  const [starting, setStarting] = useState('')
-  const startingRef = useRef(false)
-  const startOnce = (label, fn) => async (...args) => {
-    if (startingRef.current) return
-    startingRef.current = true
-    setStarting(label)
-    try { await fn(...args) } finally {
-      startingRef.current = false
-      setStarting('')
-    }
   }
 
   async function handleRefreshBids() {
@@ -470,7 +491,6 @@ export default function App() {
         + `Progress shows in the bar at the top.`
       if (!window.confirm(msg)) return
       const r = await repriceUnpriced(scope)
-      if (r.already_running) { alert('A re-price is already running; let it finish first.'); return }
       alert(`Queued ${r.repricing} items.`)
       loadLots()
     } catch (e) { alertOnce(e.message) }
@@ -500,22 +520,22 @@ export default function App() {
         + `with them. This can't be undone.\n\n`
         + `Lots marked watched are kept.`
       if (!window.confirm(msg)) return
-      setBusy('Flushing closed items…')
+      beginBusy('flush', 'Flushing closed items…')   // moves on from "Counting…"
       const r = await flushClosed()
-      setBusy('')
       alert(`Flushed ${r.lots} items`
             + (r.auctions ? ` and removed ${r.auctions} empty closed auctions` : '')
             + '.')
       refreshAll()
-    } catch (e) { alertOnce(e.message); setBusy('') }
+    } catch (e) { alertOnce(e.message) }
   }
 
   // A Vinted seller's whole closet: import everything they have listed
   // (the search only ever showed the slice that matched a keyword), then
   // show it like any other auction.
   async function handleOpenCloset(sellerId, sellerName) {
-    if (!sellerId || starting) return
-    setStarting(`Fetching ${sellerName || 'the seller'}'s closet…`)
+    const key = 'vinted-closet'
+    if (!sellerId || busyRef.current[key]) return
+    beginBusy(key, `Fetching ${sellerName || 'the seller'}'s closet…`)
     try {
       const [auction] = await importVintedSeller(sellerId)
       rememberAuctions([auction])
@@ -527,7 +547,7 @@ export default function App() {
     } catch (e) {
       alertOnce(e.message)
     } finally {
-      setStarting('')
+      endBusy(key)
     }
   }
 
@@ -670,10 +690,31 @@ export default function App() {
     if (!window.confirm(msg)) return
     try {
       const r = await importAllAuctions(ids, scanCategoryId, boloOnly)
-      if (r.already_running) {
-        alert('A bulk import is already running — check the bar at the top.')
-        return
-      }
+      alert(`Queued ${r.auctions} auctions for import.`)
+    } catch (e) { alertOnce(e.message) }
+  }
+
+  // Total lots the keyword actually matches across every listed auction —
+  // the number on the "Import N of 'query'" button. Auctions never counted
+  // under this exact keyword (a fresh card, or one whose count still
+  // belongs to a cleared filter) simply contribute nothing known yet;
+  // the import itself still reaches them, since HiBid applies the keyword
+  // fresh at fetch time regardless of what the UI could show in advance.
+  const matchingImportTotal = importAllCandidates.reduce(
+    (sum, a) => sum + (matchCountFor(a, scanCategoryId, scanSearchText) || 0), 0)
+
+  async function handleImportMatching() {
+    const ids = importAllCandidates.map((a) => a.id)
+    if (!ids.length) return
+    const msg = `Import only the lots matching "${scanSearchText}" `
+      + `from all ${ids.length} listed auctions`
+      + (scanCategoryId !== -1 && scanCategoryName ? ` (within "${scanCategoryName}")` : '')
+      + `?\n\nEverything else in each auction stays out. Free — no AI calls. `
+      + `Runs in the background: progress shows in the bar at the top, and `
+      + `imported lots appear under "My inventory" as each auction finishes.`
+    if (!window.confirm(msg)) return
+    try {
+      const r = await importAllAuctions(ids, scanCategoryId, false, scanSearchText)
       alert(`Queued ${r.auctions} auctions for import.`)
     } catch (e) { alertOnce(e.message) }
   }
@@ -853,9 +894,14 @@ export default function App() {
           </button>
         ))}
       </div>
-      {starting && (
-        <div style={{ fontSize: 13, color: 'var(--muted)', margin: '8px 0 0' }}>
-          <span className="spinner" /> {starting}
+      {/* Every in-flight action shows here — several can run at once, since
+          starting one no longer blocks another. */}
+      {Object.keys(busy).length > 0 && (
+        <div style={{ fontSize: 13, color: 'var(--muted)', margin: '8px 0 0',
+                      display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {Object.entries(busy).map(([key, label]) => (
+            <span key={key}><span className="spinner" /> {label}</span>
+          ))}
         </div>
       )}
       {/* The view switch under the open tab */}
@@ -937,31 +983,31 @@ export default function App() {
         </div>
         {/* Row 3: go + the results-shaping toggle */}
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
-          <button type="submit" disabled={!!busy} className="primary"
+          <button type="submit" disabled={!!busy['scan-hibid']} className="primary"
                   style={isMobile ? { flex: '1 1 100%', padding: 10, fontSize: 15 }
                                   : { padding: '8px 18px' }}>
             Scan auctions
           </button>
-          <button type="button" onClick={handleScanGovDeals} disabled={!!busy}
+          <button type="button" onClick={handleScanGovDeals} disabled={!!busy['scan-govdeals']}
                   title="Search GovDeals (government surplus) near your zip — one card per selling agency"
                   style={isMobile ? { flex: '1 1 100%', padding: 10, fontSize: 15 }
                                   : { padding: '8px 18px' }}>
             Scan GovDeals
           </button>
-          <button type="button" onClick={handleScanPublicSurplus} disabled={!!busy}
+          <button type="button" onClick={handleScanPublicSurplus} disabled={!!busy['scan-publicsurplus']}
                   title="Search PublicSurplus (school & city surplus) near your zip — one card for the whole area"
                   style={isMobile ? { flex: '1 1 100%', padding: 10, fontSize: 15 }
                                   : { padding: '8px 18px' }}>
             Scan PublicSurplus
           </button>
-          <button type="button" onClick={handleScanVinted} disabled={!!busy}
+          <button type="button" onClick={handleScanVinted} disabled={!!busy['scan-vinted']}
                   title="Watch a Vinted search (uses the keyword box) — newest listings graded at their asking price; rescan to refresh"
                   style={isMobile ? { flex: '1 1 100%', padding: 10, fontSize: 15 }
                                   : { padding: '8px 18px' }}>
             Scan Vinted
           </button>
           {importAllCandidates.length > 1 && (
-            <button type="button" onClick={handleImportAll} disabled={!!busy}
+            <button type="button" onClick={handleImportAll}
                     title={scanCategoryId !== -1 && scanCategoryName
                       ? `Import the matching "${scanCategoryName}" lots from every open auction listed below — one background job`
                       : 'Import all open lots from every auction listed below — one background job'}
@@ -971,8 +1017,16 @@ export default function App() {
               {scanCategoryId !== -1 && scanCategoryName ? ` · ${scanCategoryName}` : ''})
             </button>
           )}
+          {scanSearchText && matchingImportTotal > 0 && (
+            <button type="button" onClick={handleImportMatching}
+                    title={`Import only the lots matching "${scanSearchText}" from every open auction listed below — one background job. Everything else in each auction stays out.`}
+                    style={isMobile ? { flex: '1 1 100%', padding: 10, fontSize: 15 }
+                                    : { padding: '8px 18px' }}>
+              Import {matchingImportTotal} of &quot;{scanSearchText}&quot;
+            </button>
+          )}
           {importAllCandidates.length > 1 && (
-            <button type="button" onClick={() => handleImportAll(true)} disabled={!!busy}
+            <button type="button" onClick={() => handleImportAll(true)}
                     title="Import only lots whose title matches your BOLO brand list. The match is free regex over the title the fetch already returned, so this costs the same as a full import and simply keeps fewer rows."
                     style={isMobile ? { flex: '1 1 100%', padding: 10, fontSize: 15 }
                                     : { padding: '8px 18px' }}>
@@ -980,7 +1034,6 @@ export default function App() {
               {scanCategoryId !== -1 && scanCategoryName ? ` · ${scanCategoryName}` : ''})
             </button>
           )}
-          {busy && <span>{busy}</span>}
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, whiteSpace: 'nowrap' }}
                  title="Shipping analysis found these don't ship (or won't ship into the US), and they're outside your pickup radius — nothing you could actually buy">
             <input
@@ -1024,7 +1077,7 @@ export default function App() {
         </div>
         </form>
         )}
-        {listedAuctions === 0 && !busy && (view === 'saved' ? (
+        {listedAuctions === 0 && !anyBusy && (view === 'saved' ? (
           <div className="empty-state" style={{ marginTop: '0.75rem' }}>
             <div><strong>No saved auctions yet.</strong></div>
             <div style={{ marginTop: 4 }}>
@@ -1105,8 +1158,7 @@ export default function App() {
                       {' · '}{houseRatioLabel(a.estimate_ratio, a.estimate_ratio_n)}
                     </span>
                   )}
-                  {hasCategoryCount(a)
-                    ? ` · ${a.category_lot_count} in ${scanCategoryName ?? 'category'}` : ''}
+                  {matchCaption(a)}
                   {shipBadge(a) ? ` · ${shipBadge(a).text}` : ''}
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>
@@ -1121,7 +1173,7 @@ export default function App() {
                 )}
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <button style={{ flex: '1 1 90px', minWidth: 90, padding: 8 }}
-                          onClick={() => handleImport(a.id)} disabled={!!busy}>
+                          onClick={() => handleImport(a.id)}>
                     {importLabel(a)}
                   </button>
                   {a.imported_at && (
@@ -1129,8 +1181,8 @@ export default function App() {
                       <button style={{ flex: '1 1 70px', minWidth: 70, padding: 8 }}
                               onClick={() => openAuctionItems(a.id)}>View</button>
                       <button style={{ flex: '1 1 90px', minWidth: 90, padding: 8 }}
-                              disabled={!a.lots_unpriced || !!starting}
-                              onClick={startOnce('Counting unpriced items…', () => handleCompsAuction(a.id))}
+                              disabled={!a.lots_unpriced || !!busy[`comps-${a.id}`]}
+                              onClick={runBusy(`comps-${a.id}`, 'Counting unpriced items…', () => handleCompsAuction(a.id))}
                               title="Look up sold comps for this auction's unpriced lots - no AI (asks first, shows the count)">{enrichAllLabel(a)}</button>
                     </>
                   )}
@@ -1199,8 +1251,10 @@ export default function App() {
                     {a.lots_imported > 0 && (
                       <div style={{ fontSize: 11, color: 'var(--muted)' }}>{a.lots_imported} imported</div>
                     )}
-                    {hasCategoryCount(a) && (
-                      <div style={{ fontSize: 11, color: 'var(--muted)' }}>{a.category_lot_count} match</div>
+                    {matchCountFor(a, scanCategoryId, scanSearchText) != null && (
+                      <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+                        {matchCountFor(a, scanCategoryId, scanSearchText)} match
+                      </div>
                     )}
                   </td>
                   <td style={{ whiteSpace: 'nowrap' }}>
@@ -1210,7 +1264,7 @@ export default function App() {
                     {a.buyer_premium_mult ? `${Math.round((a.buyer_premium_mult - 1) * 100)}%` : '—'}
                   </td>
                   <td style={{ whiteSpace: 'nowrap' }}>
-                    <button onClick={() => handleImport(a.id)} disabled={!!busy}>{importLabel(a)}</button>{' '}
+                    <button onClick={() => handleImport(a.id)}>{importLabel(a)}</button>{' '}
                     <button className="bare"
                             onClick={() => confirmForget(a)}
                             title="Forget this auction — it won't come back in future scans"
@@ -1222,8 +1276,8 @@ export default function App() {
                     {a.imported_at && (
                       <>
                         <button onClick={() => openAuctionItems(a.id)}>View</button>{' '}
-                        <button disabled={!a.lots_unpriced || !!starting}
-                                onClick={startOnce('Counting unpriced items…', () => handleCompsAuction(a.id))}
+                        <button disabled={!a.lots_unpriced || !!busy[`comps-${a.id}`]}
+                                onClick={runBusy(`comps-${a.id}`, 'Counting unpriced items…', () => handleCompsAuction(a.id))}
                               title="Look up sold comps for this auction's unpriced lots - no AI (asks first, shows the count)">{enrichAllLabel(a)}</button>
                       </>
                     )}
@@ -1295,8 +1349,7 @@ export default function App() {
                            && !(a.closing_date && parseUtc(a.closing_date) < new Date()))
             .map((a) => (
               <button key={`partial-${a.id}`}
-                      onClick={() => handleImport(a.id, -1)}
-                      disabled={!!busy}
+                      onClick={() => handleImport(a.id, -1, '')}
                       title={`"${a.name}" has ${a.lot_count} lots on HiBid but only ${a.lots_imported} in the database — import the rest (free, no AI calls)`}
                       style={{ padding: 8, fontSize: 14 }}>
                 Import {a.lot_count - a.lots_imported} missing
@@ -1317,30 +1370,30 @@ export default function App() {
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8,
                         marginLeft: isMobile ? 0 : 'auto' }}>
             <button style={isMobile ? { flex: '1 1 45%', padding: 8 } : undefined}
-                    onClick={startOnce('Starting the bid refresh…', handleRefreshBids)}
-                    disabled={!!starting}
+                    onClick={runBusy('bid-refresh', 'Starting the bid refresh…', handleRefreshBids)}
+                    disabled={!!busy['bid-refresh']}
                     title="Re-pull current bids from HiBid for every imported open auction and recompute ROI. Free — progress shows in the top bar.">
               Refresh bids
             </button>
             {!pricedOnly && (<>
             <button className="primary"
                     style={isMobile ? { flex: '1 1 45%', padding: 8 } : undefined}
-                    onClick={startOnce('Counting unpriced items…', handleCompsOnly)}
-                    disabled={!!starting}
+                    onClick={runBusy('comps-all', 'Counting unpriced items…', handleCompsOnly)}
+                    disabled={!!busy['comps-all']}
                     title="The default way to price: for every unpriced item in view (the ticked auctions and the category dropdown), look up sold comps on its auction title as-is. No AI cost - about one SoldComps request per title (asks first, shows the count)">
               {categoryFilter ? `Price all in ${categoryFilter} with comps (no AI)` : 'Price all with comps (no AI)'}
             </button>
             <button style={isMobile ? { flex: '1 1 45%', padding: 8 } : undefined}
-                    onClick={startOnce('Counting items with no value…', handleInspectNoValue)}
-                    disabled={!!starting}
+                    onClick={runBusy('inspect-no-value', 'Counting items with no value…', handleInspectNoValue)}
+                    disabled={!!busy['inspect-no-value']}
                     title="For the items comps couldn't price: AI reads each photo, identifies what is in it and prices it (asks first, shows cost)">
               AI-price what comps missed
             </button>
             </>)}
             <button className="danger"
                     style={isMobile ? { flex: '1 1 45%', padding: 8 } : undefined}
-                    onClick={startOnce('Counting closed items…', handleFlushClosed)}
-                    disabled={!!starting}
+                    onClick={runBusy('flush', 'Counting closed items…', handleFlushClosed)}
+                    disabled={!!busy.flush}
                     title="Permanently delete all items whose auction has closed (asks first)">
               Flush closed items
             </button>

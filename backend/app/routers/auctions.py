@@ -226,8 +226,6 @@ async def analyze_shipping(dry_run: bool = False,
     # Hand the worker ids only — it fetches the shipping/terms text itself,
     # which keeps this response instant and makes the run resumable (the id
     # list persists on the job row; texts would bloat it).
-    if jobs.has_pending("ship-analysis"):
-        return {"auctions": 0, "queued": False, "already_running": True}
     jobs.enqueue("ship-analysis", "Reading shipping policies",
                  total=len(targets),
                  payload={"auction_ids": [a.id for a in targets]})
@@ -248,8 +246,6 @@ def refresh_bids(window_hours: float | None = None,
     if not ids:
         return {"auctions": 0, "queued": False,
                 "reason": "nothing closing inside the refresh window"}
-    if jobs.has_pending("bid-refresh"):
-        return {"auctions": 0, "queued": False, "already_running": True}
     jobs.enqueue("bid-refresh", "Refreshing current bids",
                  total=len(ids), payload={"auction_ids": ids})
     return {"auctions": len(ids), "queued": True}
@@ -312,19 +308,23 @@ async def scan_auctions(payload: schemas.ScanRequest,
         stored.append(row)
     db.commit()
 
-    # When scanning within a category, annotate each auction with how many of
-    # its lots actually match — so the UI can offer "import just those".
-    if payload.category_id and payload.category_id != -1:
+    # When scanning within a category and/or a keyword, annotate each
+    # auction with how many of its lots actually match — so the UI can
+    # offer "import just those" instead of the whole catalog.
+    search_text = (payload.search_text or "").strip()
+    if (payload.category_id and payload.category_id != -1) or search_text:
         cjob = jobs.start("scan", f"Counting matching lots in {len(stored)} auctions…",
                           total=len(stored))
         try:
             counts = await hibid.count_matching_lots(
-                [r.hibid_id for r in stored if r.hibid_id], payload.category_id)
+                [r.hibid_id for r in stored if r.hibid_id], payload.category_id,
+                search_text)
         finally:
             jobs.finish(cjob)
         for r in stored:
             r.category_lot_count = counts.get(r.hibid_id)
             r.category_count_for = payload.category_id
+            r.category_count_search = search_text or None
         db.commit()   # persist so a page refresh keeps the "Import N" button
     # Auto-analyze shipping for auctions the user can't drive to: anything a
     # non-local scan surfaced would have to ship, so its terms are worth an
@@ -349,10 +349,12 @@ async def scan_auctions(payload: schemas.ScanRequest,
 
 @router.post("/{auction_id}/import", status_code=202)
 def import_lots(auction_id: int, category_id: int = -1,
-                bolo_only: bool = False,
+                bolo_only: bool = False, search_text: str = "",
                 db: Session = Depends(get_db)):
     """Queue one auction's lot import on the worker (idempotent upsert).
-    category_id limits the import to one HiBid category server-side.
+    category_id and/or search_text limit the import to a HiBid category
+    and/or a keyword, applied server-side by the same lot search the scan
+    used to count matches.
 
     This used to fetch and save inline, holding the HTTP request open while
     HiBid paged through the catalog — fine at 80 lots, a timeout at 1,200,
@@ -363,24 +365,26 @@ def import_lots(auction_id: int, category_id: int = -1,
     auction = db.query(models.Auction).filter(models.Auction.id == auction_id).first()
     if not auction or not auction.hibid_id:
         raise HTTPException(status_code=404, detail="Auction not found")
-    # Same dedupe as the bulk button: two clicks must not import twice, and
-    # a single import queued under a running bulk would double-fetch.
-    if jobs.has_pending("import-all"):
-        return {"auction_id": auction_id, "queued": False, "already_running": True}
+    # No refusal here: this queues behind whatever import-all is already
+    # running (the worker serialises heavy jobs itself, in order) instead
+    # of making the user re-click once the first one finishes.
     jobs.enqueue("import-all", f"Importing lots from {auction.name}",
                  total=1,
                  payload={"auction_ids": [auction_id],
                           "category_id": category_id,
-                          "bolo_only": bolo_only})
+                          "bolo_only": bolo_only,
+                          "search_text": search_text})
     return {"auction_id": auction_id, "queued": True}
 
 
 @router.post("/import-all", status_code=202)
 def import_all(payload: schemas.ImportAllRequest, db: Session = Depends(get_db)):
     """Import lots from MANY auctions as one background job — the "scan found
-    20 auctions with a few antiques each" case. category_id limits every
-    import to that HiBid category. The caller sends the auctions in display
-    order and leaves out ones it knows have no matching lots."""
+    20 auctions with a few antiques each" case. category_id and/or
+    search_text limit every import to a HiBid category and/or a keyword —
+    the same filters the scan counted matches with. The caller sends the
+    auctions in display order and leaves out ones it knows have no
+    matching lots."""
     known = {a.id for a in
              db.query(models.Auction.id)
                .filter(models.Auction.id.in_(payload.auction_ids),
@@ -389,14 +393,12 @@ def import_all(payload: schemas.ImportAllRequest, db: Session = Depends(get_db))
     ids = [aid for aid in payload.auction_ids if aid in known]
     if not ids:
         return {"auctions": 0, "queued": False}
-    # Two clicks must not import everything twice — same dedupe as reprice.
-    if jobs.has_pending("import-all"):
-        return {"auctions": 0, "already_running": True}
     jobs.enqueue("import-all", f"Importing lots from {len(ids)} auctions",
                  total=len(ids),
                  payload={"auction_ids": ids,
                           "category_id": payload.category_id,
-                          "bolo_only": payload.bolo_only})
+                          "bolo_only": payload.bolo_only,
+                          "search_text": payload.search_text})
     return {"auctions": len(ids), "queued": True}
 
 

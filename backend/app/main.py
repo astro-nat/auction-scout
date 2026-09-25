@@ -139,6 +139,10 @@ _MIGRATIONS = [
     "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS external_id VARCHAR",
     "CREATE UNIQUE INDEX IF NOT EXISTS ix_auctions_external_id "
     "ON auctions (external_id)",
+    # Keyword-scoped import: "Import N of 'query'" alongside "Import all" —
+    # the matching count needs to remember which SEARCH (not just which
+    # category) it was counted under.
+    "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS category_count_search VARCHAR",
 ]
 
 def _run_migrations() -> list[str]:

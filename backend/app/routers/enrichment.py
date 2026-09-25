@@ -182,13 +182,9 @@ def reprice(auction_id: int | None = None, weak_only: bool = False,
                 "requests_estimate": len(lot_ids) if unpriced_only else None}
     if not lot_ids:
         return {"repricing": 0}
-    # Deploys resume orphaned reprices, so stacking a second one is easy to
-    # do by accident — and N concurrent reprices burn N× the comp lookups.
-    if jobs.has_pending("reprice"):
-        # Only a DUPLICATE is worth refusing now. The worker serialises long
-        # jobs by itself, so an unrelated one being busy is no reason to drop
-        # this request — it would simply wait its turn.
-        return {"repricing": 0, "already_running": True}
+    # No refusal: a second reprice queues behind the first rather than
+    # being refused outright — the worker runs heavy jobs one at a time
+    # itself, in order, so this just waits its turn.
     # Purge BEFORE enqueueing, so the worker never sees the stale empties.
     purged = pricing.purge_empty_sold_cache() if weak_only else 0
     jobs.enqueue("reprice", "Re-pricing lots with current comp rules",
@@ -218,8 +214,6 @@ def audit_golds(db: Session = Depends(get_db)):
            .count())
     if not n:
         return {"auditing": 0}
-    if jobs.has_pending("audit-golds"):
-        return {"auditing": 0, "already_running": True}
     jobs.enqueue("audit-golds", "Auditing unchecked golds", total=n)
     return {"auditing": n}
 

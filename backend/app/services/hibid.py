@@ -528,23 +528,27 @@ async def download_image(url: str) -> Optional[bytes]:
 
 
 COUNT_QUERY = """
-query LotCount($auctionId: Int!, $category: CategoryId) {
-  lotSearch(input: {auctionId: $auctionId, searchText: "", category: $category}, pageNumber: 1) {
+query LotCount($auctionId: Int!, $category: CategoryId, $searchText: String) {
+  lotSearch(input: {auctionId: $auctionId, searchText: $searchText, category: $category}, pageNumber: 1) {
     pagedResults { totalCount }
   }
 }
 """
 
 
-async def count_matching_lots(hibid_ids: list[int], category_id: int) -> dict[int, int]:
-    """How many lots in each auction match a HiBid category — one cheap call
-    per auction, batched concurrently. Failures just omit the auction."""
+async def count_matching_lots(hibid_ids: list[int], category_id: int,
+                              search_text: str = "") -> dict[int, int]:
+    """How many lots in each auction match a HiBid category and/or a
+    keyword — one cheap call per auction, batched concurrently. The two
+    filters compose (HiBid ANDs them server-side, same as fetch_lots).
+    Failures just omit the auction."""
     out: dict[int, int] = {}
 
     async def one(client: httpx.AsyncClient, aid: int) -> None:
         try:
             data = await _graphql(client, "LotCount", COUNT_QUERY,
-                                  {"auctionId": aid, "category": category_id})
+                                  {"auctionId": aid, "category": category_id,
+                                   "searchText": search_text})
             out[aid] = ((data.get("lotSearch") or {}).get("pagedResults") or {}).get("totalCount", 0)
         except Exception as exc:
             logger.warning("lot count failed for auction %s: %s", aid, exc)

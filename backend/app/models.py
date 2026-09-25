@@ -33,11 +33,15 @@ class Auction(Base):
     # auctions, and a house you've judged once shouldn't have to be
     # judged again every time. Kept in the DB, just out of the list.
     hidden = Column(Boolean, default=False)
-    # Result of the last category-filtered scan: how many of this auction's
-    # lots matched, and which HiBid category that count refers to. Persisted
-    # so the "Import N <category>" button survives a page refresh.
+    # Result of the last filtered scan: how many of this auction's lots
+    # matched, and which category/keyword that count refers to. Persisted
+    # so the "Import N <category>" / "Import N of 'query'" button survives
+    # a page refresh. category_count_search is NULL when the scan that
+    # produced the count had no keyword — both fields have to match the
+    # scan currently on screen for the stored count to still apply.
     category_lot_count = Column(Integer)
     category_count_for = Column(Integer)
+    category_count_search = Column(String)
     # AI-read shipping policy: rough $ to ship a typical small/medium item
     # (fees + handling), a one-line plain-English summary of the policy, and
     # when the analysis ran (so re-runs skip auctions already read).

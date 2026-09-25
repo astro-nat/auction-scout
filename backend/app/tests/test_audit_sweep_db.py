@@ -116,8 +116,6 @@ def test_endpoint_counts_what_the_sweep_will_visit(auctions, monkeypatch):
     from app.routers import enrichment as enrichment_router
     monkeypatch.setattr(enrichment_router.jobs, "enqueue",
                         lambda *a, **k: "pytest-job")
-    monkeypatch.setattr(enrichment_router.jobs, "has_pending",
-                        lambda kind: False)
     open_a, _ = auctions
     before = client.post("/lots/audit-golds").json()
     _insert(open_a, "endpoint-gold")
