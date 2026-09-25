@@ -380,6 +380,54 @@ def _share_with_twins(db: Session, lot: models.Lot, e: models.Enrichment) -> int
     return len(rows)
 
 
+def match_twins(db: Session, dry_run: bool = False,
+                auction_ids: list[int] | None = None) -> dict:
+    """One-off catch-up for lots priced before twins shared: in every group
+    of same-title lots, make every lot match the most recently priced one
+    (an AI-priced one over a comps-only one). Spends nothing - it copies.
+    dry_run only counts what would change; auction_ids limits it to those
+    auctions' lots."""
+    from collections import defaultdict
+    groups = defaultdict(list)
+    q = (db.query(models.Lot, models.Enrichment)
+           .join(models.Enrichment, models.Enrichment.lot_id == models.Lot.id))
+    if auction_ids:
+        q = q.filter(models.Lot.auction_id.in_(auction_ids))
+    for lot, e in q.all():
+        key = twins.title_key(lot.title)
+        if key is not None:
+            groups[key].append((lot, e))
+    out = {"groups": 0, "lots_changed": 0, "lots_newly_priced": 0, "dry_run": dry_run}
+    for members in groups.values():
+        priced = [m for m in members if m[1].est_resale is not None
+                  and m[1].status in ("success", "pending")]
+        if len(members) < 2 or not priced:
+            continue
+        leader = max(priced, key=lambda m: (m[1].status == "success",
+                                            m[1].last_attempted_at is not None,
+                                            m[1].last_attempted_at, m[0].id))
+        target = leader[1].est_resale
+        changing = [m for m in members if m is not leader
+                    and "est_resale" not in (m[1].user_overrides or [])
+                    and (m[1].est_resale is None or str(m[1].est_resale) != str(target))
+                    # a comps-only leader only fills in lots nothing better is coming to
+                    and (leader[1].status == "success"
+                         or m[1].status in ("pending", "failed"))]
+        if not changing:
+            continue
+        out["groups"] += 1
+        out["lots_changed"] += len(changing)
+        out["lots_newly_priced"] += sum(1 for m in changing if m[1].est_resale is None)
+        if not dry_run:
+            if auction_ids:
+                for lot, e in changing:
+                    _copy_from_twin(lot, e, *leader)
+                db.commit()
+            else:
+                _share_with_twins(db, *leader)
+    return out
+
+
 def _share_quietly(db: Session, lot: models.Lot, e: models.Enrichment) -> None:
     try:
         _share_with_twins(db, lot, e)

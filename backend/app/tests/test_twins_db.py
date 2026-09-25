@@ -147,3 +147,28 @@ def test_a_reprice_looks_each_title_up_once(env):
     assert len(calls["comps"]) == 2
     values = {float(_e(db, i).est_resale) for i in ids[:3]}
     assert len(values) == 1
+
+
+def test_match_twins_brings_an_old_group_into_line(env):
+    """Lots priced before twins shared: each got its own value. One call
+    makes them all match the most recent AI-priced one, and spends nothing."""
+    from datetime import timedelta
+    from fastapi.testclient import TestClient
+    from app.main import app
+    db, lot, calls = env
+    now = datetime.now(timezone.utc)
+    old = lot(ALARM, status="success", est_resale=9, last_attempted_at=now - timedelta(days=2))
+    new = lot(ALARM, status="success", est_resale=14, last_attempted_at=now)
+    bare = lot(ALARM)
+    mine = lot(ALARM, status="success", est_resale=40, user_overrides=["est_resale"])
+    client = TestClient(app)
+    aid = db.query(models.Lot.auction_id).filter(models.Lot.id == old).scalar()
+    scope = {"auction_id": aid}
+    peek = client.post("/lots/match-twins", params=scope).json()
+    assert peek["dry_run"] and peek["lots_changed"] == 2
+    assert float(_e(db, old).est_resale) == 9                 # a dry run changes nothing
+    client.post("/lots/match-twins", params={**scope, "dry_run": "false"})
+    assert float(_e(db, old).est_resale) == 14
+    assert float(_e(db, bare).est_resale) == 14
+    assert float(_e(db, mine).est_resale) == 40               # hand-set stays
+    assert calls["ai"] == 0 and calls["comps"] == []

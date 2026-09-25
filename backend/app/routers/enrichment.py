@@ -182,6 +182,17 @@ def audit_golds(db: Session = Depends(get_db)):
     return {"auditing": n}
 
 
+@router.post("/match-twins")
+def match_twins(dry_run: bool = True,
+                auction_id: list[int] | None = Query(None, description="limit to these auctions"),
+                db: Session = Depends(get_db)):
+    """Make every group of same-title lots carry one value - the most
+    recently priced lot's. Free: nothing is looked up, values are copied.
+    A dry run (the default) only counts what would change."""
+    from ..workers.enrich import match_twins as _match
+    return _match(db, dry_run=dry_run, auction_ids=auction_id)
+
+
 @router.post("/enrich-category", status_code=202)
 def enrich_category(category: str, skip_hard: bool = False, dry_run: bool = False,
                     db: Session = Depends(get_db)):
