@@ -88,3 +88,74 @@ def test_waiting_lots_are_listed_in_the_order_the_worker_takes_them(setup):
     assert ours[0]["auction_name"] == "queue-test sale"
     assert "q-3" not in [l["lot_id"] for l in lots["items"]]   # done, not queued
     assert lots["total"] >= 3
+
+
+# --- reordering ----------------------------------------------------------
+
+def test_moved_puts_the_target_where_asked():
+    from app.routers.queue import moved
+    ids = [1, 2, 3, 4]
+    assert moved(ids, 3, "top") == [3, 1, 2, 4]
+    assert moved(ids, 3, "up") == [1, 3, 2, 4]
+    assert moved(ids, 3, "down") == [1, 2, 4, 3]
+    assert moved(ids, 3, "bottom") == [1, 2, 4, 3]
+    assert moved(ids, 1, "up") == ids              # already first
+    assert moved(ids, 4, "down") == ids            # already last
+    assert moved(ids, 9, "top") == ids             # not in line
+
+
+def test_a_waiting_job_moves_in_line(setup):
+    """Jobs made pending and cancelled, so the dev worker never claims them;
+    the order logic doesn't care about the flag."""
+    db = SessionLocal()
+    made = []
+    try:
+        for n in range(3):
+            j = models.Job(id=f"pytestmove{n}", kind="reprice", label=f"move {n}",
+                           state="pending", cancelled=True, total=1,
+                           started_at=datetime.now() + timedelta(seconds=n))
+            db.add(j)
+            made.append(j.id)
+        db.commit()
+        r = client.post("/queue/jobs/pytestmove2/move", params={"to": "top"})
+        assert r.status_code == 200, r.text
+        order = [i for i in r.json()["order"] if i.startswith("pytestmove")]
+        assert order == ["pytestmove2", "pytestmove0", "pytestmove1"]
+        listed = [j["id"] for j in _read()["jobs"] if j["id"].startswith("pytestmove")]
+        assert listed == order
+        assert client.post(f"/queue/jobs/{JOB_ID}/move", params={"to": "top"}).status_code == 409
+    finally:
+        db.query(models.Job).filter(models.Job.id.in_(made)).delete(synchronize_session=False)
+        db.commit()
+        db.close()
+
+
+def test_a_waiting_lot_moves_to_the_top(setup):
+    """setup's lots are stamped as claimed (in flight), which keeps the dev
+    worker off them - and in-flight lots can't be moved. Unclaim two of
+    them for the move, and hold their title twin in flight: the worker
+    never takes a lot whose same-title twin it is already working."""
+    ids = setup
+    db = SessionLocal()
+    try:
+        rows = {e.lot_id: e for e in db.query(models.Enrichment)
+                                         .filter(models.Enrichment.lot_id.in_(ids)).all()}
+        lots = {l.id: l for l in db.query(models.Lot).filter(models.Lot.id.in_(ids)).all()}
+        for i in ids:
+            lots[i].title = "Queue Move Twin Widget Deluxe"
+        rows[ids[0]].claimed_at = None
+        rows[ids[1]].claimed_at = None
+        db.commit()
+        r = client.post(f"/queue/lots/{ids[0]}/move", params={"to": "top"})
+        assert r.status_code == 200, r.text
+        waiting = [l["lot_db_id"] for l in _read()["lots"]["items"]
+                   if l["lot_db_id"] in (ids[0], ids[1])]
+        assert waiting == [ids[0], ids[1]]
+        r = client.post(f"/queue/lots/{ids[0]}/move", params={"to": "down"})
+        waiting = [l["lot_db_id"] for l in _read()["lots"]["items"]
+                   if l["lot_db_id"] in (ids[0], ids[1])]
+        assert waiting == [ids[1], ids[0]]
+        held = client.post(f"/queue/lots/{ids[2]}/move", params={"to": "top"})
+        assert held.status_code == 409                 # in flight: not movable
+    finally:
+        db.close()

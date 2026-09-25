@@ -230,6 +230,9 @@ class Job(Base):
     claimed_by = Column(String)                 # host:pid of the owner
     heartbeat_at = Column(DateTime)
     started_at = Column(DateTime, server_default=func.now())
+    # Where a waiting job stands in line, when the user has reordered the
+    # Queue. Lower goes first; unset goes after, oldest first.
+    queue_pos = Column(Float)
 
 
 class FavoriteAuctioneer(Base):

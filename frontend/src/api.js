@@ -159,6 +159,15 @@ export function fetchQueue() {
   return request('/queue')
 }
 
+// Reorder the queue: to = top | up | down | bottom.
+export function moveQueuedJob(jobId, to) {
+  return request(`/queue/jobs/${jobId}/move?to=${to}`, { method: 'POST' })
+}
+
+export function moveQueuedLot(lotDbId, to) {
+  return request(`/queue/lots/${lotDbId}/move?to=${to}`, { method: 'POST' })
+}
+
 export function fetchAuctions() {
   return request('/auctions')
 }

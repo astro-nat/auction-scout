@@ -244,7 +244,9 @@ def claim_pending(kinds: Optional[list[str]] = None,
                        models.Job.cancelled.is_(False),
                        or_(models.Job.kind.notin_(HEAVY_KINDS),
                            heavy_live < max_heavy))
-               .order_by(models.Job.started_at)
+               # The user's order from the Queue view first, then oldest.
+               .order_by(models.Job.queue_pos.asc().nullslast(),
+                         models.Job.started_at)
                .with_for_update(skip_locked=True)
                .limit(1))
         if kinds:

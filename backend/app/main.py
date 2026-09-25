@@ -36,6 +36,7 @@ _MIGRATIONS = [
     # NULL when none. Set at enrichment and re-price; gates the gold badge.
     "ALTER TABLE enrichment ADD COLUMN IF NOT EXISTS identity_note VARCHAR",
     "ALTER TABLE enrichment ADD COLUMN IF NOT EXISTS fraud_note VARCHAR",
+    "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS queue_pos DOUBLE PRECISION",
     "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS ships_to_us BOOLEAN",
     "ALTER TABLE lots ADD COLUMN IF NOT EXISTS closes_at TIMESTAMP",
     "CREATE TABLE IF NOT EXISTS settings (key VARCHAR PRIMARY KEY, value VARCHAR)",

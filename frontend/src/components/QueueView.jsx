@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fetchQueue, cancelJob, cancelEnrichment, alertOnce } from '../api'
+import { fetchQueue, cancelJob, cancelEnrichment, moveQueuedJob, moveQueuedLot, alertOnce } from '../api'
 import { jobProgress, taskLabel } from '../lib/queue'
 
 // Everything started and not yet finished: each background job with how
@@ -8,6 +8,37 @@ import { jobProgress, taskLabel } from '../lib/queue'
 export default function QueueView({ isMobile }) {
   const [queue, setQueue] = useState(null)
   const [failed, setFailed] = useState(false)
+  const [moving, setMoving] = useState(false)
+
+  const load = async () => {
+    try {
+      setQueue(await fetchQueue())
+      setFailed(false)
+    } catch {
+      setFailed(true)
+    }
+  }
+
+  // Reorder, then show the new order at once rather than at the next poll.
+  async function move(fn, to) {
+    if (moving) return
+    setMoving(true)
+    try { await fn(to); await load() } catch (e) { alertOnce(e.message) }
+    finally { setMoving(false) }
+  }
+
+  const moveButtons = (fn, { first, last, bottom = false }) => (
+    <span style={{ display: 'inline-flex', gap: 4 }}>
+      {[['top', 'Top', first], ['up', 'Up', first], ['down', 'Down', last],
+        ...(bottom ? [['bottom', 'Bottom', last]] : [])].map(([to, label, off]) => (
+        <button key={to} onClick={() => move(fn, to)} disabled={moving || off}
+                style={{ fontSize: 12, padding: '2px 7px' }}
+                data-track={`Queue: move ${to}`}>
+          {label}
+        </button>
+      ))}
+    </span>
+  )
 
   useEffect(() => {
     let alive = true
@@ -48,6 +79,11 @@ export default function QueueView({ isMobile }) {
   }
 
   const { jobs, lots } = queue
+  const waitingJobs = jobs.filter((j) => j.state === 'pending' && !j.cancelled)
+  const waitingLots = lots.items.filter((l) => !l.stage)
+  // Only the first few hundred are listed; the last one shown is not the
+  // last in line when more are waiting beyond it.
+  const lastShownIsLast = lots.total <= lots.items.length
   if (!jobs.length && !lots.total) {
     return (
       <div className="empty-state">
@@ -73,9 +109,18 @@ export default function QueueView({ isMobile }) {
                     <span style={{ color: 'var(--muted)', fontSize: 13 }}>
                       {job.cancelled ? 'stopping…' : jobProgress(job)}
                     </span>
+                    {job.state === 'pending' && !job.cancelled && waitingJobs.length > 1 && (
+                      <span style={{ marginLeft: 'auto' }}>
+                        {moveButtons((to) => moveQueuedJob(job.id, to), {
+                          first: waitingJobs[0].id === job.id,
+                          last: waitingJobs[waitingJobs.length - 1].id === job.id,
+                        })}
+                      </span>
+                    )}
                     {!job.cancelled && (
                       <button onClick={() => stopJob(job)}
-                              style={{ marginLeft: 'auto', fontSize: 12, padding: '2px 8px' }}>
+                              style={{ marginLeft: job.state === 'pending' && waitingJobs.length > 1 ? 0 : 'auto',
+                                       fontSize: 12, padding: '2px 8px' }}>
                         Cancel
                       </button>
                     )}
@@ -136,13 +181,22 @@ export default function QueueView({ isMobile }) {
                       ? <strong style={{ color: 'var(--text)' }}>working now: {l.stage}</strong>
                       : `waiting to ${taskLabel(l.task)}`}
                   </div>
+                  {!l.stage && waitingLots.length > 1 && (
+                    <div style={{ marginTop: 6 }}>
+                      {moveButtons((to) => moveQueuedLot(l.lot_db_id, to), {
+                        first: waitingLots[0].lot_db_id === l.lot_db_id,
+                        last: lastShownIsLast && waitingLots[waitingLots.length - 1].lot_db_id === l.lot_db_id,
+                        bottom: true,
+                      })}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
           ) : (
             <table className="data-table">
               <thead>
-                <tr><th className="num">#</th><th>Item</th><th>Auction</th><th>What's left</th></tr>
+                <tr><th className="num">#</th><th>Item</th><th>Auction</th><th>What's left</th><th>Order</th></tr>
               </thead>
               <tbody>
                 {lots.items.map((l, i) => (
@@ -158,6 +212,14 @@ export default function QueueView({ isMobile }) {
                       {l.stage
                         ? <strong>working now: {l.stage}</strong>
                         : <span style={{ color: 'var(--muted)' }}>waiting to {taskLabel(l.task)}</span>}
+                    </td>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      {!l.stage && waitingLots.length > 1 && moveButtons(
+                        (to) => moveQueuedLot(l.lot_db_id, to), {
+                          first: waitingLots[0].lot_db_id === l.lot_db_id,
+                          last: lastShownIsLast && waitingLots[waitingLots.length - 1].lot_db_id === l.lot_db_id,
+                          bottom: true,
+                        })}
                     </td>
                   </tr>
                 ))}
