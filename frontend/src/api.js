@@ -75,6 +75,12 @@ export function compsLot(lotId) {
   return request(`/lots/${lotId}/comps`, { method: 'POST' })
 }
 
+// Deliberately release the AI lock on one lot and price it again. One
+// lot at a time by design - there is no bulk form of this.
+export function recheckLot(lotId) {
+  return request(`/lots/${lotId}/recheck`, { method: 'POST' })
+}
+
 export function enrichBatch(lotIds) {
   return request('/lots/enrich-batch', {
     method: 'POST',

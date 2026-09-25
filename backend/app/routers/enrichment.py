@@ -359,6 +359,41 @@ def inspect_lot(lot_id: str, db: Session = Depends(get_db)):
     return {"lot_id": lot_id, "status": "queued"}
 
 
+@router.post("/{lot_id}/recheck", status_code=202)
+def recheck_lot(lot_id: str, db: Session = Depends(get_db)):
+    """Deliberately release the AI lock on ONE lot and price it again.
+
+    The lock exists so a lot is never paid for twice by accident, and
+    nothing bulk may use this route - it takes a single lot_id, so every
+    re-check is a decision the user made about that lot. Worth it when the
+    first run was wrong for a reason that has since been fixed: the CD case
+    priced as an empty organiser because the router did not see a container
+    named with its contents.
+
+    Clearing ai_source is what unlocks it. The pass re-routes from scratch,
+    so a lot that now reads as a pile goes to the itemized pass instead of
+    being comped as one product.
+    """
+    lot = db.query(models.Lot).filter(models.Lot.lot_id == lot_id).first()
+    if not lot:
+        raise HTTPException(status_code=404, detail="Lot not found")
+    e = lot.enrichment
+    if e is None:
+        raise HTTPException(status_code=404, detail="Lot has no enrichment row")
+    if e.status == "queued":
+        return {"lot_id": lot_id, "status": "queued", "unlocked": False}
+
+    was_locked = ai_done(e)
+    e.ai_source = None          # releases the lock
+    e.status = "queued"
+    e.queued_task = "enrich"    # re-routes: a pile goes to inspect from here
+    e.queued_at = datetime.now(timezone.utc)
+    e.queue_rank = 0
+    e.claimed_at = None
+    db.commit()
+    return {"lot_id": lot_id, "status": "queued", "unlocked": was_locked}
+
+
 @router.patch("/{lot_id}/enrichment", response_model=schemas.LotOut)
 def patch_enrichment(lot_id: str, payload: schemas.EnrichmentPatch,
                      db: Session = Depends(get_db)):

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { enrichLot, compsLot, fetchLot, patchEnrichment, enrichBatch, repriceSelected, setWatch, setHidden, alertOnce, parseUtc } from '../api'
+import { enrichLot, compsLot, recheckLot, fetchLot, patchEnrichment, enrichBatch, repriceSelected, setWatch, setHidden, alertOnce, parseUtc } from '../api'
 import { aiDone, rowAction } from '../lib/pricing'
 import { PAGE_SIZES, pageButtons, pageWindow, savePageSize, savedPageSize, searchMatches, showingText } from '../lib/paging'
 import { compRows, ebaySoldUrl } from '../lib/comps'
@@ -469,6 +469,19 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     } catch (e) { alertOnce(e.message) }
   }
 
+  // The lock is the point, so getting past it costs a confirmation and
+  // works on exactly one lot.
+  async function handleRecheck(lotId) {
+    if (!window.confirm('This lot was already priced by AI. Re-checking it '
+                        + 'spends another AI call on this one lot. Continue?')) return
+    try {
+      pinLot(lotId)
+      await recheckLot(lotId)
+      setPollingIds((prev) => new Set(prev).add(lotId))
+      poll(lotId)
+    } catch (e) { alertOnce(e.message) }
+  }
+
   // The row's one button: comps if unpriced, AI if comps-priced, locked
   // once AI has priced it.
   // Vinted lots have a seller rather than an auction house. Their name
@@ -493,12 +506,27 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     const a = rowAction(lot.enrichment || {}, pollingIds.has(lot.lot_id))
     const onClick = a.step === 'comps' ? () => handleComps(lot.lot_id)
       : a.step === 'ai' ? () => handleEnrich(lot.lot_id) : undefined
-    return (
+    const button = (
       <button style={style} disabled={a.disabled} title={a.title} onClick={onClick}
               data-track={a.step === 'comps' ? 'Price with comps (row)'
                 : a.step === 'ai' ? 'Further inspect with AI (row)' : undefined}>
         {a.label}
       </button>
+    )
+    // A locked lot keeps its disabled button, so the guard stays visible;
+    // the way past it is a separate, quieter control that asks first.
+    if (a.step !== 'locked') return button
+    return (
+      <>
+        {button}
+        <button type="button" className="link-like"
+                style={{ fontSize: 12, marginTop: 4 }}
+                onClick={() => handleRecheck(lot.lot_id)}
+                data-track="Re-check with AI (row)"
+                title="Release the lock on this one lot and price it again. Spends another AI call.">
+          re-check
+        </button>
+      </>
     )
   }
 
