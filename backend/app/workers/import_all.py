@@ -99,6 +99,16 @@ def save_lots(db: Session, auction: models.Auction, lots: list[dict], *,
             bid_before = row.current_bid
             for k in FRESH:
                 setattr(row, k, data[k])
+            # Photos are added, never cleared. A lot already on file when the
+            # photo list started being kept had no way to gain one: FRESH
+            # cannot hold image_urls, because a source that does not report
+            # photos would then wipe what another pass fetched (a
+            # PublicSurplus detail is fetched by its own router). So copy
+            # them across only when this import actually carries them, which
+            # is what lets a re-import backfill the lots imported earlier.
+            for k in ("image_urls", "image_count"):
+                if data.get(k):
+                    setattr(row, k, data[k])
             # The bid moved, so the verdict computed against the old one is
             # no longer true. refresh.py has always done this; import never
             # did, which left lots badged GOLD MINE at a bid several times
@@ -158,12 +168,15 @@ def save_lots(db: Session, auction: models.Auction, lots: list[dict], *,
 
 
 def run_import_all(auction_ids: list[int], resume_job_id: str | None = None,
-                   category_id: int = -1, bolo_only: bool = False) -> None:
+                   category_id: int = -1, bolo_only: bool = False,
+                   search_text: str = "") -> None:
     """Import every auction in the list, one at a time.
 
-    category_id limits each import to one HiBid category (the "import all
-    the antiques" case). It rides the job payload rather than an argument
-    the dispatcher would have to know about, so a resume keeps it too.
+    category_id limits each import to one HiBid category, search_text to a
+    keyword (the "import all the pyrex" case) — both applied server-side by
+    the same HiBid lot search the scan used to count matches, and they
+    compose. They ride the job payload rather than an argument the
+    dispatcher would have to know about, so a resume keeps them too.
     """
     db: Session = SessionLocal()
     if resume_job_id:
@@ -175,15 +188,18 @@ def run_import_all(auction_ids: list[int], resume_job_id: str | None = None,
         # auction list and the job id, so anything else has to ride the
         # payload or it silently resets to its default on every run.
         bolo_only = (row.get("payload") or {}).get("bolo_only", bolo_only)
+        search_text = (row.get("payload") or {}).get("search_text", search_text)
     else:
-        job = jobs.start("import-all",
-                         ("Importing BOLO matches from "
-                          f"{len(auction_ids)} auctions" if bolo_only else
-                          f"Importing lots from {len(auction_ids)} auctions"),
+        label = (f"Importing BOLO matches from {len(auction_ids)} auctions" if bolo_only
+                 else f"Importing '{search_text}' lots from {len(auction_ids)} auctions"
+                 if search_text else
+                 f"Importing lots from {len(auction_ids)} auctions")
+        job = jobs.start("import-all", label,
                          total=len(auction_ids),
                          payload={"auction_ids": auction_ids,
                                   "category_id": category_id,
-                                  "bolo_only": bolo_only})
+                                  "bolo_only": bolo_only,
+                                  "search_text": search_text})
         start_at = 0
     imported = created_total = updated_total = 0
     try:
@@ -216,6 +232,7 @@ def run_import_all(auction_ids: list[int], resume_job_id: str | None = None,
                            "source": auction.source}
                     return await hibid.fetch_lots(
                         auction.hibid_id, auction_ctx=ctx, category_id=category_id,
+                        search_text=search_text,
                         # Detail isn't rendered, but update() heartbeats — so
                         # a slow 2,000-lot catalog can't look like a dead job.
                         on_progress=lambda fetched, total: jobs.update(
