@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
-from sqlalchemy import or_
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
@@ -15,6 +15,15 @@ def _not_hidden():
     """Lots the user hide-dismissed never earn another cent or comp lookup —
     every bulk path filters on this. Unhiding puts a lot back in scope."""
     return or_(models.Lot.hidden.is_(False), models.Lot.hidden.is_(None))
+
+
+def _worth_pricing():
+    """What every bulk pricing path may spend on: not hidden by the user,
+    and not a pickup-only lot in an auction outside the scan radius - the
+    inventory never shows those, and nothing there can be bought."""
+    return and_(_not_hidden(),
+                or_(models.Lot.unreachable_pickup.is_(False),
+                    models.Lot.unreachable_pickup.is_(None)))
 
 
 @router.post("/{lot_id}/enrich", status_code=202)
@@ -99,7 +108,7 @@ def reprice(auction_id: int | None = None, weak_only: bool = False,
     from ..services import pricing
     q = (db.query(models.Lot.id)
            .join(models.Enrichment)
-           .filter(_not_hidden()))
+           .filter(_worth_pricing()))
     if unpriced_only:
         # Never-priced lots, searched on their raw auction titles: the
         # comps-only first pass. No AI spend - the worker falls back to
@@ -166,7 +175,7 @@ def audit_golds(db: Session = Depends(get_db)):
            .join(models.Enrichment, models.Enrichment.lot_id == models.Lot.id)
            .join(models.Auction, models.Lot.auction_id == models.Auction.id)
            .filter(models.Enrichment.gold_check.is_(None),
-                   _not_hidden(),
+                   _worth_pricing(),
                    (models.Auction.closing_date.is_(None))
                    | (models.Auction.closing_date >= datetime.now()),
                    (models.Enrichment.roi_status == "GOLD MINE")
@@ -204,7 +213,7 @@ def enrich_category(category: str, skip_hard: bool = False, dry_run: bool = Fals
     q = (db.query(models.Lot.id).join(models.Enrichment)
            .join(models.Auction, models.Lot.auction_id == models.Auction.id)
            .filter(models.Lot.category == category,
-                   _not_hidden(),
+                   _worth_pricing(),
                    models.Enrichment.status.in_(["pending", "failed"]),
                    (models.Auction.closing_date.is_(None))
                    | (models.Auction.closing_date >= datetime.now())))
@@ -238,7 +247,7 @@ def re_enrich_blind(auction_id: int | None = None, dry_run: bool = False,
     sends them through the full pipeline again."""
     q = (db.query(models.Lot.id).join(models.Enrichment)
            .filter(models.Enrichment.status == "success",
-                   _not_hidden(),
+                   _worth_pricing(),
                    or_(models.Enrichment.ai_source.is_(None),
                        models.Enrichment.ai_source == "none"),
                    models.Enrichment.enriched_title.is_(None),
@@ -274,7 +283,7 @@ def reinspect_no_comps(dry_run: bool = False,
         db.query(models.Lot).join(models.Enrichment)
         .join(models.Auction, models.Lot.auction_id == models.Auction.id)
         .filter(models.Enrichment.status == "success",
-                _not_hidden(),
+                _worth_pricing(),
                 models.Enrichment.est_resale.is_(None),
                 (models.Auction.closing_date.is_(None))
                 | (models.Auction.closing_date >= datetime.now()),

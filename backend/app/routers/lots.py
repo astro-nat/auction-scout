@@ -59,6 +59,9 @@ def lot_categories(db: Session = Depends(get_db)):
     from sqlalchemy import and_, case, func, or_
     enrichable = case(
         (and_(models.Enrichment.status.in_(["pending", "failed"]),
+              # Same scope as the bulk paths (enrichment._worth_pricing):
+              # a pickup-only lot out of range is never priced.
+              models.Lot.unreachable_pickup.isnot(True),
               or_(models.Auction.closing_date.is_(None),
                   models.Auction.closing_date >= datetime.now())), 1),
         else_=0)

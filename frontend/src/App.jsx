@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, scanGovDeals, importGovDeals, scanPublicSurplus, importPublicSurplus, scanVinted, importLots, importAllAuctions, enrichAll, enrichCategory, flushClosed, refreshBids, reinspectNoComps, repriceUnpriced, fetchSettings, saveTargetRoi, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
-import { auctionClosed, goldBadge } from './lib/pacing'
+import { auctionClosed } from './lib/pacing'
 import { houseRatioLabel, houseRatioTitle } from './lib/calibration'
 import { initialView, saveView, viewFromHash, viewUrl } from './lib/view'
 import { queueCount } from './lib/queue'
@@ -1096,9 +1096,6 @@ Skipping ${hard} HARD-to-ship lots.`
                     ? ` · ${a.category_lot_count} in ${scanCategoryName ?? 'category'}` : ''}
                   {shipBadge(a) ? ` · ${shipBadge(a).text}` : ''}
                 </div>
-                {goldBadge(a) && (
-                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{goldBadge(a)}</div>
-                )}
                 <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>
                   {auctionState(a).text}
                 </div>
@@ -1167,9 +1164,6 @@ Skipping ${hard} HARD-to-ship lots.`
                     }}>
                   <td style={{ paddingRight: 12 }}>
                     <a href={a.source_url} target="_blank" rel="noreferrer">{a.name}</a>
-                    {goldBadge(a) && (
-                      <div style={{ fontSize: 12, fontWeight: 600 }}>{goldBadge(a)}</div>
-                    )}
                     <div style={{ fontSize: 11, color: 'var(--muted)' }}>{auctionState(a).text}</div>
                   </td>
                   <td style={{ paddingRight: 12 }}>
@@ -1467,7 +1461,6 @@ Skipping ${hard} HARD-to-ship lots.`
           <p style={{ color: 'var(--muted)' }}><span className="spinner" /> Loading your items…</p>
         ) : lotsLoadState === 'error' || lotTotal > 0 ? (
           <div className="empty-state">
-            <div className="big">📡</div>
             <div>
               Couldn't load your {lotTotal ? lotTotal.toLocaleString() : ''} items —
               the server is probably busy with a big job right now.

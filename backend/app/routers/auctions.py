@@ -446,10 +446,10 @@ def enrich_all(auction_id: int, skip_hard: bool = False, db: Session = Depends(g
     re-run — already-successful lots are skipped. skip_hard leaves out
     HARD-to-ship lots, which rarely clear the ROI bar and cost the same to
     enrich as anything else."""
-    from .enrichment import _not_hidden
+    from .enrichment import _worth_pricing
     q = (db.query(models.Lot).join(models.Enrichment)
            .filter(models.Lot.auction_id == auction_id,
-                   _not_hidden(),
+                   _worth_pricing(),
                    models.Enrichment.status.in_(["pending", "failed"])))
     if skip_hard:
         q = q.filter(models.Lot.logistics_ease != "HARD")

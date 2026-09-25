@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { auctionClosed, goldBadge } from './pacing'
+import { auctionClosed } from './pacing'
 
 const NOW = new Date('2026-09-20T12:00:00Z')
 const auction = (over = {}) => ({
@@ -15,16 +15,5 @@ describe('auctionClosed', () => {
 
   it('treats a missing close time as open', () => {
     expect(auctionClosed(auction({ closing_date: null }), NOW)).toBe(false)
-  })
-})
-
-describe('goldBadge', () => {
-  it('shows count and profit', () => {
-    expect(goldBadge(auction())).toBe('2 gold · ~$275 potential profit')
-  })
-
-  it('shows nothing without gold', () => {
-    expect(goldBadge(auction({ gold_count: 0 }))).toBeNull()
-    expect(goldBadge(auction({ gold_count: undefined }))).toBeNull()
   })
 })

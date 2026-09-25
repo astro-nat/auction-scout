@@ -316,19 +316,13 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
   const [queuing, setQueuing] = useState(false)
   // Multi-select: lot_ids the user has ticked. Kept as a Set of ids rather
   // than row indexes so ticks survive re-sorting, re-filtering and the
-  // 5-second refresh while a batch runs. Actions act on the ticked lots
+  // reload when a batch finishes. Actions act on the ticked lots
   // still in the current result (see lib/selection.inView).
   const [selected, setSelected] = useState(() => new Set())
 
-  // Whenever ANY lot is queued — no matter which client or button started the
-  // batch — refresh the table every 5s until the queue drains, so background
-  // work is always visibly progressing.
+  // Lots still queued, for the note above the table. The table itself is
+  // not reloaded while they run - it updates once, when the batch finishes.
   const anyQueued = lots.some((l) => l.enrichment?.status === 'queued')
-  useEffect(() => {
-    if (!anyQueued || !onRefresh) return
-    const interval = setInterval(onRefresh, 5000)
-    return () => clearInterval(interval)
-  }, [anyQueued, onRefresh])
 
   // A lot is "working" when the server has it queued or this client just
   // kicked it off and is polling for the result.
@@ -654,7 +648,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
             </button>
           )}
           {bulkBar && <div style={{ flexBasis: '100%' }}>{bulkBar}</div>}
-          {anyQueued && <span style={{ flexBasis: '100%' }}><span className="spinner" />{lots.filter((l) => l.enrichment?.status === 'queued').length} lots in the queue… auto-refreshing</span>}
+          {anyQueued && <span style={{ flexBasis: '100%' }}><span className="spinner" />{lots.filter((l) => l.enrichment?.status === 'queued').length} lots in the queue… updates when they finish</span>}
           <div style={{ flexBasis: '100%' }}>{countLine}</div>
         </div>
         {sorted.slice(0, renderLimit).map((lot) => {
@@ -816,7 +810,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
         {queuing ? <><span className="spinner" />Queuing {enrichableCount} lots…</>
                  : `Price all ${enrichableCount} with AI`}
       </button>
-      {anyQueued && <span style={{ marginLeft: '0.75rem' }}><span className="spinner" />{lots.filter((l) => l.enrichment?.status === 'queued').length} lots in the queue… auto-refreshing</span>}
+      {anyQueued && <span style={{ marginLeft: '0.75rem' }}><span className="spinner" />{lots.filter((l) => l.enrichment?.status === 'queued').length} lots in the queue… updates when they finish</span>}
       <span style={{ marginLeft: '0.75rem' }}>{countLine}</span>
     </div>
     {bulkBar}
@@ -934,12 +928,12 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                   {lot.hidden ? 'show' : 'hide'}
                 </button>
                 {e.bolo_brand && (
-                  <span style={{ cursor: 'help', marginRight: 4 }}
-                        title={`BOLO match: ${e.bolo_brand} (tier ${e.bolo_tier ?? '?'})`}>🎯</span>
+                  <span className="badge bolo" style={{ cursor: 'help', marginRight: 4 }}
+                        title={`BOLO match: ${e.bolo_brand} (tier ${e.bolo_tier ?? '?'})`}>BOLO</span>
                 )}
                 {e.auth_required && (
-                  <span style={{ cursor: 'help', marginRight: 4 }}
-                        title="Luxury/precious-metal match — resale depends on authentication; don't trust the comps until verified in hand">⚠️</span>
+                  <span className="badge bolo" style={{ cursor: 'help', marginRight: 4 }}
+                        title="Luxury/precious-metal match — resale depends on authentication; don't trust the comps until verified in hand">verify</span>
                 )}
                 <a href={lot.lot_link} target="_blank" rel="noreferrer"
                    style={lot.hidden ? { opacity: 0.5, textDecoration: 'line-through' } : undefined}>{lot.title}</a>

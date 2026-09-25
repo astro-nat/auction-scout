@@ -55,3 +55,26 @@ def test_not_hidden_excludes_only_the_hidden_lot(seeded):
              .all()]
     # hidden=False and hidden=NULL stay; hidden=True is out
     assert sorted(ids) == ["hiddentest-0", "hiddentest-2"]
+
+
+def test_bulk_pricing_skips_pickup_only_lots_out_of_range():
+    """A pickup-only lot in an out-of-area auction can't be bought and never
+    shows in the inventory, so no bulk path spends a lookup on it."""
+    from app.routers.enrichment import _worth_pricing
+    db = SessionLocal()
+    try:
+        a = models.Auction(hibid_id=999999973, name="pytest unreachable")
+        db.add(a)
+        db.flush()
+        far = models.Lot(lot_id="pytest-unreach-1", title="far", auction_id=a.id,
+                         unreachable_pickup=True)
+        near = models.Lot(lot_id="pytest-unreach-2", title="near", auction_id=a.id,
+                          unreachable_pickup=False)
+        db.add_all([far, near])
+        db.flush()
+        got = {l.lot_id for l in db.query(models.Lot)
+                                  .filter(models.Lot.auction_id == a.id, _worth_pricing())}
+        assert got == {"pytest-unreach-2"}
+    finally:
+        db.rollback()
+        db.close()
