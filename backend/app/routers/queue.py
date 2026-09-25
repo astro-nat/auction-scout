@@ -28,8 +28,12 @@ NEXT_UP = 20
 LOTS_MAX = 500
 
 
-def _names(db: Session, key: str, ids: list[int]) -> list[str]:
-    """Display names for a job's upcoming ids, in the job's own order."""
+def _names(db: Session, key: str, ids: list[int]) -> list[dict]:
+    """A job's upcoming items as {id, name}, in the job's own order.
+
+    The id rides along because the Queue view lets one of them be pulled
+    forward, and a name is not something to move a job's work list by.
+    """
     if not ids:
         return []
     if key == "lot_ids":
@@ -38,7 +42,14 @@ def _names(db: Session, key: str, ids: list[int]) -> list[str]:
         rows = (db.query(models.Auction.id, models.Auction.name)
                   .filter(models.Auction.id.in_(ids)).all())
     by_id = {i: n for i, n in rows}
-    return [by_id[i] or f"#{i}" for i in ids if i in by_id]
+    return [{"id": i, "name": by_id[i] or f"#{i}"} for i in ids if i in by_id]
+
+
+# Kinds whose runner re-reads its work list each batch, so a reorder made
+# while it is running takes effect on what is still to come. A kind not
+# listed here would accept the change and then ignore it until a resume,
+# which is worse than refusing.
+LIVE_REORDER_KINDS = ("reprice",)
 
 
 @router.get("/queue")
@@ -58,6 +69,8 @@ def get_queue(db: Session = Depends(get_db)):
             "detail": j.detail, "cancelled": bool(j.cancelled),
             "started_at": j.started_at.isoformat() if j.started_at else None,
             "next_up": [], "next_up_more": 0,
+            # Whether moving one of them will actually change what runs next.
+            "next_up_movable": j.kind in LIVE_REORDER_KINDS,
         }
         key = RESUMABLE_KINDS.get(j.kind)
         ids = (j.payload or {}).get(key) if key else None
@@ -166,3 +179,37 @@ def move_lot(lot_db_id: int, to: str, db: Session = Depends(get_db)):
         by_lot[i].queue_rank = rank
     db.commit()
     return {"position": order.index(lot_db_id) + 1, "waiting": len(order)}
+
+
+@router.post("/queue/jobs/{job_id}/items/{item_id}/move")
+def move_job_item(job_id: str, item_id: int, to: str, db: Session = Depends(get_db)):
+    """Move one item inside a running job's remaining work.
+
+    This is the queue the user is actually looking at. A long reprice is one
+    job holding a list of a few hundred lots; the Queue view lists what is
+    coming next, and until now there was no way to pull one of them forward.
+
+    Only the part not yet done can be reordered - `current` counts what is
+    finished, and moving something already priced would make the checkpoint
+    mean something else.
+    """
+    _check_move(to)
+    job = db.query(models.Job).filter(models.Job.id == job_id).first()
+    if job is None:
+        raise HTTPException(status_code=404, detail="No such job")
+    key = RESUMABLE_KINDS.get(job.kind)
+    if key is None or job.kind not in LIVE_REORDER_KINDS:
+        raise HTTPException(
+            status_code=409,
+            detail=f"A {job.kind} job's order can't be changed while it runs")
+    ids = list((job.payload or {}).get(key) or [])
+    done = job.current or 0
+    tail = ids[done:]
+    if item_id not in tail:
+        raise HTTPException(status_code=409,
+                            detail="That item is done already or not in this job")
+    new_tail = moved(tail, item_id, to)
+    # JSONB: reassign rather than mutate, or the change is never flushed.
+    job.payload = {**(job.payload or {}), key: ids[:done] + new_tail}
+    db.commit()
+    return {"position": new_tail.index(item_id) + 1, "remaining": len(new_tail)}

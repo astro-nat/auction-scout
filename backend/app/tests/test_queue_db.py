@@ -75,7 +75,9 @@ def test_a_job_says_how_much_is_left_and_what_is_next(setup):
     job = next(j for j in _read()["jobs"] if j["id"] == JOB_ID)
     assert (job["current"], job["total"], job["remaining"]) == (1, 4, 3)
     # The first lot is done; the rest are named in the job's own order.
-    assert job["next_up"] == ["Queue Widget 1", "Queue Widget 2", "Queue Widget 3"]
+    assert [n["name"] for n in job["next_up"]] == [
+        "Queue Widget 1", "Queue Widget 2", "Queue Widget 3"]
+    assert all(isinstance(n["id"], int) for n in job["next_up"])
     assert job["next_up_more"] == 0
 
 

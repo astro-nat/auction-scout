@@ -98,6 +98,13 @@ export function recheckLot(lotId) {
   return request(`/lots/${lotId}/recheck`, { method: 'POST' })
 }
 
+// Pull one item forward inside a running job's remaining work - the list
+// the Queue view shows under "Next up".
+export function moveJobItem(jobId, itemId, to) {
+  return request(`/queue/jobs/${jobId}/items/${itemId}/move?to=${to}`,
+                 { method: 'POST' })
+}
+
 export function enrichBatch(lotIds) {
   return request('/lots/enrich-batch', {
     method: 'POST',

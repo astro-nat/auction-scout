@@ -2065,6 +2065,15 @@ def run_reprice(lot_db_ids: list[int], resume_job_id: str | None = None) -> None
             if jobs.is_cancelled(job):
                 print(f"Reprice cancelled after {i} lots")
                 break
+            # Re-read the persisted list so a reorder made from the Queue
+            # view while this is running reaches the work still to come.
+            # The list was only ever read once, at the call, which meant a
+            # reorder sat in the payload doing nothing until a resume. The
+            # length guard is the safety: a payload that has lost entries
+            # must not silently truncate the run.
+            fresh = ((jobs.get(job) or {}).get("payload") or {}).get("lot_ids")
+            if isinstance(fresh, list) and len(fresh) == len(lot_db_ids):
+                lot_db_ids = fresh
             batch = lot_db_ids[i:i + width]
 
             # --- A. plan on the session; no network yet

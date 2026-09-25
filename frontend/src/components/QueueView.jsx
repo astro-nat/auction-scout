@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fetchQueue, cancelJob, cancelEnrichment, moveQueuedJob, moveQueuedLot, alertOnce } from '../api'
+import { fetchQueue, cancelJob, cancelEnrichment, moveQueuedJob, moveQueuedLot, moveJobItem, alertOnce } from '../api'
 import { jobProgress, taskLabel } from '../lib/queue'
 
 // Everything started and not yet finished: each background job with how
@@ -140,7 +140,22 @@ export default function QueueView({ isMobile }) {
                         Next up ({(job.remaining ?? job.next_up.length).toLocaleString()} left)
                       </summary>
                       <ol style={{ margin: '6px 0 0', paddingLeft: 22 }}>
-                        {job.next_up.map((name, i) => <li key={i}>{name}</li>)}
+                        {job.next_up.map((it, i) => (
+                          <li key={it.id ?? i} style={{ marginBottom: 3 }}>
+                            <span style={{ marginRight: 6 }}>{it.name}</span>
+                            {/* This is the list the user is looking at when
+                                they want something priced sooner, so the
+                                controls belong here rather than only on the
+                                rare pending job. */}
+                            {job.next_up_movable && job.next_up.length > 1 && (
+                              moveButtons((to) => moveJobItem(job.id, it.id, to), {
+                                first: i === 0,
+                                last: i === job.next_up.length - 1 && !job.next_up_more,
+                                bottom: false,
+                              })
+                            )}
+                          </li>
+                        ))}
                       </ol>
                       {job.next_up_more > 0 && (
                         <div style={{ color: 'var(--muted)', marginTop: 4 }}>
