@@ -402,6 +402,35 @@ def import_all(payload: schemas.ImportAllRequest, db: Session = Depends(get_db))
     return {"auctions": len(ids), "queued": True}
 
 
+@router.post("/backfill-photos", status_code=202)
+def backfill_photos(db: Session = Depends(get_db)):
+    """Fill in the photo list on the lots already on file.
+
+    The photo list only started being kept on 2026-09-25; a lot imported
+    before that has a photo count and no list, so the AI is shown one
+    thumbnail of a lot that has five photos. Re-importing would fix them and
+    also pull in every lot the original import filtered out - thousands of
+    rows nobody asked for - so this writes photos and nothing else.
+
+    Only auctions with lots on file are queued: there is nothing to fill in
+    for the rest, and fetching them would be a long job doing no work.
+    """
+    if jobs.has_pending("backfill-photos"):
+        return {"auctions": 0, "queued": False, "already_running": True}
+    ids = [r[0] for r in
+           db.query(models.Auction.id)
+             .join(models.Lot, models.Lot.auction_id == models.Auction.id)
+             .filter(models.Auction.hibid_id.isnot(None))
+             .group_by(models.Auction.id)
+             .order_by(models.Auction.id)
+             .all()]
+    if not ids:
+        return {"auctions": 0, "queued": False}
+    jobs.enqueue("backfill-photos", f"Filling in photos for {len(ids)} auctions",
+                 total=len(ids), payload={"auction_ids": ids})
+    return {"auctions": len(ids), "queued": True}
+
+
 @router.post("/{auction_id}/hide", response_model=schemas.AuctionOut)
 def set_auction_hidden(auction_id: int, hidden: bool = True,
                        db: Session = Depends(get_db)):

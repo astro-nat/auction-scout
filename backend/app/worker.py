@@ -54,7 +54,7 @@ def _runner_for(kind: str):
     time, and that shouldn't happen just because someone imported this."""
     from .workers.enrich import (run_audit_sweep, run_regrade, run_reprice,
                                  run_ship_analysis)
-    from .workers.import_all import run_import_all
+    from .workers.import_all import run_import_all, run_photo_backfill
     from .workers.refresh import run_bid_refresh
     return {
         "reprice": run_reprice,
@@ -63,6 +63,7 @@ def _runner_for(kind: str):
         "regrade": run_regrade,
         "audit-golds": run_audit_sweep,
         "import-all": run_import_all,
+        "backfill-photos": run_photo_backfill,
     }.get(kind)
 
 

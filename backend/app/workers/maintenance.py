@@ -71,14 +71,15 @@ def _start_reaper() -> None:
     # client at import time, and housekeeping shouldn't depend on that.
     from ..services import jobs
     from .enrich import run_reprice, run_ship_analysis
-    from .import_all import run_import_all
+    from .import_all import run_import_all, run_photo_backfill
     from .refresh import run_bid_refresh
 
     def loop():
         runners = {"reprice": run_reprice,
                    "ship-analysis": run_ship_analysis,
                    "bid-refresh": run_bid_refresh,
-                   "import-all": run_import_all}
+                   "import-all": run_import_all,
+                   "backfill-photos": run_photo_backfill}
         time.sleep(STARTUP_DELAY_SECONDS)
         while True:
             try:

@@ -167,6 +167,103 @@ def save_lots(db: Session, auction: models.Auction, lots: list[dict], *,
     return created, updated, cancelled
 
 
+def backfill_photos(db: Session, auction: models.Auction, lots: list[dict],
+                    on_progress=None, should_cancel=None) -> tuple[int, int]:
+    """Fill in the photo list on lots ALREADY on file. Never creates a row.
+
+    The photo list only started being kept on 2026-09-25, so every lot
+    imported before that has a photo COUNT and no list - image_count came
+    with the first version of the parser - and the AI is shown a single
+    thumbnail of it. A plain re-import would fix them and also add every lot
+    the original import filtered out: thousands of rows nobody asked for.
+    This touches the photos and nothing else - not bids, not status, and
+    not a lot that is no longer in the catalogue.
+    """
+    by_id = {r.lot_id: r for r in
+             db.query(models.Lot)
+               .filter(models.Lot.auction_id == auction.id).all()}
+    filled = matched = 0
+    for i, data in enumerate(lots, 1):
+        if should_cancel and i % 200 == 0 and should_cancel():
+            break
+        row = by_id.get(data["lot_id"])
+        if row is None:
+            continue          # in the catalogue, not on file: leave it alone
+        matched += 1
+        urls = data.get("image_urls")
+        if not urls or row.image_urls == urls:
+            continue
+        row.image_urls = urls
+        row.image_count = data.get("image_count") or len(urls)
+        filled += 1
+        if on_progress and i % 100 == 0:
+            on_progress(i, len(lots))
+    db.commit()
+    return filled, matched
+
+
+def run_photo_backfill(auction_ids: list[int],
+                       resume_job_id: str | None = None) -> None:
+    """Fill in the photo list for every auction in the list, one at a time.
+
+    Same shape as run_import_all - persisted job, `current` is the resume
+    checkpoint, the reaper restarts it - but it writes only photos, so it is
+    safe to run over the whole inventory. Costs network and nothing else.
+    """
+    db: Session = SessionLocal()
+    if resume_job_id:
+        job = resume_job_id
+        start_at = (jobs.get(job) or {}).get("current") or 0
+    else:
+        job = jobs.start("backfill-photos",
+                         f"Filling in photos for {len(auction_ids)} auctions",
+                         total=len(auction_ids),
+                         payload={"auction_ids": auction_ids})
+        start_at = 0
+    filled_total = matched_total = 0
+    try:
+        for i, auction_id in enumerate(auction_ids[start_at:], start_at + 1):
+            if jobs.is_cancelled(job):
+                logger.info("Photo backfill cancelled after %d auctions", i - 1)
+                break
+            auction = (db.query(models.Auction)
+                         .filter(models.Auction.id == auction_id).first())
+            if not auction or not auction.hibid_id:
+                jobs.update(job, current=i)
+                continue
+            name = (auction.name or "")[:40]
+            jobs.update(job, current=i, label=f"Photos: {name}")
+            try:
+                async def _fetch():
+                    ctx = {"premium_mult": auction.buyer_premium_mult,
+                           "source": auction.source}
+                    return await hibid.fetch_lots(
+                        auction.hibid_id, auction_ctx=ctx,
+                        on_progress=lambda fetched, total: jobs.update(
+                            job, detail=f"{name} - {fetched}/{total} lots"),
+                        should_cancel=lambda: jobs.is_cancelled(job))
+
+                lots = asyncio.run(_fetch())
+            except Exception as exc:  # noqa: BLE001 - one bad auction must not stop the run
+                logger.warning("Photo backfill fetch failed for auction %s: %s",
+                               auction_id, exc)
+                continue
+            f, m = backfill_photos(
+                db, auction, lots,
+                on_progress=lambda n, tot: jobs.update(
+                    job, detail=f"{name} - {n}/{tot} checked"),
+                should_cancel=lambda: jobs.is_cancelled(job))
+            filled_total += f
+            matched_total += m
+            logger.info("Photo backfill %s: %d of %d lots on file filled",
+                        name, f, m)
+    finally:
+        jobs.finish(job)
+        db.close()
+    logger.info("Photo backfill done: %d lots filled across %d on file",
+                filled_total, matched_total)
+
+
 def run_import_all(auction_ids: list[int], resume_job_id: str | None = None,
                    category_id: int = -1, bolo_only: bool = False,
                    search_text: str = "") -> None:
