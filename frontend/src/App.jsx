@@ -754,8 +754,12 @@ export default function App() {
   // Closed at the ITEM level: the whole auction ended, or this lot's own
   // HiBid status says it's done — catalogs soft-close progressively, so an
   // open auction can be full of already-closed lots.
+  // Closed three ways: the whole auction is over, HiBid says so, or the
+  // lot's own closing time has passed (timed sales close lot by lot, and
+  // the status only updates on a bid refresh).
   const isClosedItem = (l) =>
     l.auction_closed || /^(closed|sold|ended|passed|archived)/i.test(l.status || '')
+    || (l.closes_at && parseUtc(l.closes_at) < new Date())
 
   const visibleLots = useMemo(() => {
     const auctionNames = { ...auctionIndex, ...Object.fromEntries(auctions.map((a) => [a.id, a.name])) }

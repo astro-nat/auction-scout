@@ -1,3 +1,4 @@
+from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 from typing import Optional, List
@@ -137,6 +138,11 @@ def list_lots(
     return rows
 
 
+# How long past a lot's own closing time before the flush takes it (see
+# flush_closed_now).
+LOT_CLOSE_GRACE = timedelta(hours=1)
+
+
 def flush_closed_now(db: Session, dry_run: bool = False) -> dict:
     """Delete every imported lot that can no longer be bid on — its own
     HiBid status says closed/sold, OR its whole auction has closed — then
@@ -144,31 +150,46 @@ def flush_closed_now(db: Session, dry_run: bool = False) -> dict:
     and the 12-hourly maintenance loop (workers/maintenance.py). Permanent —
     enrichment results (the paid AI calls) go with the lots.
 
+    A lot also counts as closed once its OWN closing time is LOT_CLOSE_GRACE
+    past. Timed sales close lot by lot, hours before the auction's final
+    close, and HiBid's per-lot status only reaches us through a bid
+    refresh - which no longer runs on its own - so without this, lots whose
+    time was up stayed "open" and were never flushed (727 of them on
+    2026-09-25). The grace covers HiBid extending a lot when a bid lands in
+    its last minutes.
+
     Watched lots are never flushed."""
     from datetime import datetime
-    from sqlalchemy import func, or_
+    from sqlalchemy import and_, func, or_
     from .auctions import purge_stale_auctions
     from ..services import calibration
 
     _CLOSED_STATUSES = ("CLOSED", "SOLD", "ENDED", "PASSED", "ARCHIVED")
-    doomed = (
-        db.query(models.Lot, models.Auction.auctioneer_id)
+    now = datetime.now()
+    auction_over = and_(models.Auction.closing_date.isnot(None),
+                        models.Auction.closing_date < now)
+    status_closed = func.upper(func.coalesce(models.Lot.status, "")).in_(_CLOSED_STATUSES)
+    time_up = and_(models.Lot.closes_at.isnot(None),
+                   models.Lot.closes_at < now - LOT_CLOSE_GRACE)
+    rows = (
+        db.query(models.Lot, models.Auction.auctioneer_id,
+                 or_(auction_over, status_closed))
           .join(models.Auction, models.Lot.auction_id == models.Auction.id)
-          .filter(or_(
-              (models.Auction.closing_date.isnot(None))
-              & (models.Auction.closing_date < datetime.now()),
-              func.upper(func.coalesce(models.Lot.status, "")).in_(_CLOSED_STATUSES),
-          ))
+          .filter(or_(auction_over, status_closed, time_up))
           # coalesce: rows created before the column existed hold NULL.
           .filter(func.coalesce(models.Lot.watched, False).is_(False))
           .all()
     )
+    doomed = [(lot, aid) for lot, aid, _ in rows]
     lot_ids = [lot.id for lot, _ in doomed]
     if dry_run:
         return {"lots": len(lot_ids), "dry_run": True}
     # Last chance to learn from these lots: estimate-vs-hammer observations
     # feed the per-house calibration, and the rows are about to be deleted.
-    calibration.capture(db, doomed)
+    # Not from a lot known closed only by the clock: its bid is whatever it
+    # was at the last refresh, not what it sold for, and a stale "hammer"
+    # would bend the house's estimate ratio.
+    calibration.capture(db, [(lot, aid) for lot, aid, confirmed in rows if confirmed])
     if lot_ids:
         # No delete-cascade on the models, so the children go first. The
         # price trail was added after this was written, and the first closed

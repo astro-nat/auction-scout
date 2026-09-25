@@ -19,11 +19,13 @@ def _not_hidden():
 
 def _worth_pricing():
     """What every bulk pricing path may spend on: not hidden by the user,
-    and not a pickup-only lot in an auction outside the scan radius - the
-    inventory never shows those, and nothing there can be bought."""
+    not a pickup-only lot in an auction outside the scan radius, and not a
+    lot whose own closing time has passed - nothing there can be bought."""
     return and_(_not_hidden(),
                 or_(models.Lot.unreachable_pickup.is_(False),
-                    models.Lot.unreachable_pickup.is_(None)))
+                    models.Lot.unreachable_pickup.is_(None)),
+                or_(models.Lot.closes_at.is_(None),
+                    models.Lot.closes_at >= datetime.now()))
 
 
 @router.post("/{lot_id}/enrich", status_code=202)
