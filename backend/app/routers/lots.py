@@ -6,6 +6,7 @@ from typing import Optional, List
 
 from .. import models, schemas
 from ..database import get_db
+from ..services import twins
 
 router = APIRouter(prefix="/lots", tags=["lots"])
 
@@ -254,6 +255,49 @@ def flush_closed(dry_run: bool = False, db: Session = Depends(get_db)):
     """Manual flush — dry_run=true only counts, so the UI can put a real
     number in its confirm dialog."""
     return flush_closed_now(db, dry_run=dry_run)
+
+
+@router.post("/{lot_id}/hide-like")
+def hide_like(lot_id: str, hidden: bool = True, dry_run: bool = False,
+              db: Session = Depends(get_db)):
+    """Hide (or bring back) every lot that is the same product as this one.
+
+    Hiding was the most-used action in the app and 57 of 68 of them came in
+    bursts - the same thing dismissed four, six, nine times in a row,
+    because a liquidation sale lists one product many times and tells the
+    copies apart with an asset tag. This is one decision instead.
+
+    dry_run returns the count and a few titles without changing anything, so
+    the confirm can say what it is about to do. Nothing here is destructive:
+    the lots are marked, not deleted, and unhiding is the same call with
+    hidden=false.
+    """
+    lot = db.query(models.Lot).filter(models.Lot.lot_id == lot_id).first()
+    if not lot:
+        raise HTTPException(status_code=404, detail="Lot not found")
+    key = twins.product_key(lot.title)
+    if key is None:
+        # Too generic to group on - "Pyrex" is a category, not a product.
+        # Say so rather than quietly hiding the one lot and implying more.
+        return {"key": None, "matched": 0, "changed": 0, "titles": [],
+                "reason": "This title is too generic to match others on"}
+
+    # Every title is normalised in Python rather than SQL, because the key
+    # drops a trailing asset tag and that is not a regexp worth writing
+    # twice. A few thousand titles is one cheap query.
+    rows = db.query(models.Lot.id, models.Lot.title, models.Lot.hidden).all()
+    same = [r for r in rows if twins.product_key(r[1]) == key]
+    todo = [r for r in same if bool(r[2]) != hidden]
+    if dry_run:
+        return {"key": key, "matched": len(same), "changed": len(todo),
+                "titles": [r[1] for r in todo[:5]]}
+    if todo:
+        (db.query(models.Lot)
+           .filter(models.Lot.id.in_([r[0] for r in todo]))
+           .update({models.Lot.hidden: hidden}, synchronize_session=False))
+        db.commit()
+    return {"key": key, "matched": len(same), "changed": len(todo),
+            "titles": [r[1] for r in todo[:5]]}
 
 
 @router.post("/{lot_id}/watch", response_model=schemas.LotOut)

@@ -105,6 +105,13 @@ export function moveJobItem(jobId, itemId, to) {
                  { method: 'POST' })
 }
 
+// Hide (or bring back) every lot that is the same product as this one.
+// dry_run counts first, so the confirm can say what it will do.
+export function hideLike(lotId, hidden = true, dryRun = false) {
+  return request(`/lots/${lotId}/hide-like?hidden=${hidden}&dry_run=${dryRun}`,
+                 { method: 'POST' })
+}
+
 export function enrichBatch(lotIds) {
   return request('/lots/enrich-batch', {
     method: 'POST',

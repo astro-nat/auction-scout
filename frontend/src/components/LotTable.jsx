@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { enrichLot, compsLot, recheckLot, fetchLot, patchEnrichment, flagComp, enrichBatch, repriceSelected, setWatch, setHidden, alertOnce, parseUtc } from '../api'
+import { enrichLot, compsLot, recheckLot, fetchLot, patchEnrichment, flagComp, enrichBatch, repriceSelected, setWatch, setHidden, hideLike, alertOnce, parseUtc } from '../api'
 import { aiDone, rowAction } from '../lib/pricing'
 import { PAGE_SIZES, pageButtons, pageWindow, savePageSize, savedPageSize, searchMatches, showingText } from '../lib/paging'
 import { compRows, ebaySoldUrl } from '../lib/comps'
@@ -571,6 +571,25 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     } catch (e) { alertOnce(e.message) }
   }
 
+  // One decision instead of nine. A sale lists the same product many times
+  // and tells the copies apart with an asset tag, which is why hiding was
+  // the most-used action and came in bursts. Counts first, then asks.
+  async function handleHideLike(lotId, hidden) {
+    try {
+      const peek = await hideLike(lotId, hidden, true)
+      if (peek.key === null) { alertOnce(peek.reason); return }
+      if (peek.changed === 0) { alertOnce('Nothing else matches this one.'); return }
+      const verb = hidden ? 'Hide' : 'Bring back'
+      const names = peek.titles.slice(0, 3).join('; ')
+      const more = peek.changed > 3 ? ' and more' : ''
+      if (!window.confirm(
+        `${verb} ${peek.changed} lot${peek.changed === 1 ? '' : 's'} matching `
+        + `"${peek.key}"? ${names}${more}`)) return
+      await hideLike(lotId, hidden, false)
+      onRefresh?.()
+    } catch (e) { alertOnce(e.message) }
+  }
+
   async function handleHide(lotId, hidden) {
     try {
       const updated = await setHidden(lotId, hidden)
@@ -909,6 +928,16 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                            opacity: lot.hidden ? 1 : 0.4 }}>
                   {lot.hidden ? 'show' : 'hide'}
                 </button>
+                <button
+                  className="bare"
+                  onClick={() => handleHideLike(lot.lot_id, !lot.hidden)}
+                  data-track={lot.hidden ? 'Show all like this' : 'Hide all like this'}
+                  title={lot.hidden
+                    ? 'Bring back every lot that is the same product as this one'
+                    : 'Hide every lot that is the same product as this one — asks first'}
+                  style={{ fontSize: 12, padding: '0 6px 0 0', opacity: 0.55 }}>
+                  {lot.hidden ? '+ all' : '+ all'}
+                </button>
                 {lot.lot_number && (
                   <span style={{ color: 'var(--muted)', fontSize: 13, marginRight: 4 }}>
                     #{lot.lot_number}
@@ -1160,6 +1189,16 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                   style={{ fontSize: 13, padding: '0 4px 0 0',
                            opacity: lot.hidden ? 1 : 0.4 }}>
                   {lot.hidden ? 'show' : 'hide'}
+                </button>
+                <button
+                  className="bare"
+                  onClick={() => handleHideLike(lot.lot_id, !lot.hidden)}
+                  data-track={lot.hidden ? 'Show all like this' : 'Hide all like this'}
+                  title={lot.hidden
+                    ? 'Bring back every lot that is the same product as this one'
+                    : 'Hide every lot that is the same product as this one — asks first'}
+                  style={{ fontSize: 12, padding: '0 6px 0 0', opacity: 0.55 }}>
+                  + all
                 </button>
                 {e.bolo_brand && (
                   <span className="badge bolo" style={{ cursor: 'help', marginRight: 4 }}
