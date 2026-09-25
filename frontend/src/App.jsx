@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, scanGovDeals, importGovDeals, scanPublicSurplus, importPublicSurplus, scanVinted, importLots, importAllAuctions, enrichAll, enrichCategory, flushClosed, refreshBids, reinspectNoComps, repriceUnpriced, fetchSettings, saveTargetRoi, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
+import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, scanGovDeals, importGovDeals, scanPublicSurplus, importPublicSurplus, scanVinted, importLots, importAllAuctions, flushClosed, refreshBids, reinspectNoComps, repriceUnpriced, fetchSettings, saveTargetRoi, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
 import { auctionClosed } from './lib/pacing'
 import { houseRatioLabel, houseRatioTitle } from './lib/calibration'
 import { initialView, saveView, viewFromHash, viewUrl } from './lib/view'
@@ -427,19 +427,30 @@ export default function App() {
   // keep their pending status, so "Price the unpriced" can still add the
   // condition judgement later, and only on the ones worth it.
   async function handleCompsOnly() {
+    // Scoped to what is on screen - the ticked auctions and the category
+    // dropdown - so the request count quoted is the one the user meant.
+    // Unscoped, a production dry run came back with 8,262 lots.
+    const where = [selectedAuctions.length ? `${selectedAuctions.length} selected auction(s)` : 'all open auctions',
+                   categoryFilter ? `category "${categoryFilter}"` : null].filter(Boolean).join(', ')
+    return compsFor({ auctionIds: selectedAuctions, category: categoryFilter }, where)
+  }
+
+  // One auction's "Price N" button: the same comps pass, just that auction.
+  function handleCompsAuction(auctionId) {
+    const a = importedRows[auctionId] || auctions.find((x) => x.id === auctionId)
+    return compsFor({ auctionIds: [auctionId] }, `"${a?.name ?? 'this auction'}"`)
+  }
+
+  // The default way to price: sold comps on each lot's own title, no AI.
+  // AI is the second step, for the lots worth a closer look.
+  async function compsFor(scope, where) {
     try {
-      // Scoped to what is on screen - the ticked auctions and the category
-      // dropdown - so the request count quoted is the one the user meant.
-      // Unscoped, a production dry run came back with 8,262 lots.
-      const scope = { auctionIds: selectedAuctions, category: categoryFilter }
       const peek = await repriceUnpriced({ ...scope, dryRun: true })
       if (!peek.repricing) { alert('Every item in view already has a value.'); return }
-      const where = [selectedAuctions.length ? `${selectedAuctions.length} selected auction(s)` : 'all open auctions',
-                     categoryFilter ? `category "${categoryFilter}"` : null].filter(Boolean).join(', ')
       const msg = `Look up sold comps for ${peek.repricing} unpriced items (${where}), using their `
-        + `auction titles as-is?\n\nNo AI cost. About ${peek.requests_estimate ?? peek.repricing} `
-        + `SoldComps requests against your plan. Items stay marked pending, so `
-        + `"Price the unpriced" can still add a condition check later. `
+        + `auction titles as-is?\n\nNo AI cost. At most ${peek.requests_estimate ?? peek.repricing} `
+        + `SoldComps requests against your plan - identical titles share one. `
+        + `Afterwards, "AI check" can add a condition check to the ones worth it. `
         + `Progress shows in the bar at the top.`
       if (!window.confirm(msg)) return
       const r = await repriceUnpriced(scope)
@@ -493,67 +504,6 @@ export default function App() {
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])
   }, [])
 
-  async function handleEnrichCategory() {
-    try {
-      // Dry-run first: the stored counts can be stale, and the confirm
-      // dialog should quote the number that will actually be spent on.
-      const peek = await enrichCategory(categoryFilter, { skipHard: hideHardShip, dryRun: true })
-      if (!peek.lots) {
-        alert(`Every "${categoryFilter}" item in an open auction is already enriched`
-              + (hideHardShip ? ' (HARD-to-ship items are being skipped).' : '.'))
-        return
-      }
-      const cost = (peek.lots * 0.005).toFixed(2)
-      let msg = `Price ${peek.lots} "${categoryFilter}" items across ALL imported auctions?\n\n`
-              + `Roughly $${cost} of API usage. Progress shows in the bar at the top.`
-      if (hideHardShip) msg += `\n\nSkipping HARD-to-ship items ("Hide HARD ship" is on).`
-      if (!window.confirm(msg)) return
-      const r = await enrichCategory(categoryFilter, { skipHard: hideHardShip })
-      alert(`Queued ${r.queued} items. Each one's status updates as it finishes.`)
-      loadLots()
-    } catch (e) { alertOnce(e.message) }
-  }
-
-  async function handleEnrichAll(auctionId) {
-    const a = auctions.find((x) => x.id === auctionId)
-    const todo = (a?.lots_pending ?? 0) + (a?.lots_failed ?? 0)
-    const hard = a?.lots_hard_pending ?? 0
-    const willDo = hideHardShip ? todo - hard : todo
-    const cost = (willDo * 0.005).toFixed(2)
-
-    let msg = `Enrich ${willDo} lots from "${a?.name ?? 'this auction'}"?
-
-`
-             + `Roughly $${cost} of API usage. Progress shows in the bar at the top.`
-    if (hard > 0 && !hideHardShip) {
-      // Pricing a sofa costs the same as pricing a Rolex and almost never
-      // pays — make that explicit before the money is spent.
-      msg = `Warning: ${hard} of these ${todo} lots are HARD to ship (furniture, `
-          + `appliances, pickup-only). They cost the same to enrich and rarely `
-          + `clear your ROI bar.
-
-`
-          + `Tick "Hide HARD ship" in My inventory first and they'll be skipped.
-
-`
-          + `Price all ${todo} anyway? Roughly $${cost} of API usage.`
-    } else if (hard > 0 && hideHardShip) {
-      msg += `
-
-Skipping ${hard} HARD-to-ship lots.`
-    }
-    if (!window.confirm(msg)) return
-
-    try {
-      const r = await enrichAll(auctionId, hideHardShip)
-      alert(r.queued
-        ? `Queued ${r.queued} lots. Progress shows in the bar at the top; each lot's status updates as it finishes.`
-        : 'Nothing to enrich — every lot in this auction is already done.')
-      await syncAuctionStats()
-      loadLots()
-    } catch (e) { alertOnce(e.message) }
-  }
-
   function handleLotUpdated(updated) {
     setLots((prev) => {
       const i = prev.findIndex((l) => l.lot_id === updated.lot_id)
@@ -600,7 +550,7 @@ Skipping ${hard} HARD-to-ship lots.`
   }
 
   function enrichAllLabel(a) {
-    const todo = a.lots_pending + a.lots_failed
+    const todo = a.lots_unpriced ?? 0
     return todo ? `Price ${todo}` : 'All priced'
   }
 
@@ -1138,8 +1088,9 @@ Skipping ${hard} HARD-to-ship lots.`
                       <button style={{ flex: '1 1 70px', minWidth: 70, padding: 8 }}
                               onClick={() => openAuctionItems(a.id)}>View</button>
                       <button style={{ flex: '1 1 90px', minWidth: 90, padding: 8 }}
-                              disabled={!(a.lots_pending + a.lots_failed) || !!starting}
-                              onClick={startOnce('Queueing the auction…', () => handleEnrichAll(a.id))}>{enrichAllLabel(a)}</button>
+                              disabled={!a.lots_unpriced || !!starting}
+                              onClick={startOnce('Counting unpriced items…', () => handleCompsAuction(a.id))}
+                              title="Look up sold comps for this auction's unpriced lots - no AI (asks first, shows the count)">{enrichAllLabel(a)}</button>
                     </>
                   )}
                 </div>
@@ -1230,8 +1181,9 @@ Skipping ${hard} HARD-to-ship lots.`
                     {a.imported_at && (
                       <>
                         <button onClick={() => openAuctionItems(a.id)}>View</button>{' '}
-                        <button disabled={!(a.lots_pending + a.lots_failed) || !!starting}
-                                onClick={startOnce('Queueing the auction…', () => handleEnrichAll(a.id))}>{enrichAllLabel(a)}</button>
+                        <button disabled={!a.lots_unpriced || !!starting}
+                                onClick={startOnce('Counting unpriced items…', () => handleCompsAuction(a.id))}
+                              title="Look up sold comps for this auction's unpriced lots - no AI (asks first, shows the count)">{enrichAllLabel(a)}</button>
                       </>
                     )}
                   </td>
@@ -1321,19 +1273,6 @@ Skipping ${hard} HARD-to-ship lots.`
               <option key={c.category} value={c.category}>{c.category} ({c.lots})</option>
             ))}
           </select>
-          {categoryFilter && !pricedOnly && (() => {
-            const cat = lotCategories.find((c) => c.category === categoryFilter)
-            return (
-              <button
-                onClick={startOnce('Counting items in the category…', handleEnrichCategory)}
-                disabled={!cat?.enrichable || !!starting}
-                title="Work out a value for every unpriced item in this category, across ALL imported open auctions (asks first, shows cost)"
-                style={{ padding: 8, fontSize: 14 }}
-              >
-                {cat?.enrichable ? `Price ${cat.enrichable} in category` : 'Category fully priced'}
-              </button>
-            )
-          })()}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8,
                         marginLeft: isMobile ? 0 : 'auto' }}>
             <button style={isMobile ? { flex: '1 1 45%', padding: 8 } : undefined}
@@ -1343,17 +1282,18 @@ Skipping ${hard} HARD-to-ship lots.`
               Refresh bids
             </button>
             {!pricedOnly && (<>
-            <button style={isMobile ? { flex: '1 1 45%', padding: 8 } : undefined}
+            <button className="primary"
+                    style={isMobile ? { flex: '1 1 45%', padding: 8 } : undefined}
                     onClick={startOnce('Counting unpriced items…', handleCompsOnly)}
                     disabled={!!starting}
-                    title="For every unpriced item in an open auction: look up sold comps on its auction title as-is. No AI cost - about one SoldComps request per item (asks first, shows the count)">
-              Comps only, no AI
+                    title="The default way to price: for every unpriced item in view (the ticked auctions and the category dropdown), look up sold comps on its auction title as-is. No AI cost - about one SoldComps request per title (asks first, shows the count)">
+              {categoryFilter ? `Price all in ${categoryFilter} with comps (no AI)` : 'Price all with comps (no AI)'}
             </button>
             <button style={isMobile ? { flex: '1 1 45%', padding: 8 } : undefined}
                     onClick={startOnce('Counting items with no value…', handleInspectNoValue)}
                     disabled={!!starting}
-                    title="For every item still showing no value: AI reads the photo, identifies what is in it and prices it (asks first, shows cost)">
-              Price the unpriced with AI
+                    title="For the items comps couldn't price: AI reads each photo, identifies what is in it and prices it (asks first, shows cost)">
+              AI-price what comps missed
             </button>
             </>)}
             <button className="danger"

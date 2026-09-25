@@ -469,18 +469,45 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
   // The render cap exists to save DOM memory, and capping the BATCH to it
   // meant "Enrich" on a 1,199-lot result stopped at 150. The confirm dialog
   // quoting the exact count and dollar cost is what guards the spend.
-  const enrichable = sorted
-    .filter((l) => !['success', 'queued'].includes(l.enrichment?.status))
+  //
+  // Comps first, AI second. The default prices every unpriced lot in the
+  // result from sold comps on its own title - no AI. AI then goes only to
+  // the lots worth a closer look: comps-priced at or above `aiMin`, where a
+  // condition check and a sharper identification can move real money.
+  const unpricedShown = sorted
+    .filter((l) => l.enrichment?.est_resale == null && l.enrichment?.status !== 'queued')
+  const [aiMin, setAiMin] = useState(50)
+  const aiTargets = sorted
+    .filter((l) => !['success', 'queued'].includes(l.enrichment?.status)
+                   && l.enrichment?.est_resale != null
+                   && Number(l.enrichment.est_resale) >= Number(aiMin || 0))
+    .sort((a, b) => Number(b.enrichment.est_resale) - Number(a.enrichment.est_resale))
+
+  async function handleCompsMatching() {
+    if (!unpricedShown.length || queuing) return
+    const ok = window.confirm(
+      `Look up sold comps for the ${unpricedShown.length} unpriced lots matching your filters?\n\n` +
+      `No AI cost - at most one SoldComps request per title (identical titles share one). ` +
+      `Progress appears in the bar at the top of the page.`)
+    if (!ok) return
+    setQueuing(true)
+    try {
+      const r = await repriceSelected(unpricedShown.map((l) => l.lot_id))
+      if (r.already_running) alert('A re-price is already running; let it finish first.')
+      onRefresh?.()
+    } catch (e) { alertOnce(e.message) }
+    finally { setQueuing(false) }
+  }
 
   async function handleEnrichMatching() {
-    if (!enrichable.length || queuing) return
-    const cost = (enrichable.length * 0.005).toFixed(2)
+    if (!aiTargets.length || queuing) return
+    const cost = (aiTargets.length * 0.005).toFixed(2)
     const ok = window.confirm(
-      `Work out a value for all ${enrichable.length} lots matching your filters?
+      `AI-check the ${aiTargets.length} lots worth $${aiMin}+ that haven't had one?
 
 ` +
-      `Each one runs an AI pass and an eBay comp lookup — roughly $${cost} ` +
-      `of API usage, processed in the order shown, top first.
+      `AI reads each one's photo and listing for condition and a closer identification, ` +
+      `then prices it again - roughly $${cost} of API usage, most valuable first.
 
 ` +
       `Progress appears in the bar at the top of the page.`
@@ -490,7 +517,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
     // moment, and total silence after "OK" read as the button being broken.
     setQueuing(true)
     try {
-      const r = await enrichBatch(enrichable.map((l) => l.lot_id))
+      const r = await enrichBatch(aiTargets.map((l) => l.lot_id))
       onRefresh?.()
       if (!r.queued) {
         alert('Nothing to queue — those lots are already enriched or in progress.')
@@ -552,6 +579,18 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
     bulkEach(selectedInView.map((l) => l.lot_id), (id) => setWatch(id, watched))
 
   const smallBtn = { fontSize: 13, padding: '4px 9px' }
+  const aiCheck = (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13 }}>
+      <button onClick={handleEnrichMatching} disabled={!aiTargets.length || queuing}
+              title="AI reads the photo and listing for condition and a closer identification, then prices again. Only lots already priced at or above the amount, most valuable first (asks first, shows cost)">
+        AI check {aiTargets.length.toLocaleString()} worth
+      </button>
+      $<input type="number" min="0" value={aiMin}
+              onChange={(ev) => setAiMin(ev.target.value)}
+              title="Only lots priced at or above this"
+              style={{ width: 56 }} />+
+    </span>
+  )
   const bulkBar = selectedInView.length > 0 && (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center',
                   margin: '6px 0', padding: 6, borderRadius: 6,
@@ -563,14 +602,14 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
           Select all {sorted.length.toLocaleString()}
         </button>
       )}
-      <button style={smallBtn} onClick={handleBulkPrice} disabled={queuing}
-              title="AI pass plus comp lookup on the selected lots (asks first, shows cost)">
-        Price selected with AI
-      </button>
-      <button style={smallBtn} onClick={handleBulkComps} disabled={queuing}
+      <button className="primary" style={smallBtn} onClick={handleBulkComps} disabled={queuing}
               data-track="Comps only (selected lots)"
               title="Sold-comps lookup on the selected lots' titles as-is. No AI cost (asks first, shows the request count)">
-        Comps only, no AI
+        Price with comps (no AI)
+      </button>
+      <button style={smallBtn} onClick={handleBulkPrice} disabled={queuing}
+              title="AI reads each selected lot's photo and listing for condition and a closer identification, then prices it (asks first, shows cost)">
+        AI check selected
       </button>
       <button style={smallBtn} onClick={() => handleBulkHide(true)}>Hide</button>
       <button style={smallBtn} onClick={() => handleBulkHide(false)}>Unhide</button>
@@ -582,7 +621,6 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
 
   if (!lots.length) return <p>No lots yet — scan auctions and import one above.</p>
 
-  const enrichableCount = enrichable.length
   // What's actually on screen right now vs. what the filters matched.
   const shownCount = Math.min(renderLimit, sorted.length)
   const countLine = (
@@ -641,13 +679,14 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
               Clear {activeFilterCount} filter{activeFilterCount === 1 ? '' : 's'}
             </button>
           )}
-          <button className="primary" onClick={handleEnrichMatching}
-                  disabled={!enrichableCount || queuing}
-                  title="Work out a value for every lot matching the current filters — the whole result, not just the rows on screen. Asks for confirmation with the exact cost first."
+          <button className="primary" onClick={handleCompsMatching}
+                  disabled={!unpricedShown.length || queuing}
+                  title="The default: sold comps for every unpriced lot matching the filters, on each lot's own title. No AI cost."
                   style={{ flex: '1 1 100%', padding: 10, fontSize: 15 }}>
-            {queuing ? <><span className="spinner" />Queuing {enrichableCount} lots…</>
-                     : `Price all ${enrichableCount} with AI`}
+            {queuing ? <><span className="spinner" />Queuing…</>
+                     : `Price ${unpricedShown.length.toLocaleString()} with comps (no AI)`}
           </button>
+          {aiCheck}
           {!selectedInView.length && sorted.length > 0 && (
             <button style={{ flex: '1 1 100%', padding: 6, fontSize: 13 }}
                     onClick={() => setSelected(selectAll(sorted))}
@@ -812,12 +851,13 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
   return (
     <>
     <div style={{ marginBottom: '0.5rem' }}>
-      <button className="primary" onClick={handleEnrichMatching}
-              disabled={!enrichableCount || queuing}
-              title="Work out a value for every lot matching the current filters — the whole result, not just the rows on screen. Asks for confirmation with the exact cost first.">
-        {queuing ? <><span className="spinner" />Queuing {enrichableCount} lots…</>
-                 : `Price all ${enrichableCount} with AI`}
+      <button className="primary" onClick={handleCompsMatching}
+              disabled={!unpricedShown.length || queuing}
+              title="The default: sold comps for every unpriced lot matching the filters, on each lot's own title. No AI cost.">
+        {queuing ? <><span className="spinner" />Queuing…</>
+                 : `Price ${unpricedShown.length.toLocaleString()} with comps (no AI)`}
       </button>
+      <span style={{ marginLeft: 8 }}>{aiCheck}</span>
       {anyQueued && <span style={{ marginLeft: '0.75rem' }}><span className="spinner" />{lots.filter((l) => l.enrichment?.status === 'queued').length} lots in the queue… updates when they finish</span>}
       <span style={{ marginLeft: '0.75rem' }}>{countLine}</span>
     </div>

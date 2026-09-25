@@ -139,6 +139,7 @@ class AuctionOut(BaseModel):
     lots_failed: int = 0
     lots_inspected: int = 0
     lots_hard_pending: int = 0   # HARD-to-ship lots still awaiting enrichment
+    lots_unpriced: int = 0       # no value yet - what its comps button would look up
 
 
 class EnrichBatchRequest(BaseModel):

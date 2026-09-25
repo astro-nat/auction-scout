@@ -135,6 +135,12 @@ def _attach_stats(db: Session, auctions: list) -> list:
             func.count(case((models.Enrichment.ai_source == "vision-itemized", 1))),
             func.count(case(((models.Lot.logistics_ease == "HARD")
                              & models.Enrichment.status.in_(["pending", "failed"]), 1))),
+            # What the auction's "Price N" (comps) button would look up:
+            # no value yet, not hidden, not an unreachable pickup lot.
+            func.count(case((models.Enrichment.est_resale.is_(None)
+                             & models.Enrichment.status.in_(["pending", "failed"])
+                             & models.Lot.hidden.isnot(True)
+                             & models.Lot.unreachable_pickup.isnot(True), 1))),
         )
         .outerjoin(models.Enrichment, models.Enrichment.lot_id == models.Lot.id)
         .group_by(models.Lot.auction_id)
@@ -149,7 +155,7 @@ def _attach_stats(db: Session, auctions: list) -> list:
         a.gold_count, a.gold_profit = gold.get(a.id, (0, 0))
         (a.lots_imported, a.lots_enriched, a.lots_pending,
          a.lots_failed, a.lots_inspected,
-         a.lots_hard_pending) = stats.get(a.id, (0, 0, 0, 0, 0, 0))
+         a.lots_hard_pending, a.lots_unpriced) = stats.get(a.id, (0, 0, 0, 0, 0, 0, 0))
         a.favorite = a.auctioneer_id in starred
         # This house's estimate-to-hammer track record, from its own closed
         # lots — how much to discount everything it claims.
