@@ -81,6 +81,12 @@ class LotOut(BaseModel):
     hidden: bool = False
     lot_link: Optional[str] = None
     thumbnail_url: Optional[str] = None
+    # How many photos the listing has. One integer, so it costs nothing in a
+    # page of a thousand lots, and it is the only way from outside to tell a
+    # lot the AI could examine properly from one it saw a single thumbnail
+    # of. The URLs themselves stay off the payload - five per lot would put
+    # half a megabyte back on a page that was just cut down.
+    image_count: Optional[int] = None
     created_at: datetime
     auction_name: Optional[str] = None
     auction_closed: bool = False
@@ -129,8 +135,9 @@ class AuctionOut(BaseModel):
     gold_profit: Optional[Decimal] = None     # summed potential profit of those lots
     estimate_ratio: Optional[float] = None    # median estimate-low/hammer for this house
     estimate_ratio_n: int = 0                 # closed sales backing that median
-    category_lot_count: Optional[int] = None  # lots matching the last scanned category
+    category_lot_count: Optional[int] = None  # lots matching the last scan's filters
     category_count_for: Optional[int] = None  # which category that count is for
+    category_count_search: Optional[str] = None  # which keyword that count is for
     ship_cost_estimate: Optional[float] = None  # AI-read rough $ to ship a small/medium item
     ship_summary: Optional[str] = None          # one-line shipping-policy summary
     ships_to_us: Optional[bool] = None          # Canadian house: ships into the US? None = unknown
@@ -170,17 +177,21 @@ class UiEventBatch(BaseModel):
 class ImportAllRequest(BaseModel):
     """Bulk import: which auctions, in display order, and how much of each.
 
-    Three shapes, all through this one request:
+    Four shapes, all through this one request:
       - everything                  category_id = -1, bolo_only = False
       - one HiBid category          category_id = <id>
       - only BOLO brand matches     bolo_only = True
+      - a keyword search            search_text = "pyrex"
 
-    The two filters compose, so "every BOLO match in the antiques category"
-    is just both at once.
+    The filters compose — "pyrex lots in the antiques category" is just
+    both category_id and search_text at once — and each is applied
+    server-side by HiBid's own lot search, the same query the scan used
+    to find the auctions in the first place.
     """
     auction_ids: list[int]
     category_id: int = -1
     bolo_only: bool = False
+    search_text: str = ""
 
 
 class ScanRequest(BaseModel):
