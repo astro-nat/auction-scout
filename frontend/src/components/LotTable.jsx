@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { enrichLot, compsLot, fetchLot, patchEnrichment, enrichBatch, repriceSelected, setWatch, setHidden, alertOnce, parseUtc } from '../api'
 import { aiDone, rowAction } from '../lib/pricing'
+import { PAGE_SIZES, pageButtons, pageWindow, savePageSize, savedPageSize, searchMatches, showingText } from '../lib/paging'
 import { compRows, ebaySoldUrl } from '../lib/comps'
 import { houseRatioLabel, houseRatioTitle } from '../lib/calibration'
 import { CLOSING_RANGES, ROI_RANGES, hoursUntil, matchesFilter, presetsFor, roiPercent } from '../lib/filters'
@@ -311,9 +312,18 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
     if (idx >= 0) pinnedPos.current.set(lotId, idx)
     onLotTouched?.(lotId)
   }
-  // Render cap: building thousands of DOM rows eats real browser memory.
-  // All lots stay loaded for filtering/sorting; we just paint them in pages.
-  const [renderLimit, setRenderLimit] = useState(150)
+  // Pages, as DataTables does them: all lots stay loaded for filtering and
+  // sorting; only one page is painted, which is what keeps thousands of
+  // rows from eating browser memory. The size is a per-browser preference.
+  const [pageSize, setPageSizeState] = useState(() =>
+    savedPageSize(typeof window === 'undefined' ? null : window.localStorage))
+  const [page, setPage] = useState(1)
+  const setPageSize = (n) => {
+    setPageSizeState(n)
+    savePageSize(n, typeof window === 'undefined' ? null : window.localStorage)
+  }
+  // One search box across title, AI title, auction, category and lot number.
+  const [search, setSearch] = useState('')
   // True while the enrich-batch request is in flight.
   const [queuing, setQueuing] = useState(false)
   // Multi-select: lot_ids the user has ticked. Kept as a Set of ids rather
@@ -342,12 +352,12 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
 
   const filtered = useMemo(() => {
     const active = COLUMNS.filter((c) => colFilters[c.key]?.trim())
-    if (!active.length) return lots
+    if (!active.length && !search.trim()) return lots
     // filterGet lets a column sort by one value and filter by another - the
     // Closes column sorts by the instant but filters by hours until close.
-    return lots.filter((l) => active.every((c) =>
+    return lots.filter((l) => searchMatches(l, search) && active.every((c) =>
       matchesFilter((c.filterGet ?? c.get)(l), colFilters[c.key].trim())))
-  }, [lots, colFilters])
+  }, [lots, colFilters, search])
 
   const sortedBase = useMemo(() => {
     if (!sort.key) return filtered
@@ -379,6 +389,20 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
     for (const l of pinned) rest.splice(Math.min(pins.get(l.lot_id), rest.length), 0, l)
     return rest
   }, [sortedBase])
+
+  // A new result - filters, search, sort or page size changed - starts on
+  // page one, not wherever the old one was.
+  useEffect(() => { setPage(1) }, [colFilters, search, sort, pageSize])
+
+  function handleSearch(value) {
+    pinnedPos.current.clear()
+    clearTimeout(filterLogTimers.current.search)
+    if (value?.trim()) {
+      filterLogTimers.current.search = setTimeout(
+        () => track('filter', { key: 'search', value: String(value).slice(0, 40) }), 1200)
+    }
+    setSearch(value)
+  }
 
   function handleSort(key) {
     pinnedPos.current.clear()
@@ -650,14 +674,38 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
 
   if (!lots.length) return <p>No lots yet — scan auctions and import one above.</p>
 
-  // What's actually on screen right now vs. what the filters matched.
-  const shownCount = Math.min(renderLimit, sorted.length)
+  // What's on screen vs. what the filters matched, and the pager.
+  const pg = pageWindow(sorted.length, page, pageSize)
+  const pageRows = sorted.slice(pg.start, pg.end)
   const countLine = (
     <span style={{ fontSize: 13, color: 'var(--muted)' }}>
-      Showing <strong style={{ color: 'var(--fg, inherit)' }}>{shownCount.toLocaleString()}</strong>
-      {' '}of {sorted.length.toLocaleString()} item{sorted.length === 1 ? '' : 's'}
-      {sorted.length !== lots.length && ` (${lots.length.toLocaleString()} loaded, rest filtered out)`}
+      {showingText(sorted.length, pg.start, pg.end)}
+      {sorted.length !== lots.length && ` (filtered from ${lots.length.toLocaleString()})`}
     </span>
+  )
+  const go = (n) => { setPage(n); window.scrollTo?.({ top: 0 }) }
+  const pager = pg.pages > 1 && (
+    <nav className="pager" aria-label="Pages">
+      <button onClick={() => go(1)} disabled={pg.page === 1} title="First page">«</button>
+      <button onClick={() => go(pg.page - 1)} disabled={pg.page === 1} title="Previous page">‹</button>
+      {pageButtons(pg.page, pg.pages).map((b, i) => (b === '…'
+        ? <span key={`gap-${i}`} className="gap">…</span>
+        : <button key={b} onClick={() => go(b)} className={b === pg.page ? 'current' : undefined}
+                  aria-current={b === pg.page ? 'page' : undefined}
+                  data-track="Page number">{b}</button>))}
+      <button onClick={() => go(pg.page + 1)} disabled={pg.page === pg.pages} title="Next page">›</button>
+      <button onClick={() => go(pg.pages)} disabled={pg.page === pg.pages} title="Last page">»</button>
+    </nav>
+  )
+  const lengthMenu = (
+    <label style={{ fontSize: 13, color: 'var(--muted)', whiteSpace: 'nowrap' }}>
+      Show{' '}
+      <select value={pageSize} onChange={(ev) => setPageSize(Number(ev.target.value))}
+              style={{ padding: '2px 4px' }}>
+        {PAGE_SIZES.map((n) => <option key={n} value={n}>{n}</option>)}
+      </select>
+      {' '}per page
+    </label>
   )
 
   if (isMobile) {
@@ -665,9 +713,10 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
       <>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
           <input
-            value={colFilters.title ?? ''}
-            onChange={(ev) => setFilter('title', ev.target.value)}
-            placeholder="Search lots…"
+            type="search"
+            value={search}
+            onChange={(ev) => handleSearch(ev.target.value)}
+            placeholder="Search title, auction, category…"
             style={{ flex: '1 1 100%', padding: 8, fontSize: 16 }}
           />
           <select
@@ -725,9 +774,11 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
           )}
           {bulkBar && <div style={{ flexBasis: '100%' }}>{bulkBar}</div>}
           {anyQueued && <span style={{ flexBasis: '100%' }}><span className="spinner" />{lots.filter((l) => l.enrichment?.status === 'queued').length} lots in the queue… updates when they finish</span>}
-          <div style={{ flexBasis: '100%' }}>{countLine}</div>
+          {/* Length menu up here; the count and pager sit under the cards,
+              the way DataTables lays a table out. */}
+          <div style={{ flexBasis: '100%' }}>{lengthMenu}</div>
         </div>
-        {sorted.slice(0, renderLimit).map((lot) => {
+        {pageRows.map((lot) => {
           const e = lot.enrichment || {}
           const gold = e.roi_status === 'GOLD MINE'
           const overbid = isOverbid(lot, e)
@@ -862,12 +913,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
             </div>
           )
         })}
-        {sorted.length > renderLimit && (
-          <button style={{ width: '100%', padding: 10, marginTop: 4 }}
-                  onClick={() => setRenderLimit((n) => n + 150)}>
-            Show more ({sorted.length - renderLimit} hidden)
-          </button>
-        )}
+        <div className="table-footer">{countLine}{pager}</div>
       </>
     )
   }
@@ -883,14 +929,25 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
       </button>
       <span style={{ marginLeft: 8 }}>{aiCheck}</span>
       {anyQueued && <span style={{ marginLeft: '0.75rem' }}><span className="spinner" />{lots.filter((l) => l.enrichment?.status === 'queued').length} lots in the queue… updates when they finish</span>}
-      <span style={{ marginLeft: '0.75rem' }}>{countLine}</span>
     </div>
     {bulkBar}
+    {/* DataTables' top bar: page length left, the one search box right. */}
+    <div className="table-toolbar">
+      {lengthMenu}
+      <label className="table-search">
+        Search:{' '}
+        <input type="search" value={search} onChange={(ev) => handleSearch(ev.target.value)}
+               placeholder="title, auction, category, lot #" />
+      </label>
+    </div>
     {/* No overflow wrapper: an overflow-x container becomes the scrollport
         position:sticky binds to, and the thead's top offset then displaces
         it INSIDE the table by the status bar's height — a blank band with
         the header floating over the first rows whenever a job is running.
         A too-narrow window falls back to page-level horizontal scrolling. */}
+    {sort.key && (
+      <style>{`.lot-table tbody td:nth-child(${COLUMNS.findIndex((c) => c.key === sort.key) + 2}) { background-image: linear-gradient(var(--sorted-tint), var(--sorted-tint)); }`}</style>
+    )}
     <table className="data-table lot-table">
       {/* Sticks below the status bar when one is showing (see StatusBar's
           --statusbar-h). Solid background or the rows scroll through it. */}
@@ -916,7 +973,10 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
               title="Click to sort"
             >
               {c.label}
-              {sort.key === c.key ? (sort.dir === 1 ? ' ▲' : ' ▼') : ''}
+              <span className={`sort-arrows${sort.key === c.key ? (sort.dir === 1 ? ' asc' : ' desc') : ''}`}
+                    aria-hidden="true">
+                <span>▲</span><span>▼</span>
+              </span>
             </th>
           ))}
           <th></th>
@@ -955,7 +1015,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
         </tr>
       </thead>
       <tbody>
-        {sorted.slice(0, renderLimit).map((lot) => {
+        {pageRows.map((lot) => {
           const e = lot.enrichment || {}
           const gold = e.roi_status === 'GOLD MINE'
           const ev = evidence(e)
@@ -1156,12 +1216,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
         })}
       </tbody>
     </table>
-    {sorted.length > renderLimit && (
-      <button style={{ marginTop: 8, padding: '6px 14px' }}
-              onClick={() => setRenderLimit((n) => n + 150)}>
-        Show more ({sorted.length - renderLimit} hidden)
-      </button>
-    )}
+    <div className="table-footer">{countLine}{pager}</div>
     </>
   )
 }

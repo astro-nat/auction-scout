@@ -21,6 +21,8 @@
   --bolo-bg: #fff1cc;
   --bolo-text: #6a4b00;
   --highlight: #eef1fb;
+  --stripe: rgba(20, 30, 60, 0.028);     /* every other row */
+  --sorted-tint: rgba(47, 95, 208, 0.05);  /* the column the table is sorted by */
   --success: #1e8e46;
   --error: #c43a3a;
   --danger: #c43a3a;
@@ -52,6 +54,8 @@
     --bolo-bg: #453611;
     --bolo-text: #ffd97a;
     --highlight: #262e45;
+    --stripe: rgba(255, 255, 255, 0.025);
+    --sorted-tint: rgba(95, 134, 232, 0.07);
     --success: #4ec97b;
     --error: #ff7a7a;
     --danger: #ff7a7a;
@@ -230,6 +234,54 @@ label { user-select: none; }
 .data-table tbody tr:not(.row-gold):not(.row-overbid):hover td {
   background: var(--highlight);
 }
+
+/* Zebra stripes, as DataTables draws them: faint enough to guide the eye
+   along a wide row without competing with the gold and overbid washes. */
+.data-table tbody tr:nth-child(even):not(.row-gold):not(.row-overbid) td {
+  background-color: var(--stripe);
+}
+
+/* Sort arrows: a faint pair on every sortable header, the active one lit. */
+.sort-arrows {
+  display: inline-flex;
+  flex-direction: column;
+  margin-left: 5px;
+  font-size: 7px;
+  line-height: 7px;
+  vertical-align: middle;
+  opacity: 0.35;
+}
+.sort-arrows.asc, .sort-arrows.desc { opacity: 1; }
+.sort-arrows.asc span:last-child,
+.sort-arrows.desc span:first-child { opacity: 0.25; }
+.sort-arrows.asc span:first-child,
+.sort-arrows.desc span:last-child { color: var(--accent); }
+
+/* Around the table: page length and search above, info and pages below. */
+.table-toolbar, .table-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin: 8px 0;
+}
+.table-search { font-size: 13px; color: var(--muted); white-space: nowrap; }
+.table-search input { width: 240px; max-width: 60vw; margin-left: 4px; }
+.pager { display: inline-flex; flex-wrap: wrap; gap: 3px; align-items: center; }
+.pager button {
+  min-width: 30px;
+  padding: 3px 8px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.pager button.current {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+.pager .gap { padding: 0 4px; color: var(--muted); }
 
 /* Numbers: right-aligned, digits that line up. */
 .num {
