@@ -399,3 +399,47 @@ tr.row-overbid td:first-child { box-shadow: inset 3px 0 0 var(--overbid-accent);
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* ======================= touch targets ============================== */
+
+/* On a touch screen every control has to be hittable with a thumb. The
+   guideline is 44x44; the phone layout was shipping 20px buttons and 15px
+   checkboxes, so 168 of 172 buttons missed it. Scoped to coarse pointers
+   so the dense desktop table keeps its size - a mouse is precise, a thumb
+   is not. */
+@media (pointer: coarse) {
+  button, select, input[type="number"], input[type="text"], input[type="search"] {
+    min-height: 44px;
+  }
+  button {
+    min-width: 44px;
+    padding-inline: 12px;
+  }
+
+  /* Inline text buttons (hide, watch, forget) sit in a row inside a card.
+     Square them off so neighbours can't be hit by mistake. */
+  button.bare {
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* A checkbox IS its label: tapping the words toggles it, so the label is
+     the target and it gets the height. The box itself grows too - a 15px
+     box is hard to aim at even inside a big label. */
+  input[type="checkbox"] {
+    width: 22px;
+    height: 22px;
+    min-height: 0;
+  }
+  label {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  /* Breathing room, so two 44px targets never share an edge. */
+  .pager { gap: 6px; }
+  .pager button { min-width: 44px; }
+}
