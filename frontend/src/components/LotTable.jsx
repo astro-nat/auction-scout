@@ -849,11 +849,12 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                   <span style={{ color: 'var(--danger)' }}
                         title="This house has said it won't ship into the US">no US shipping · </span>
                 )}
-                <span onClick={() => onSelectAuction?.(lot.auction_id)}
-                      title="Show only this auction's items"
-                      style={{ cursor: 'pointer', textDecoration: 'underline dotted' }}>
+                <button type="button" className="link-like"
+                        onClick={() => onSelectAuction?.(lot.auction_id)}
+                        data-track="Auction name (show its items)"
+                        title="Show only this auction's items">
                   {lot.auction_name}
-                </span>
+                </button>
               </div>
               {e.enriched_title && e.enriched_title !== lot.title && (
                 <div style={{ color: 'var(--muted)', fontSize: 13 }}>→ {e.enriched_title}</div>
@@ -1129,11 +1130,12 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                   <div style={{ color: 'var(--danger)' }}
                        title="This house has said it won't ship into the US">no US shipping</div>
                 )}
-                <span onClick={() => onSelectAuction?.(lot.auction_id)}
-                      title="Show only this auction's items"
-                      style={{ cursor: 'pointer', textDecoration: 'underline dotted' }}>
+                <button type="button" className="link-like"
+                        onClick={() => onSelectAuction?.(lot.auction_id)}
+                        data-track="Auction name (show its items)"
+                        title="Show only this auction's items">
                   {lot.auction_name}
-                </span>
+                </button>
               </td>
               <td style={{ ...cell, whiteSpace: 'nowrap' }}>{lot.category}</td>
               <td style={{ ...cell, whiteSpace: 'nowrap',

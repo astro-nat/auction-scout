@@ -400,6 +400,25 @@ tr.row-overbid td:first-child { box-shadow: inset 3px 0 0 var(--overbid-accent);
   to { transform: rotate(360deg); }
 }
 
+/* A word that acts like a link but does something in the page (the auction
+   name on a lot row). A button so the keyboard reaches it; styled as text
+   so the row still reads as a row. */
+.link-like {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  text-decoration: underline dotted;
+  border-radius: 3px;
+}
+.link-like:hover:not(:disabled) {
+  background: none;
+  transform: none;
+  color: var(--link);
+}
+
 /* ======================= touch targets ============================== */
 
 /* On a touch screen every control has to be hittable with a thumb. The
@@ -435,6 +454,15 @@ tr.row-overbid td:first-child { box-shadow: inset 3px 0 0 var(--overbid-accent);
   }
   label {
     min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  /* Text-styled buttons keep their place in the sentence; they just get
+     the height, so a thumb has something to land on. */
+  .link-like {
+    min-width: 0;
+    padding-inline: 0;
     display: inline-flex;
     align-items: center;
   }

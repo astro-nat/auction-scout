@@ -1480,7 +1480,13 @@ export default function App() {
         )
       ) : (
         <LotTable lots={visibleLots} onLotUpdated={handleLotUpdated} onRefresh={loadLots}
-                  onSelectAuction={(id) => setSelectedAuctions([id])}
+                  onSelectAuction={(id) => {
+                    // Jump back to the top: the change happens above the
+                    // rows, and from halfway down a list it looked like
+                    // nothing had happened.
+                    setSelectedAuctions([id])
+                    window.scrollTo?.({ top: 0, behavior: 'smooth' })
+                  }}
                   onLotTouched={markTouched} />
       )}
       </>)}
