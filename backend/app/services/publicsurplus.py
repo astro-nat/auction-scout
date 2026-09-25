@@ -12,6 +12,13 @@ exact pickup address live.
 Parsed per row: the auction id, title, current price, thumbnail, and the
 exact close time — the page embeds it as epoch millis in its countdown
 script, which beats parsing "10 hours 31 mins" strings that go stale.
+
+The listing grid carries no description. Each item page does, and it is
+where the condition actually lives: "**Does not have Hard Drive. **No
+power cord." on a laptop the app had called normal wear and tear, because
+the title and photo were all it ever saw. fetch_detail() pulls that text
+for one item; the enrichment pass fetches it for a PublicSurplus lot that
+has none before asking the model anything.
 """
 
 import logging
@@ -26,6 +33,7 @@ logger = logging.getLogger(__name__)
 
 BASE = "https://www.publicsurplus.com"
 PAGES_MAX = 20   # 25 rows a page; a runaway radius stops at 500 items
+USER_AGENT = "Mozilla/5.0"
 
 _TITLE_RE = re.compile(r'title="#(\d+) - ([^"]{1,200})"')
 _PRICE_RE = re.compile(r'id="val_(\d+)searchGrid">\s*\$([\d,]+\.?\d*)')
@@ -41,6 +49,70 @@ def _search_url(zip_code: str, miles: int, page: int) -> str:
     return (f"{BASE}/sms/all,{region}/browse/search"
             f"?posting=y&endHours=-1&startHours=-1"
             f"&zipCode={zip_code}&milesLocation={miles}&page={page}")
+
+
+# The item page's description block, and the Condition field above it.
+_DETAIL_RE = re.compile(r'overflow-wrap:\s*anywhere"\s*>(.*?)(?:<!--\s*DOCUMENTS|\Z)',
+                        re.DOTALL | re.IGNORECASE)
+_CONDITION_RE = re.compile(
+    r'class="auctitle"\s*>\s*Condition:\s*</span>\s*<span[^>]*>(.*?)</span>',
+    re.DOTALL | re.IGNORECASE)
+# Agency legal boilerplate, identical on every lot from the same seller.
+# It is most of the text and none of the information, and it would crowd
+# the real condition note out of the model's prompt.
+_BOILERPLATE_RE = re.compile(
+    r"(\*+\s*ITEMS ARE SOLD|ITEMS ARE SOLD\s+\"?AS-?IS|WE DO NOT SHIP|"
+    r"ALL SALES ARE FINAL|Winning bidder must pay and take possession|"
+    r"We are not\s+experts on the items|Payment (?:is )?due|"
+    r"Removal of (?:the )?item|By placing a bid)",
+    re.IGNORECASE)
+DESCRIPTION_MAX = 1200
+
+
+def _text(fragment: str) -> str:
+    """HTML fragment -> readable text, with block tags as line breaks."""
+    import html as html_mod
+    t = re.sub(r"<\s*(br|/p|/div|/li|/tr)\s*/?>", "\n", fragment, flags=re.I)
+    t = re.sub(r"<[^>]+>", " ", t)
+    t = html_mod.unescape(t).replace("\xa0", " ")
+    t = re.sub(r"[ \t]+", " ", t)
+    t = re.sub(r"\s*\n\s*", "\n", t)
+    return re.sub(r"\n{2,}", "\n", t).strip()
+
+
+def parse_detail(html: str) -> dict:
+    """One item page → {"description", "condition"}.
+
+    The description keeps what the seller said about THIS item and drops
+    the legal boilerplate that follows it. Missing fields come back empty
+    rather than raising: a lot with no description still prices.
+    """
+    m = _DETAIL_RE.search(html or "")
+    text = _text(m.group(1)) if m else ""
+    cut = _BOILERPLATE_RE.search(text)
+    if cut:
+        text = text[:cut.start()].strip()
+    c = _CONDITION_RE.search(html or "")
+    condition = _text(c.group(1)) if c else ""
+    # The page states a condition of its own ("UNKNOWN", "Used"); it is
+    # part of what the seller disclosed, so it rides with the description.
+    if condition and condition.lower() not in text.lower():
+        text = f"Condition: {condition}\n{text}".strip()
+    return {"description": text[:DESCRIPTION_MAX].strip(), "condition": condition}
+
+
+def fetch_detail(auction_id: int) -> dict | None:
+    """The item page for one lot. None on any network trouble - a missing
+    description must never fail an enrichment."""
+    try:
+        with httpx.Client(timeout=20, follow_redirects=True,
+                          headers={"User-Agent": USER_AGENT}) as client:
+            r = client.get(item_link(auction_id))
+            r.raise_for_status()
+            return parse_detail(r.text)
+    except Exception as exc:  # noqa: BLE001 - a detail page is a bonus, never a blocker
+        logger.warning("PublicSurplus detail fetch failed for %s: %s", auction_id, exc)
+        return None
 
 
 def item_link(auction_id: int) -> str:
@@ -95,7 +167,7 @@ def search_items(zip_code: str, miles: int) -> list[dict]:
     seen: dict[int, dict] = {}
     last_page = 0
     with httpx.Client(timeout=30, follow_redirects=True,
-                      headers={"User-Agent": "Mozilla/5.0"}) as client:
+                      headers={"User-Agent": USER_AGENT}) as client:
         page = 0
         while page <= min(last_page, PAGES_MAX):
             r = client.get(_search_url(zip_code, miles, page))

@@ -39,7 +39,7 @@ from sqlalchemy.orm import Session, joinedload
 from ..database import SessionLocal
 from .. import models, config
 from ..services import financials, gemini, hibid, jobs, price_log, pricing
-from ..services import funko, shipping, twins
+from ..services import funko, publicsurplus, shipping, twins
 from ..services import settings as settings_store
 from ..services.bolo import BoloMatcher
 from ..services.hibid import classify_logistics
@@ -606,9 +606,32 @@ def apply_bolo_match(e: models.Enrichment, title: str, description: str,
     return True
 
 
+def fetch_ps_description(lot: models.Lot) -> str | None:
+    """The seller's own text for a PublicSurplus lot, from its item page.
+    None for any other source, or when the page cannot be read."""
+    lot_id = lot.lot_id or ""
+    if not lot_id.startswith("ps-"):
+        return None
+    try:
+        detail = publicsurplus.fetch_detail(int(lot_id[3:]))
+    except (ValueError, TypeError):
+        return None
+    return (detail or {}).get("description") or None
+
+
 def _enrich(lot: models.Lot, e: models.Enrichment, db: Session,
             phase=None) -> None:
     title = lot.title or ""
+    # PublicSurplus keeps what the seller disclosed on the item page, not in
+    # the listing grid the scan reads: "**Does not have Hard Drive. **No
+    # power cord." on a laptop this called normal wear and tear from the
+    # title and photo alone. Fetched once, here, for a lot that has none -
+    # one page per lot, only for lots actually being priced.
+    if not (lot.description or "").strip():
+        fetched = fetch_ps_description(lot)
+        if fetched:
+            lot.description = fetched
+            db.commit()
     description = lot.description or ""
     # Fields the user hand-corrected are never overwritten by re-enrichment.
     protected = set(e.user_overrides or [])

@@ -18,6 +18,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from .. import config, models, schemas
@@ -126,6 +127,39 @@ def scan(payload: PublicSurplusScanRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(card)
     return _attach_stats(db, [card])
+
+
+@router.post("/backfill-descriptions")
+def backfill_descriptions(limit: int = 200, dry_run: bool = True,
+                          db: Session = Depends(get_db)):
+    """Fetch the seller's item-page text for PublicSurplus lots that have
+    none. Free - no AI, one page per lot - and it is what tells the pricer
+    a laptop has no hard drive. Lots imported before this existed all have
+    an empty description; enrichment fetches it for new ones by itself.
+
+    dry_run counts what would be fetched. `limit` caps one call so a few
+    hundred pages are not pulled in a single request.
+    """
+    q = (db.query(models.Lot)
+           .filter(models.Lot.lot_id.like("ps-%"),
+                   or_(models.Lot.description.is_(None),
+                       models.Lot.description == ""))
+           .order_by(models.Lot.id.desc()))
+    total = q.count()
+    if dry_run:
+        return {"missing": total, "dry_run": True}
+    filled = failed = 0
+    for lot in q.limit(limit).all():
+        detail = publicsurplus.fetch_detail(int(lot.lot_id[3:]))
+        text = (detail or {}).get("description")
+        if text:
+            lot.description = text
+            filled += 1
+        else:
+            failed += 1
+    db.commit()
+    return {"missing_before": total, "filled": filled,
+            "no_text": failed, "remaining": max(0, total - filled - failed)}
 
 
 @router.post("/{auction_id}/import", status_code=201)
