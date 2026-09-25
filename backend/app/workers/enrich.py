@@ -262,7 +262,7 @@ A vintage/unbranded item is still confident if you can name 3+ visual specifics 
 Mixed/bundled lots are never confident.
 
 Original listing title: {title}
-Listing description (may be empty or boilerplate — trust the photo over it, but use its sizes/model numbers): {description}
+Listing description (may be empty or boilerplate — trust the photo over it, but use its sizes/model numbers): {description}{photo_note}
 
 Return ONLY valid JSON: {{"enriched_title": string, "verdict": string, "confident": boolean, "notes": string, "ship": string}}
 verdict must be exactly one of "broken, damaged, or for parts" | "untested or unknown condition" | "mint condition or working perfectly" | "normal wear and tear"
@@ -688,15 +688,19 @@ def _enrich(lot: models.Lot, e: models.Enrichment, db: Session,
     # The photo pass is the expensive one — never reach for it on a lot whose
     # price and condition were already free.
     if not from_title and (ai is None or not ai.get("confident")):
-        _progress(db, e, "AI examining the photo…")
+        # Comps have already put a number on this lot, so this is the
+        # deliberate "look closer" the user paid for: read several photos.
+        # A lot with no value yet is the cheap first pass - one photo.
+        deep = e.est_resale is not None
+        urls = lot_image_urls(lot, DEEP_IMAGE_MAX if deep else 1)
+        _progress(db, e, f"AI examining {'the photos' if len(urls) > 1 else 'the photo'}…")
         with _step(phase, "image_download"):
             # Largest first. The vision pass was reading 120px thumbnails when
             # a full photo was on file: a Denon deck's model came back as
             # "DR-M11" - a guess from the layout - and priced against
             # three-head decks worth four times as much. The badge on the
             # full photo says DRM-555. The itemized pass always did this.
-            image_bytes = _download_image(lot.fullsize_url or lot.hd_thumbnail_url
-                                          or lot.thumbnail_url)
+            image_bytes = _download_images(urls)
         if image_bytes:
             with _step(phase, "ai_vision"):
                 vision = _call_vision(title, image_bytes, description)
@@ -1194,14 +1198,14 @@ def _apply_audit(db: Session, lot: models.Lot, e: models.Enrichment, result: dic
     db.commit()
 
 
-INSPECT_PROMPT = """This is a photo of a multi-item auction lot titled: {title}
+INSPECT_PROMPT = """These are photos of ONE multi-item auction lot titled: {title}
 
 The listing description (may be empty or boilerplate — trust the photo over
 it, but use its sizes, model numbers, and quantities):
 {description}
 
 Identify each INDIVIDUALLY SELLABLE item you can actually read or recognize in
-the photo — CD/DVD/book spines, game boxes, branded products, etc. For each,
+the photos - the SAME item seen in two photos is ONE item, never two — CD/DVD/book spines, game boxes, branded products, etc. For each,
 give an eBay-searchable title (under 60 chars) AND your estimate of what that
 item actually SELLS for secondhand in visible condition — a realistic eBay
 sold price, not an asking price and not retail. Title items the way buyers
@@ -1292,10 +1296,13 @@ def run_inspection(lot_db_id: int) -> None:
 
 
 def _inspect(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
-    # Full-size image beats the thumbnails for reading spines/labels
-    _progress(db, e, "downloading the full-size photo…")
-    image_bytes = _download_image(lot.fullsize_url or lot.hd_thumbnail_url
-                                  or lot.thumbnail_url)
+    # Full-size image beats the thumbnails for reading spines/labels, and
+    # once comps have priced the lot this is the deliberate look: read the
+    # other photos too, since half a box is often only shown in photo three.
+    deep = e.est_resale is not None
+    urls = lot_image_urls(lot, DEEP_IMAGE_MAX if deep else 1)
+    _progress(db, e, "downloading the full-size photos…")
+    image_bytes = _download_images(urls)
     if not image_bytes:
         raise RuntimeError("no image available for inspection")
 
@@ -1303,7 +1310,8 @@ def _inspect(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
     result = _vision_json(
         INSPECT_PROMPT.format(
             title=lot.title or "",
-            description=(lot.description or "")[:1500] or "(none)"),
+            description=(lot.description or "")[:1500] or "(none)")
+        + _photo_note(len(image_bytes)),
         image_bytes, max_tokens=800)
     if result is None:
         raise RuntimeError("vision call failed")
@@ -1521,39 +1529,78 @@ def _image_mime(image_bytes: bytes) -> str:
     return "image/jpeg"
 
 
-def _vision_json(prompt: str, image_bytes: bytes, max_tokens: int) -> dict | None:
+def _vision_json(prompt: str, image_bytes: bytes | list[bytes],
+                 max_tokens: int) -> dict | None:
     """One dispatcher for every image-understanding call. Provider comes
     from config: Gemini when its key is set (it identified the user's
     jewelry lots better in practice), Claude otherwise, VISION_PROVIDER to
     force either. The gold-check audit is deliberately NOT routed through
     here — a value priced by one model and audited by another is a
     genuinely independent second opinion."""
-    mime = _image_mime(image_bytes)
+    images = image_bytes if isinstance(image_bytes, list) else [image_bytes]
+    images = [i for i in images if i]
+    if not images:
+        return None
+    mime = _image_mime(images[0])
     if config.vision_provider() == "gemini":
         return _call_with_retry(
-            lambda: gemini.generate(prompt, image_bytes, max_tokens=max_tokens,
+            lambda: gemini.generate(prompt, images, max_tokens=max_tokens,
                                     mime_type=mime))
-    b64 = base64.b64encode(image_bytes).decode()
+    content = [{"type": "image",
+                "source": {"type": "base64",
+                           "media_type": _image_mime(i),
+                           "data": base64.b64encode(i).decode()}}
+               for i in images]
+    content.append({"type": "text", "text": prompt})
     return _call_with_retry(lambda: client.messages.create(
         model=MODEL,
         max_tokens=max_tokens,
-        messages=[{
-            "role": "user",
-            "content": [
-                {"type": "image", "source": {"type": "base64",
-                                             "media_type": mime,
-                                             "data": b64}},
-                {"type": "text", "text": prompt},
-            ],
-        }],
+        messages=[{"role": "user", "content": content}],
     ).content[0].text)
 
 
-def _call_vision(title: str, image_bytes: bytes, description: str = "") -> dict | None:
+def _call_vision(title: str, image_bytes: bytes | list[bytes],
+                 description: str = "") -> dict | None:
+    images = image_bytes if isinstance(image_bytes, list) else [image_bytes]
     return _vision_json(
         VISION_PROMPT.format(title=title,
-                             description=(description or "")[:1500] or "(none)"),
-        image_bytes, max_tokens=400)
+                             description=(description or "")[:1500] or "(none)",
+                             photo_note=_photo_note(len(images))),
+        images, max_tokens=400)
+
+
+# How many photos the deliberate AI look reads. Each one costs about the
+# same again in image tokens, so this is the spend dial: four covers the
+# "stock photo first, real item behind it" case without paying for an
+# estate lot's forty.
+DEEP_IMAGE_MAX = int(os.environ.get("DEEP_IMAGE_MAX", "4"))
+
+
+def lot_image_urls(lot: models.Lot, limit: int) -> list[str]:
+    """The photos to show the model, best rendition first. Falls back to the
+    single stored URL for a lot imported before the list was kept."""
+    urls = [u for u in (lot.image_urls or []) if u]
+    if not urls:
+        urls = [u for u in (lot.fullsize_url, lot.hd_thumbnail_url,
+                            lot.thumbnail_url) if u][:1]
+    return urls[:max(1, limit)]
+
+
+def _download_images(urls: list[str]) -> list[bytes]:
+    """Every photo that downloads. A photo that fails is skipped, not fatal:
+    three of four still beats one."""
+    return [b for b in (_download_image(u) for u in urls) if b]
+
+
+def _photo_note(n: int) -> str:
+    if n <= 1:
+        return ""
+    return (f"\n\nYou are given {n} photos of the SAME lot, in listing order. "
+            "The first may be a stock or catalogue image rather than the item "
+            "for sale - if the later photos show a different, used, damaged or "
+            "incomplete item, they are the truth and the first is marketing. "
+            "Judge condition from the WORST thing any photo shows, and say in "
+            "notes which photo it came from.")
 
 
 def _download_image(url: str | None) -> bytes | None:

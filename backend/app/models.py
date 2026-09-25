@@ -96,6 +96,11 @@ class Lot(Base):
     hd_thumbnail_url = Column(String)
     fullsize_url = Column(String)
     image_count = Column(Integer, default=0)
+    # Every photo the listing has, largest rendition, in the order shown.
+    # The first one is not always the item: sellers lead with a stock or
+    # catalogue shot, and condition judged from that is condition judged
+    # from someone else's product. The deliberate AI look reads several.
+    image_urls = Column(JSONB)
     created_at = Column(DateTime, server_default=func.now())
 
     auction = relationship("Auction", back_populates="lots")

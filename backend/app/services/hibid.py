@@ -36,6 +36,7 @@ LOT_PAGE_SIZE = 100      # server-fixed
 MAX_LOT_PAGES = 100      # server cap
 AUCTION_BATCH = 20       # concurrent auctions per gather
 META_CHUNK = 50          # eventIds per AuctionMeta call
+MAX_LOT_IMAGES = 8       # photos kept per lot; a guard against estate lots
 
 HEADERS = {
     "User-Agent": config.HIBID_USER_AGENT,
@@ -437,6 +438,14 @@ def _process_lot(raw: dict, auction_ctx: dict) -> dict:
         "hd_thumbnail_url": first_pic.get("hdThumbnailLocation"),
         "fullsize_url": first_pic.get("fullSizeLocation"),
         "image_count": len(pictures),
+        # Every photo, largest rendition, in listing order. Kept because the
+        # first one is often a stock or catalogue shot; the deliberate AI
+        # look reads several (workers/enrich.lot_image_urls).
+        "image_urls": [u for u in
+                       ((pic or {}).get("fullSizeLocation")
+                        or (pic or {}).get("hdThumbnailLocation")
+                        or (pic or {}).get("thumbnailLocation")
+                        for pic in pictures[:MAX_LOT_IMAGES]) if u],
         # nationwide auction + pickup-only lot = unbuyable, never grade as a bargain
         "unreachable_pickup": (auction_ctx.get("source") == "Ship"
                                and source == "Local Pickup"),

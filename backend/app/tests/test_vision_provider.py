@@ -116,8 +116,13 @@ def test_vision_json_routes_to_gemini_and_parses(monkeypatch):
 
     out = enrich._vision_json("identify", b"img", max_tokens=400)
     assert out == {"title": "Widget", "condition": "used"}
-    assert calls == [{"prompt": "identify", "image": b"img",
+    # Always a list now: one photo or four, the provider takes the same shape.
+    assert calls == [{"prompt": "identify", "image": [b"img"],
                       "max_tokens": 400, "mime_type": "image/jpeg"}]
+
+    calls.clear()
+    enrich._vision_json("identify", [b"one", b"two"], max_tokens=400)
+    assert calls[0]["image"] == [b"one", b"two"]
 
 
 def test_vision_json_stays_on_claude_by_default(monkeypatch):

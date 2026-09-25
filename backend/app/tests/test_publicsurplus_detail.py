@@ -29,7 +29,7 @@ PAGE = """
   </div></div>
 </div>
 <!-- DOCUMENTS -->
-<img src="/sms/docviewer/aucdoc/IMG_1490.jpeg?auc=4085372" />
+<img src="/sms/docviewer/aucdoc/IMG_1490.jpeg?auc=4085372&thumb=b" />
 """
 
 
@@ -60,9 +60,18 @@ def test_the_pictures_after_the_block_are_not_description():
 
 
 def test_a_page_with_no_description_is_empty_not_an_error():
-    assert parse_detail("<html><body>nothing here</body></html>") == {
-        "description": "", "condition": ""}
-    assert parse_detail("") == {"description": "", "condition": ""}
+    empty = {"description": "", "condition": "", "images": []}
+    assert parse_detail("<html><body>nothing here</body></html>") == empty
+    assert parse_detail("") == empty
+
+
+def test_every_photo_is_collected_at_full_size():
+    """The page lists small "thumb=b" renditions; "thumb=a" is the full
+    photo. The first picture is often a stock shot, so the rest matter."""
+    d = parse_detail(PAGE)
+    assert d["images"] == ["https://www.publicsurplus.com/sms/docviewer/aucdoc/"
+                           "IMG_1490.jpeg?auc=4085372&thumb=a"]
+    assert "thumb=b" not in d["images"][0]
 
 
 def test_a_runaway_description_is_capped():

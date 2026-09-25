@@ -132,8 +132,8 @@ def scan(payload: PublicSurplusScanRequest, db: Session = Depends(get_db)):
 @router.post("/backfill-descriptions")
 def backfill_descriptions(limit: int = 200, dry_run: bool = True,
                           db: Session = Depends(get_db)):
-    """Fetch the seller's item-page text for PublicSurplus lots that have
-    none. Free - no AI, one page per lot - and it is what tells the pricer
+    """Fetch the seller's item-page text - and its photo list - for
+    PublicSurplus lots that have none. Free - no AI, one page per lot - and it is what tells the pricer
     a laptop has no hard drive. Lots imported before this existed all have
     an empty description; enrichment fetches it for new ones by itself.
 
@@ -150,8 +150,11 @@ def backfill_descriptions(limit: int = 200, dry_run: bool = True,
         return {"missing": total, "dry_run": True}
     filled = failed = 0
     for lot in q.limit(limit).all():
-        detail = publicsurplus.fetch_detail(int(lot.lot_id[3:]))
-        text = (detail or {}).get("description")
+        detail = publicsurplus.fetch_detail(int(lot.lot_id[3:])) or {}
+        text = detail.get("description")
+        if detail.get("images"):
+            lot.image_urls = detail["images"]
+            lot.image_count = len(detail["images"])
         if text:
             lot.description = text
             filled += 1

@@ -67,6 +67,12 @@ _BOILERPLATE_RE = re.compile(
     r"Removal of (?:the )?item|By placing a bid)",
     re.IGNORECASE)
 DESCRIPTION_MAX = 1200
+MAX_LOT_IMAGES = 8
+# The item page lists its photos as small "thumb=b" renditions of the same
+# docviewer URL the full photo uses; "thumb=a" is the full one (217 KB vs
+# 4 KB on the Dell). The URL redirects to a signed S3 link that expires, so
+# the docviewer URL is what gets stored and the downloader follows it.
+_PICTURE_RE = re.compile(r'src="(/sms/docviewer/aucdoc/[^"]+)"', re.IGNORECASE)
 
 
 def _text(fragment: str) -> str:
@@ -98,7 +104,14 @@ def parse_detail(html: str) -> dict:
     # part of what the seller disclosed, so it rides with the description.
     if condition and condition.lower() not in text.lower():
         text = f"Condition: {condition}\n{text}".strip()
-    return {"description": text[:DESCRIPTION_MAX].strip(), "condition": condition}
+    seen, images = set(), []
+    for src in _PICTURE_RE.findall(html or ""):
+        url = BASE + src.replace("thumb=b", "thumb=a")
+        if url not in seen:
+            seen.add(url)
+            images.append(url)
+    return {"description": text[:DESCRIPTION_MAX].strip(), "condition": condition,
+            "images": images[:MAX_LOT_IMAGES]}
 
 
 def fetch_detail(auction_id: int) -> dict | None:

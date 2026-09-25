@@ -52,16 +52,20 @@ def _extract_text(data: dict) -> str:
     raise ValueError(f"no text in interaction response (keys: {sorted(data)[:8]})")
 
 
-def generate(prompt: str, image_bytes: bytes | None = None,
+def generate(prompt: str, image_bytes: bytes | list[bytes] | None = None,
              max_tokens: int = 800, mime_type: str = "image/jpeg") -> str:
     # max_tokens is accepted for signature parity with the Claude path but
     # not sent: the Interactions field name for it is unverified, and
     # thinking_level minimal plus bounded prompts keep outputs tight anyway.
     del max_tokens
     parts: list[dict] = [{"type": "text", "text": prompt}]
-    if image_bytes:
+    # One image or several: a lot's later photos are where the damage the
+    # first (often stock) photo never showed turns up.
+    images = ([] if not image_bytes
+              else image_bytes if isinstance(image_bytes, list) else [image_bytes])
+    for img in images:
         parts.append({"type": "image", "mime_type": mime_type,
-                      "data": base64.b64encode(image_bytes).decode()})
+                      "data": base64.b64encode(img).decode()})
     r = httpx.post(
         _URL,
         headers={"x-goog-api-key": config.GEMINI_API_KEY,
