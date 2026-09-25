@@ -559,11 +559,20 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
     finally { setQueuing(false) }
   }
 
+  // Only the selected lots with no value yet. A lot that already has a price
+  // is left alone: "Select all" on Priced Inventory once sent 1,485 priced
+  // lots back through comps.
+  const selectedUnpriced = selectedInView
+    .filter((l) => l.enrichment?.est_resale == null && l.enrichment?.status !== 'queued')
+
   async function handleBulkComps() {
-    const ids = selectedInView.map((l) => l.lot_id)
-    if (!window.confirm(`Look up sold comps for ${ids.length} selected lots, using their titles `
-                        + `as-is?\n\nNo AI cost. About ${ids.length} SoldComps requests against `
-                        + `your plan. Lots that already have a value are searched again.`)) return
+    const ids = selectedUnpriced.map((l) => l.lot_id)
+    if (!ids.length) { alert('Every selected lot already has a value.'); return }
+    const skipped = selectedInView.length - ids.length
+    if (!window.confirm(`Look up sold comps for the ${ids.length} selected lots with no value yet, `
+                        + `using their titles as-is?\n\nNo AI cost. At most ${ids.length} SoldComps `
+                        + `requests against your plan - identical titles share one.`
+                        + (skipped ? `\n\n${skipped} selected lots already have a value and are left alone.` : ''))) return
     setQueuing(true)
     try {
       const r = await repriceSelected(ids)
@@ -602,10 +611,13 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
           Select all {sorted.length.toLocaleString()}
         </button>
       )}
-      <button className="primary" style={smallBtn} onClick={handleBulkComps} disabled={queuing}
+      <button className="primary" style={smallBtn} onClick={handleBulkComps}
+              disabled={queuing || !selectedUnpriced.length}
               data-track="Comps only (selected lots)"
-              title="Sold-comps lookup on the selected lots' titles as-is. No AI cost (asks first, shows the request count)">
-        Price with comps (no AI)
+              title="Sold-comps lookup on the selected lots that have no value yet, on their titles as-is. Lots already priced are left alone. No AI cost (asks first, shows the request count)">
+        {selectedUnpriced.length
+          ? `Price ${selectedUnpriced.length.toLocaleString()} with comps (no AI)`
+          : 'All selected are priced'}
       </button>
       <button style={smallBtn} onClick={handleBulkPrice} disabled={queuing}
               title="AI reads each selected lot's photo and listing for condition and a closer identification, then prices it (asks first, shows cost)">
