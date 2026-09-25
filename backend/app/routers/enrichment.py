@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from .. import models, schemas
 from ..database import get_db
 from ..services import jobs
-from ..workers.enrich import _apply_roi
+from ..workers.enrich import _apply_roi, ai_done, ai_done_sql
 
 router = APIRouter(prefix="/lots", tags=["enrichment"])
 
@@ -28,11 +28,40 @@ def _worth_pricing():
                     models.Lot.closes_at >= datetime.now()))
 
 
+def _refuse_if_locked(lot: models.Lot) -> None:
+    """A lot AI has already priced is locked against another paid run."""
+    if ai_done(lot.enrichment):
+        raise HTTPException(status_code=409,
+                            detail="Already priced by AI - locked so it isn't paid for twice")
+
+
+@router.post("/{lot_id}/comps", status_code=202)
+def comps_lot(lot_id: str, db: Session = Depends(get_db)):
+    """Price one lot from sold comps on its own title - no AI. Queued for
+    the worker like the AI tasks, so it runs even while a bulk re-price
+    job has the re-price slot."""
+    lot = db.query(models.Lot).filter(models.Lot.lot_id == lot_id).first()
+    if not lot:
+        raise HTTPException(status_code=404, detail="Lot not found")
+    _refuse_if_locked(lot)
+    e = lot.enrichment
+    if e.status == "queued":
+        return {"lot_id": lot_id, "status": "queued"}
+    e.status = "queued"
+    e.queued_task = "comps"
+    e.queued_at = datetime.now(timezone.utc)
+    e.queue_rank = 0
+    e.claimed_at = None
+    db.commit()
+    return {"lot_id": lot_id, "status": "queued"}
+
+
 @router.post("/{lot_id}/enrich", status_code=202)
 def enrich_lot(lot_id: str, db: Session = Depends(get_db)):
     lot = db.query(models.Lot).filter(models.Lot.lot_id == lot_id).first()
     if not lot:
         raise HTTPException(status_code=404, detail="Lot not found")
+    _refuse_if_locked(lot)
 
     lot.enrichment.status = "queued"
     lot.enrichment.queued_task = "enrich"
@@ -110,7 +139,9 @@ def reprice(auction_id: int | None = None, weak_only: bool = False,
     from ..services import pricing
     q = (db.query(models.Lot.id)
            .join(models.Enrichment)
-           .filter(_worth_pricing()))
+           .filter(_worth_pricing(),
+                   # AI-priced lots are locked: never searched again.
+                   ~ai_done_sql()))
     if unpriced_only:
         # Never-priced lots, searched on their raw auction titles: the
         # comps-only first pass. No AI spend - the worker falls back to
@@ -284,7 +315,8 @@ def reinspect_no_comps(dry_run: bool = False,
     rows = (
         db.query(models.Lot).join(models.Enrichment)
         .join(models.Auction, models.Lot.auction_id == models.Auction.id)
-        .filter(models.Enrichment.status == "success",
+        .filter(models.Enrichment.status != "queued",
+                ~ai_done_sql(),         # AI-priced lots are locked
                 _worth_pricing(),
                 models.Enrichment.est_resale.is_(None),
                 (models.Auction.closing_date.is_(None))
@@ -315,6 +347,7 @@ def inspect_lot(lot_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Lot not found")
     if not (lot.thumbnail_url or lot.hd_thumbnail_url):
         raise HTTPException(status_code=422, detail="Lot has no image to inspect")
+    _refuse_if_locked(lot)
 
     lot.enrichment.status = "queued"
     lot.enrichment.queued_task = "inspect"

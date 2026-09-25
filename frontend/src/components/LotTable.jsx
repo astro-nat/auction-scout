@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { enrichLot, inspectLot, fetchLot, patchEnrichment, enrichBatch, repriceSelected, setWatch, setHidden, alertOnce, parseUtc } from '../api'
+import { enrichLot, compsLot, fetchLot, patchEnrichment, enrichBatch, repriceSelected, setWatch, setHidden, alertOnce, parseUtc } from '../api'
+import { aiDone, rowAction } from '../lib/pricing'
 import { compRows, ebaySoldUrl } from '../lib/comps'
 import { houseRatioLabel, houseRatioTitle } from '../lib/calibration'
 import { CLOSING_RANGES, ROI_RANGES, hoursUntil, matchesFilter, presetsFor, roiPercent } from '../lib/filters'
@@ -87,7 +88,8 @@ function statusLabel(e) {
   }
   if (e.status === 'failed') return '✗ failed'
   if (e.status === 'queued') return 'queued'
-  return 'imported, not enriched'
+  if (e.est_resale != null) return 'priced by comps'
+  return 'not priced'
 }
 
 // Column definitions. `get` drives sorting and filtering; `filter` picks the
@@ -408,13 +410,28 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
     } catch (e) { alertOnce(e.message) }
   }
 
-  async function handleInspect(lotId) {
+  async function handleComps(lotId) {
     try {
       pinLot(lotId)
-      await inspectLot(lotId)
+      await compsLot(lotId)
       setPollingIds((prev) => new Set(prev).add(lotId))
       poll(lotId)
     } catch (e) { alertOnce(e.message) }
+  }
+
+  // The row's one button: comps if unpriced, AI if comps-priced, locked
+  // once AI has priced it.
+  function rowButton(lot, style) {
+    const a = rowAction(lot.enrichment || {}, pollingIds.has(lot.lot_id))
+    const onClick = a.step === 'comps' ? () => handleComps(lot.lot_id)
+      : a.step === 'ai' ? () => handleEnrich(lot.lot_id) : undefined
+    return (
+      <button style={style} disabled={a.disabled} title={a.title} onClick={onClick}
+              data-track={a.step === 'comps' ? 'Price with comps (row)'
+                : a.step === 'ai' ? 'Further inspect with AI (row)' : undefined}>
+        {a.label}
+      </button>
+    )
   }
 
   async function handleCorrect(lotId, field, value) {
@@ -452,7 +469,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
         return
       }
       onLotUpdated(updated)
-      if (updated.enrichment?.status === 'success' || updated.enrichment?.status === 'failed') {
+      if (updated.enrichment?.status !== 'queued') {
         setPollingIds((prev) => {
           const next = new Set(prev)
           next.delete(lotId)
@@ -478,7 +495,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
     .filter((l) => l.enrichment?.est_resale == null && l.enrichment?.status !== 'queued')
   const [aiMin, setAiMin] = useState(50)
   const aiTargets = sorted
-    .filter((l) => !['success', 'queued'].includes(l.enrichment?.status)
+    .filter((l) => !aiDone(l.enrichment) && l.enrichment?.status !== 'queued'
                    && l.enrichment?.est_resale != null
                    && Number(l.enrichment.est_resale) >= Number(aiMin || 0))
     .sort((a, b) => Number(b.enrichment.est_resale) - Number(a.enrichment.est_resale))
@@ -840,12 +857,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                 </details>
               )}
               <div style={{ display: 'flex', gap: 8 }}>
-                <button style={{ flex: 1, padding: 8 }} disabled={isWorking(lot)}
-                        title="Work out what this is worth: match it against your BOLO brand list, have AI read the description (or the photo) to identify it and judge condition, look up eBay comps, then compute your max bid and ROI."
-                        onClick={() => handleEnrich(lot.lot_id)}>Price it</button>
-                <button style={{ flex: 1, padding: 8 }} disabled={isWorking(lot)}
-                        title="For a box of many things (a crate of CDs, a tray of tools): AI reads the full-size photo, lists every item it can identify, prices them one by one and totals them. Slower and dearer than pricing the lot as a single item."
-                        onClick={() => handleInspect(lot.lot_id)}>Price each item</button>
+                {rowButton(lot, { flex: 1, padding: 8 })}
               </div>
             </div>
           )
@@ -1137,12 +1149,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
                 )}
               </td>
               <td style={{ ...cell, whiteSpace: 'nowrap' }}>
-                <button disabled={isWorking(lot)} title="Work out what this is worth: match it against your BOLO brand list, have AI read the description (or the photo) to identify it and judge condition, look up eBay comps, then compute your max bid and ROI."
-                        onClick={() => handleEnrich(lot.lot_id)}>Price it</button>{' '}
-                <button disabled={isWorking(lot)} title="For a box of many things (a crate of CDs, a tray of tools): AI reads the full-size photo, lists every item it can identify, prices them one by one and totals them. Slower and dearer than pricing the lot as a single item."
-                        onClick={() => handleInspect(lot.lot_id)}>
-                  Price each item
-                </button>
+                {rowButton(lot)}
               </td>
             </tr>
           )

@@ -70,6 +70,11 @@ export function inspectLot(lotId) {
   return request(`/lots/${lotId}/inspect`, { method: 'POST' })
 }
 
+// One lot, sold comps on its own title, no AI - the row's default button.
+export function compsLot(lotId) {
+  return request(`/lots/${lotId}/comps`, { method: 'POST' })
+}
+
 export function enrichBatch(lotIds) {
   return request('/lots/enrich-batch', {
     method: 'POST',

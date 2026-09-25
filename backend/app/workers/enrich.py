@@ -33,7 +33,7 @@ from datetime import datetime, timezone
 
 import anthropic
 import httpx
-from sqlalchemy import or_
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session, joinedload
 
 from ..database import SessionLocal
@@ -426,6 +426,57 @@ def match_twins(db: Session, dry_run: bool = False,
             else:
                 _share_with_twins(db, *leader)
     return out
+
+
+def ai_done(e: models.Enrichment | None) -> bool:
+    """AI has already priced this lot. It is then locked: no button and no
+    bulk path runs AI or a comp lookup on it again. A 'success' the AI never
+    actually saw (ai_source missing or 'none' - it was unreachable) is not
+    AI-priced and stays open to a retry."""
+    return (e is not None and e.status == "success"
+            and e.ai_source not in (None, "none"))
+
+
+def ai_done_sql():
+    """ai_done() as a SQL condition, for the bulk paths to exclude."""
+    return and_(models.Enrichment.status == "success",
+                models.Enrichment.ai_source.isnot(None),
+                models.Enrichment.ai_source != "none")
+
+
+def run_comps(lot_db_id: int) -> None:
+    """One lot, sold comps only, from its row's "Price with comps" button.
+    The same plan / lookup / apply as a bulk re-price, without the job - so
+    it works while a bulk re-price is running. No AI; the lot comes back
+    'pending', still owed an AI look if it turns out worth one."""
+    db: Session = SessionLocal()
+    try:
+        lot = db.query(models.Lot).filter(models.Lot.id == lot_db_id).first()
+        e = lot.enrichment if lot else None
+        if e is None or e.status != "queued":
+            return
+        try:
+            plan = _plan_reprice_lot(db, lot_db_id)
+            db.commit()
+            comps = None
+            if plan["kind"] == "title":
+                comps = plan.get("comps")
+            elif plan["kind"] == "network":
+                comps = _fetch_reprice_comps(plan)
+            if plan["kind"] in ("title", "network"):
+                _apply_reprice(db, plan, comps)
+        except Exception as exc:  # noqa: BLE001 - the lot goes back to waiting, not failed
+            logger.warning("Comps for lot %s failed: %s", lot_db_id, exc)
+            db.rollback()
+        db.expire_all()
+        e = db.query(models.Enrichment).filter(models.Enrichment.lot_id == lot_db_id).first()
+        if e is not None and e.status == "queued":
+            e.status = "pending"
+            e.claimed_at = None
+            e.progress = None
+            db.commit()
+    finally:
+        db.close()
 
 
 def _share_quietly(db: Session, lot: models.Lot, e: models.Enrichment) -> None:
@@ -1649,6 +1700,9 @@ def _plan_reprice_lot(db: Session, lot_db_id: int) -> dict:
     marks = set(e.user_overrides or [])
     if "est_resale" in marks:
         plan["kind"] = "override"       # never overwrite a hand-corrected price
+        return plan
+    if ai_done(e):
+        plan["kind"] = "override"       # AI-priced: locked, never searched again
         return plan
     # Reclassify ship tier with the current regex rules — free, and ship-rule
     # fixes should reach old lots the same way pricing-rule fixes do.

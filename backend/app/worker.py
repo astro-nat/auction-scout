@@ -106,11 +106,13 @@ def _start_batch_job() -> bool:
 def _run_one_lot(item) -> None:
     """One claimed lot, on a pool thread. Imports are lazy for the same
     reason as _runner_for — the Anthropic client builds at import time."""
-    from .workers.enrich import run_enrichment, run_inspection
+    from .workers.enrich import run_comps, run_enrichment, run_inspection
     lot_id, task = item
     try:
         if task == "inspect":
             run_inspection(lot_id)
+        elif task == "comps":
+            run_comps(lot_id)
         else:
             run_enrichment(lot_id)
     except Exception:  # noqa: BLE001 — one lot must not kill the pool
