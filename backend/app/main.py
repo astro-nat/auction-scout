@@ -143,6 +143,10 @@ _MIGRATIONS = [
     # the matching count needs to remember which SEARCH (not just which
     # category) it was counted under.
     "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS category_count_search VARCHAR",
+    # "Flag this comp" — the user's own signal that a valuation looks
+    # wrong, independent of a hand-corrected value.
+    "ALTER TABLE enrichment ADD COLUMN IF NOT EXISTS comp_flagged BOOLEAN DEFAULT FALSE",
+    "ALTER TABLE enrichment ADD COLUMN IF NOT EXISTS comp_flag_note VARCHAR",
 ]
 
 def _run_migrations() -> list[str]:

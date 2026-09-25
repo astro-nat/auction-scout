@@ -39,9 +39,18 @@ class EnrichmentOut(BaseModel):
     gold_check_note: Optional[str] = None
     identity_note: Optional[str] = None
     fraud_note: Optional[str] = None
+    comp_flagged: bool = False
+    comp_flag_note: Optional[str] = None
     progress: Optional[str] = None
     error_message: Optional[str] = None
     user_overrides: list[str] = []
+
+
+class CompFlagRequest(BaseModel):
+    """Flag (or clear) a lot's comps as wrong. flagged defaults true so the
+    button is a single call; pass flagged=false to clear it."""
+    flagged: bool = True
+    note: Optional[str] = None
 
 
 class EnrichmentPatch(BaseModel):

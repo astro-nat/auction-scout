@@ -17,6 +17,7 @@ def count_lots(
     roi_status: Optional[str] = None,
     bolo_only: bool = False,
     priced_only: bool = False,
+    flagged_only: bool = False,
     include_closed: bool = False,
     db: Session = Depends(get_db),
 ):
@@ -27,14 +28,16 @@ def count_lots(
         q = q.filter(models.Lot.category == category)
     if auction_id:
         q = q.filter(models.Lot.auction_id.in_(auction_id))
-    q = _enrichment_filters(q, status, roi_status, bolo_only, priced_only)
+    q = _enrichment_filters(q, status, roi_status, bolo_only, priced_only,
+                            flagged_only)
     return {"total": q.count()}
 
 
-def _enrichment_filters(q, status, roi_status, bolo_only, priced_only):
+def _enrichment_filters(q, status, roi_status, bolo_only, priced_only,
+                        flagged_only=False):
     """The filters that live on the enrichment row, shared by the list and
     its count so the two can never disagree about what is in view."""
-    if status or roi_status or bolo_only or priced_only:
+    if status or roi_status or bolo_only or priced_only or flagged_only:
         q = q.join(models.Enrichment)
     if status:
         q = q.filter(models.Enrichment.status == status)
@@ -46,6 +49,10 @@ def _enrichment_filters(q, status, roi_status, bolo_only, priced_only):
         # "Priced" means a value exists, whatever tier produced it - the
         # Priced inventory tab is every lot the app has an opinion on.
         q = q.filter(models.Enrichment.est_resale.isnot(None))
+    if flagged_only:
+        # The worklist: every lot the user has personally said "this
+        # valuation is wrong" about.
+        q = q.filter(models.Enrichment.comp_flagged.is_(True))
     return q
 
 
@@ -87,6 +94,7 @@ def list_lots(
     roi_status: Optional[str] = Query(None, description="GOLD MINE | PASS"),
     bolo_only: bool = False,
     priced_only: bool = Query(False, description="only lots with an est_resale"),
+    flagged_only: bool = Query(False, description="only lots flagged as wrong comps"),
     include_comps: bool = Query(False, description="send each lot's comp records too"),
     include_closed: bool = False,
     limit: int = 2000,
@@ -107,7 +115,8 @@ def list_lots(
         q = q.filter(models.Lot.category == category)
     if auction_id:
         q = q.filter(models.Lot.auction_id.in_(auction_id))
-    q = _enrichment_filters(q, status, roi_status, bolo_only, priced_only)
+    q = _enrichment_filters(q, status, roi_status, bolo_only, priced_only,
+                            flagged_only)
 
     from datetime import datetime
     from ..services import calibration

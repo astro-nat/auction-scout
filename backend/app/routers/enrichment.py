@@ -388,6 +388,25 @@ def recheck_lot(lot_id: str, db: Session = Depends(get_db)):
     return {"lot_id": lot_id, "status": "queued", "unlocked": was_locked}
 
 
+@router.post("/{lot_id}/flag-comp", response_model=schemas.LotOut)
+def flag_comp(lot_id: str, payload: schemas.CompFlagRequest,
+              db: Session = Depends(get_db)):
+    """Mark (or clear) a lot's comps as wrong — the user's own signal,
+    independent of a hand-corrected value. Doesn't touch est_resale or
+    user_overrides: flagging is a note about the EVIDENCE, not a
+    correction, so it survives the next reprice instead of blocking one.
+    A pile of flagged lots is a worklist for comp-matching fixes."""
+    lot = db.query(models.Lot).filter(models.Lot.lot_id == lot_id).first()
+    if not lot:
+        raise HTTPException(status_code=404, detail="Lot not found")
+    e = lot.enrichment
+    e.comp_flagged = payload.flagged
+    e.comp_flag_note = (payload.note or None) if payload.flagged else None
+    db.commit()
+    db.refresh(lot)
+    return lot
+
+
 @router.patch("/{lot_id}/enrichment", response_model=schemas.LotOut)
 def patch_enrichment(lot_id: str, payload: schemas.EnrichmentPatch,
                      db: Session = Depends(get_db)):

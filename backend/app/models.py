@@ -186,6 +186,13 @@ class Enrichment(Base):
     # listing's own words changed about how the lot was priced - an
     # unauthenticated signature, a custom/bootleg, a loose pop.
     fraud_note = Column(String)
+    # User-flagged: "these comps came back wrong." Independent of
+    # user_overrides — it's a note about the EVIDENCE, not a corrected
+    # value, so it survives a reprice instead of blocking one. Feeds future
+    # algorithm work: a pile of flagged lots is a worklist of comp-matching
+    # failures, grouped by price_source, category, whatever pattern shows up.
+    comp_flagged = Column(Boolean, default=False)
+    comp_flag_note = Column(String)
 
     # Which worker a 'queued' lot is waiting for ('enrich' | 'inspect') — how
     # the worker process knows what to run.

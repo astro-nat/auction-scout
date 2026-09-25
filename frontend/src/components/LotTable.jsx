@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { enrichLot, compsLot, recheckLot, fetchLot, patchEnrichment, enrichBatch, repriceSelected, setWatch, setHidden, alertOnce, parseUtc } from '../api'
+import { enrichLot, compsLot, recheckLot, fetchLot, patchEnrichment, flagComp, enrichBatch, repriceSelected, setWatch, setHidden, alertOnce, parseUtc } from '../api'
 import { aiDone, rowAction } from '../lib/pricing'
 import { PAGE_SIZES, pageButtons, pageWindow, savePageSize, savedPageSize, searchMatches, showingText } from '../lib/paging'
 import { compRows, ebaySoldUrl } from '../lib/comps'
@@ -13,16 +13,31 @@ import useMediaQuery from '../useMediaQuery'
 // used (raw observed prices — never scaled to match the conclusion), plus a
 // one-tap eBay sold-listings search so distrust costs thirty seconds, not a
 // Google detour. Rows enriched before comps were stored still get the link.
-function CompsPeek({ lot, e }) {
+function CompsPeek({ lot, e, onLotUpdated }) {
   const search = ebaySoldUrl(e.enriched_title || lot.title)
   // The list endpoint leaves the comp records out - they were 60% of its
   // payload and are read only here - so the first open fetches this one
   // lot, which always carries them.
   const [comps, setComps] = useState(e.comps ?? null)
   const [loading, setLoading] = useState(false)
+  const [flagging, setFlagging] = useState(false)
   const rows = compRows(comps)
   const expected = e.comp_count ?? 0
   if (!search && !rows.length && !expected) return null
+
+  async function toggleFlag() {
+    if (flagging) return
+    setFlagging(true)
+    try {
+      let note
+      if (!e.comp_flagged) {
+        note = window.prompt(
+          "What's wrong with these comps? (optional — Cancel still flags it)") || undefined
+      }
+      const updated = await flagComp(lot.lot_id, { flagged: !e.comp_flagged, note })
+      onLotUpdated(updated)
+    } catch (err) { alertOnce(err.message) } finally { setFlagging(false) }
+  }
 
   async function fill(ev) {
     if (!ev.target.open || comps || loading || !expected) return
@@ -41,6 +56,7 @@ function CompsPeek({ lot, e }) {
     <details style={{ marginTop: 2 }} onToggle={fill}>
       <summary style={{ color: 'var(--muted)', fontSize: 11, cursor: 'pointer' }}>
         evidence{(rows.length || expected) ? ` (${rows.length || expected})` : ''}
+        {e.comp_flagged ? ' — flagged wrong' : ''}
       </summary>
       <div style={{ fontSize: 11, textAlign: 'left', maxWidth: 360, padding: '4px 0' }}>
         {e.roi_reason && (
@@ -51,6 +67,17 @@ function CompsPeek({ lot, e }) {
         {e.price_source && (
           <div style={{ color: 'var(--muted)', marginBottom: 3 }}>{e.price_source}</div>
         )}
+        {e.comp_flagged && (
+          <div style={{ marginBottom: 3, color: 'var(--danger)' }}>
+            flagged: wrong comps{e.comp_flag_note ? ` — ${e.comp_flag_note}` : ''}
+          </div>
+        )}
+        <button type="button" className="link-like" disabled={flagging}
+                style={{ fontSize: 11, marginBottom: 3, display: 'block' }}
+                onClick={toggleFlag}
+                title="Mark this valuation as wrong — builds a worklist for fixing the comp matching">
+          {flagging ? 'saving…' : e.comp_flagged ? 'unflag' : 'flag these comps as wrong'}
+        </button>
         {rows.map((r, i) => (
           <div key={i} style={{ marginBottom: 2 }}>
             {r.label}
@@ -951,7 +978,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                   </span>
                 )}
               </div>
-              {e.est_resale != null && <CompsPeek lot={lot} e={e} />}
+              {e.est_resale != null && <CompsPeek lot={lot} e={e} onLotUpdated={onLotUpdated} />}
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
                 <span className="badge">{lot.logistics_ease}</span>
                 {e.bolo_brand && (
@@ -1240,7 +1267,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                       ? ` · ${houseRatioLabel(lot.house_ratio, lot.house_ratio_n)}` : ''}
                   </div>
                 )}
-                {e.est_resale != null && <CompsPeek lot={lot} e={e} />}
+                {e.est_resale != null && <CompsPeek lot={lot} e={e} onLotUpdated={onLotUpdated} />}
               </td>
               <td className="num" style={cell}>{money(e.max_bid)}</td>
               <td className="num" title={roiTooltip(lot, e)}

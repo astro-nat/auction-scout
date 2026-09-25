@@ -57,7 +57,7 @@ export function alertOnce(msg) {
   window.alert(msg)
 }
 
-export function fetchLots({ auctionIds, category, status, roiStatus, boloOnly, pricedOnly, offset } = {}) {
+export function fetchLots({ auctionIds, category, status, roiStatus, boloOnly, pricedOnly, flaggedOnly, offset } = {}) {
   const params = new URLSearchParams()
   // 2000 per page everywhere: a 6000-lot payload crashed phone tabs and
   // strained the backend. Big auctions page in with `offset` via the
@@ -71,6 +71,7 @@ export function fetchLots({ auctionIds, category, status, roiStatus, boloOnly, p
   if (roiStatus) params.set('roi_status', roiStatus)
   if (boloOnly) params.set('bolo_only', 'true')
   if (pricedOnly) params.set('priced_only', 'true')
+  if (flaggedOnly) params.set('flagged_only', 'true')
   return request(`/lots?${params}`)
 }
 
@@ -111,7 +112,17 @@ export function patchEnrichment(lotId, changes) {
   })
 }
 
-export function fetchLotCount({ auctionIds, category, status, roiStatus, boloOnly, pricedOnly } = {}) {
+// "These comps came back wrong" — independent of a hand-corrected value,
+// so it survives the next reprice instead of blocking one. flagged=false
+// clears it.
+export function flagComp(lotId, { flagged = true, note } = {}) {
+  return request(`/lots/${lotId}/flag-comp`, {
+    method: 'POST',
+    body: JSON.stringify({ flagged, note }),
+  })
+}
+
+export function fetchLotCount({ auctionIds, category, status, roiStatus, boloOnly, pricedOnly, flaggedOnly } = {}) {
   const params = new URLSearchParams()
   for (const id of auctionIds || []) params.append('auction_id', id)
   if (category) params.set('category', category)
@@ -119,6 +130,7 @@ export function fetchLotCount({ auctionIds, category, status, roiStatus, boloOnl
   if (roiStatus) params.set('roi_status', roiStatus)
   if (boloOnly) params.set('bolo_only', 'true')
   if (pricedOnly) params.set('priced_only', 'true')
+  if (flaggedOnly) params.set('flagged_only', 'true')
   return request(`/lots/count?${params}`)
 }
 

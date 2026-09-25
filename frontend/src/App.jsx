@@ -84,7 +84,7 @@ export default function App() {
   const [categoryFilter, setCategoryFilter] = useState('')
   const [lotCategories, setLotCategories] = useState([])
   const [lots, setLots] = useState([])
-  const [filters, setFilters] = useState({ boloOnly: false, roiStatus: '' })
+  const [filters, setFilters] = useState({ boloOnly: false, roiStatus: '', flaggedOnly: false })
   const [hideLowValue, setHideLowValue] = useState(true)
   const [lowValueCutoff, setLowValueCutoff] = useState(25)
   // HARD-ship lots (furniture, appliances) rarely clear the ROI bar and
@@ -181,6 +181,7 @@ export default function App() {
       category: categoryFilter || undefined,
       boloOnly: filters.boloOnly,
       roiStatus: filters.roiStatus || undefined,
+      flaggedOnly: filters.flaggedOnly,
       pricedOnly,
     }
     // Pages of 2000, fetched AT ONCE rather than one after another. One
@@ -1417,6 +1418,14 @@ export default function App() {
               checked={filters.roiStatus === 'GOLD MINE'}
               onChange={(ev) => setFilters((f) => ({ ...f, roiStatus: ev.target.checked ? 'GOLD MINE' : '' }))}
             /> Gold mines only
+          </label>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
+                 title="Lots you've flagged as having wrong comps — a worklist for fixing the algorithm">
+            <input
+              type="checkbox"
+              checked={filters.flaggedOnly}
+              onChange={(ev) => setFilters((f) => ({ ...f, flaggedOnly: ev.target.checked }))}
+            /> Flagged only
           </label>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap',
                          color: 'var(--muted)' }}
