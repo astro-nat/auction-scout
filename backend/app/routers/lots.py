@@ -7,6 +7,7 @@ from typing import Optional, List
 from .. import models, schemas
 from ..database import get_db
 from ..services import twins
+from ..services.boilerplate import is_boilerplate
 
 router = APIRouter(prefix="/lots", tags=["lots"])
 
@@ -255,6 +256,29 @@ def flush_closed(dry_run: bool = False, db: Session = Depends(get_db)):
     """Manual flush — dry_run=true only counts, so the UI can put a real
     number in its confirm dialog."""
     return flush_closed_now(db, dry_run=dry_run)
+
+
+@router.post("/hide-boilerplate")
+def hide_boilerplate(dry_run: bool = False, db: Session = Depends(get_db)):
+    """Hide the house notices already on file.
+
+    Imports drop them now, but the ones imported before that are still here,
+    still priced - a returns policy valued at $56.70 - and still eligible
+    for a re-price. Hidden rather than deleted: the enrichment rows are real
+    history, and hiding is what already takes a lot out of the views and out
+    of every bulk pricing path.
+    """
+    rows = (db.query(models.Lot)
+              .filter(or_(models.Lot.hidden.is_(False),
+                          models.Lot.hidden.is_(None))).all())
+    todo = [r for r in rows if is_boilerplate(r.title)]
+    if not dry_run and todo:
+        (db.query(models.Lot)
+           .filter(models.Lot.id.in_([r.id for r in todo]))
+           .update({models.Lot.hidden: True}, synchronize_session=False))
+        db.commit()
+    return {"changed": len(todo), "dry_run": dry_run,
+            "titles": [r.title for r in todo[:20]]}
 
 
 @router.post("/{lot_id}/hide-like")

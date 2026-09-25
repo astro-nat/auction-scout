@@ -23,6 +23,7 @@ from ..services import hibid, jobs
 from ..services import shipping
 from ..services.timing import timed
 from .enrich import _apply_roi, apply_bolo_match, looks_multi_item
+from ..services.boilerplate import is_boilerplate
 from ..services.bolo import category_hint
 
 logger = logging.getLogger(__name__)
@@ -83,6 +84,7 @@ def save_lots(db: Session, auction: models.Auction, lots: list[dict], *,
              "thumbnail_url", "hd_thumbnail_url", "fullsize_url")
     new_rows: list = []
     new_data: list = []
+    notices = 0
     for i, data in enumerate(incoming, 1):
         if i % 200 == 0 or i == total:
             if should_cancel and should_cancel():
@@ -117,6 +119,16 @@ def save_lots(db: Session, auction: models.Auction, lots: list[dict], *,
             if row.current_bid != bid_before and row.enrichment is not None:
                 _apply_roi(row, row.enrichment)
             updated += 1
+            continue
+
+        # The house's own notices - "**RETURNS**", "Pickup Process & Hours"
+        # - are listed in the catalogue like lots. Nothing there can be
+        # bought, and importing them cost a sold-comps lookup each and put a
+        # value on them: $56.70 for a returns policy. Dropped before the row
+        # exists, so it never needs pricing and never needs hiding. Rows
+        # already on file are left alone - /lots/hide-boilerplate does those.
+        if is_boilerplate(data.get("title")):
+            notices += 1
             continue
 
         if bolo_only:
@@ -164,6 +176,10 @@ def save_lots(db: Session, auction: models.Auction, lots: list[dict], *,
     if skipped:
         logger.info("Import (BOLO only): kept %d, skipped %d non-matching lots",
                     created, skipped)
+    if notices:
+        # Logged rather than silent: a filter that drops rows should say so,
+        # in case it ever drops one it should not have.
+        logger.info("Import: skipped %d house notices (not lots)", notices)
     return created, updated, cancelled
 
 
