@@ -1,5 +1,6 @@
 from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 from typing import Optional, List
 
@@ -28,9 +29,27 @@ def count_lots(
         q = q.filter(models.Lot.category == category)
     if auction_id:
         q = q.filter(models.Lot.auction_id.in_(auction_id))
+    q = _visible_auctions(q, auction_id)
     q = _enrichment_filters(q, status, roi_status, bolo_only, priced_only,
                             flagged_only)
     return {"total": q.count()}
+
+
+def _visible_auctions(q, auction_id):
+    """Drop the lots of a dismissed auction.
+
+    Hiding a sale has to take its listings with it - hiding the auction and
+    leaving 187 of its lots in the inventory is not hiding it. Filtered
+    rather than written onto each lot, so bringing the auction back brings
+    its lots back unchanged.
+
+    An explicit auction_id is honoured anyway: that is the auction-name
+    click, and it is the only way back to a dismissed sale's own items.
+    """
+    if auction_id:
+        return q
+    return q.filter(models.Lot.auction.has(
+        or_(models.Auction.hidden.is_(False), models.Auction.hidden.is_(None))))
 
 
 def _enrichment_filters(q, status, roi_status, bolo_only, priced_only,
@@ -115,6 +134,7 @@ def list_lots(
         q = q.filter(models.Lot.category == category)
     if auction_id:
         q = q.filter(models.Lot.auction_id.in_(auction_id))
+    q = _visible_auctions(q, auction_id)
     q = _enrichment_filters(q, status, roi_status, bolo_only, priced_only,
                             flagged_only)
 

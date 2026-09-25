@@ -17,11 +17,20 @@ def _not_hidden():
     return or_(models.Lot.hidden.is_(False), models.Lot.hidden.is_(None))
 
 
+def _not_dismissed_auction():
+    """Lots of a sale the user dismissed. Hiding an auction takes its lots
+    out of the views; it has to take them out of the spending too."""
+    return models.Lot.auction.has(
+        or_(models.Auction.hidden.is_(False), models.Auction.hidden.is_(None)))
+
+
 def _worth_pricing():
     """What every bulk pricing path may spend on: not hidden by the user,
-    not a pickup-only lot in an auction outside the scan radius, and not a
-    lot whose own closing time has passed - nothing there can be bought."""
+    not in an auction the user dismissed, not a pickup-only lot in an
+    auction outside the scan radius, and not a lot whose own closing time
+    has passed - nothing there can be bought."""
     return and_(_not_hidden(),
+                _not_dismissed_auction(),
                 or_(models.Lot.unreachable_pickup.is_(False),
                     models.Lot.unreachable_pickup.is_(None)),
                 or_(models.Lot.closes_at.is_(None),
