@@ -199,8 +199,53 @@ _MULTI_ITEM_RE = re.compile(
 COUNTED_TOTAL_MAX_RATIO = float(os.environ.get("COUNTED_TOTAL_MAX_RATIO", "3"))
 
 
+# A container named together with its contents is a pile too, and none of
+# the words above appear in it. "Zippered CD Storage Case With Music CDs"
+# was priced $8 as an empty organiser while the case was full of discs.
+# What keeps this narrow is requiring the contents to be PLURAL: "Guitar
+# Case with Strap" and "Pelican Case with Foam" are one sellable unit with
+# a part, not a container of things.
+_CONTAINER_RE = re.compile(
+    r"\b(?:\w*box|\w*case|bin|tote|crate|binder|drawer|shelf|rack|tray|bag"
+    r"|basket|folder|album|sleeve|holder|organi[sz]er|cabinet|chest"
+    r"|footlocker|container|carrier)\b"
+    r"\s+(?:full\s+of|filled\s+with|containing|w/|with|of)\s+"
+    r"([\w'\- ,]{0,40})",
+    re.IGNORECASE)
+
+# Plurals that are part OF the container rather than things in it. A case
+# with wheels is still an empty case.
+_CONTAINER_PARTS = {
+    "wheels", "casters", "handles", "straps", "keys", "locks", "latches",
+    "clasps", "hinges", "dividers", "inserts", "compartments", "pockets",
+    "sleeves", "trays", "shelves", "drawers", "legs", "feet", "lids",
+    "zippers", "buckles", "clips", "hooks", "holes", "tabs", "labels",
+}
+
+# Words ending in s that are not plurals of anything.
+_NOT_PLURAL = {
+    "is", "was", "has", "as", "this", "its", "his", "us", "yes", "plus",
+    "minus", "various", "lens", "bus", "gas", "plexiglass",
+}
+
+
+def _names_contents(tail: str) -> bool:
+    """True when the words after a container name a plural of things inside."""
+    for word in tail.split()[:4]:
+        w = re.sub(r"[^\w']", "", word).lower()
+        if not w or w in _CONTAINER_PARTS or w in _NOT_PLURAL:
+            continue
+        if w.endswith("s") and not w.endswith("ss"):
+            return True
+    return False
+
+
 def looks_multi_item(title: str) -> bool:
-    return bool(_MULTI_ITEM_RE.search(title or ""))
+    t = title or ""
+    if _MULTI_ITEM_RE.search(t):
+        return True
+    m = _CONTAINER_RE.search(t)
+    return bool(m) and _names_contents(m.group(1))
 
 
 def _sane_estimate(v) -> float | None:
