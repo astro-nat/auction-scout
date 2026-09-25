@@ -69,6 +69,27 @@ export function makeTracker({
   return { track, flush, drain, pending: () => queue.length }
 }
 
+// What a clicked button is called in the log. Tab and view-switch buttons
+// return null: the switch is already logged as a 'view' event, and counting
+// the click as well doubled every one. A button can name itself with
+// data-track when its label is shared with a different button.
+export function buttonName(b) {
+  if (!b) return null
+  const cls = b.classList
+  if (cls && (cls.contains('tab') || cls.contains('subtab'))) return null
+  return normalizeLabel(b.dataset?.track || b.innerText || b.title || 'button')
+}
+
+// What a checkbox is called in the log: its own name if it has one, else
+// the text of the label around it. Most filter boxes carry no title, so
+// every one of them used to log as plain "checkbox".
+export function checkboxName(el) {
+  const own = el.dataset?.track || el.getAttribute?.('aria-label') || el.title
+  if (own) return normalizeLabel(own)
+  const text = el.closest?.('label')?.innerText?.trim()
+  return normalizeLabel(text || 'checkbox')
+}
+
 // --- the page ---------------------------------------------------------
 
 const tracker = makeTracker({
@@ -84,13 +105,13 @@ export const track = tracker.track
 export function installTracking(root = document) {
   const onClick = (ev) => {
     const b = ev.target && ev.target.closest && ev.target.closest('button')
-    if (!b) return
-    track('button', { name: normalizeLabel(b.innerText || b.title || 'button') })
+    const name = buttonName(b)
+    if (name) track('button', { name })
   }
   const onChange = (ev) => {
     const el = ev.target
     if (!el || el.type !== 'checkbox') return
-    track('check', { name: normalizeLabel(el.title || 'checkbox'), on: !!el.checked })
+    track('check', { name: checkboxName(el), on: !!el.checked })
   }
   // The last few seconds of activity when the tab closes or goes to the
   // background: a beacon survives page unload where fetch may not.

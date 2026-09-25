@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { makeTracker, normalizeLabel } from './track'
+import { buttonName, checkboxName, makeTracker, normalizeLabel } from './track'
 
 // A scheduler the test drives by hand, so timer behaviour is exact.
 function manualClock() {
@@ -105,5 +105,48 @@ describe('makeTracker', () => {
     const on = tracker()
     on.t.track('')
     expect(on.t.pending()).toBe(0)
+  })
+})
+
+
+// Stand-ins for DOM elements: just the parts the namers read.
+const el = ({ cls = [], data = {}, text = '', title = '', aria = null, label = null } = {}) => ({
+  classList: { contains: (c) => cls.includes(c) },
+  dataset: data,
+  innerText: text,
+  title,
+  getAttribute: (a) => (a === 'aria-label' ? aria : null),
+  closest: (sel) => (sel === 'label' && label != null ? { innerText: label } : null),
+})
+
+describe('buttonName', () => {
+  it('names a button by its label', () => {
+    expect(buttonName(el({ text: 'Price all 386 with AI' }))).toBe('Price all N with AI')
+  })
+
+  it('skips tab switches, which are already logged as views', () => {
+    expect(buttonName(el({ cls: ['tab'], text: 'Inventory' }))).toBeNull()
+    expect(buttonName(el({ cls: ['subtab'], text: 'Queue (5)' }))).toBeNull()
+  })
+
+  it('lets a button that shares a label name itself', () => {
+    expect(buttonName(el({ text: 'Comps only, no AI', data: { track: 'Comps only (selected lots)' } })))
+      .toBe('Comps only (selected lots)')
+  })
+})
+
+describe('checkboxName', () => {
+  it('uses the text of the label around it', () => {
+    expect(checkboxName(el({ label: ' Hide HARD ship ' }))).toBe('Hide HARD ship')
+  })
+
+  it('prefers the box\'s own name', () => {
+    expect(checkboxName(el({ title: 'Select every lot in view', label: 'x' })))
+      .toBe('Select every lot in view')
+    expect(checkboxName(el({ aria: 'BOLO only' }))).toBe('BOLO only')
+  })
+
+  it('falls back to "checkbox" only when there is nothing else', () => {
+    expect(checkboxName(el())).toBe('checkbox')
   })
 })

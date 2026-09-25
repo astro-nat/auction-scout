@@ -384,11 +384,18 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
     setSort((prev) => (prev.key === key ? { key, dir: -prev.dir } : { key, dir: 1 }))
   }
 
+  // Filters are logged once the typing stops: "Johnny" typed into the title
+  // box used to arrive as thirteen rows, one per keystroke.
+  const filterLogTimers = useRef({})
   function setFilter(key, value) {
     pinnedPos.current.clear()
     // Cleared filters are not worth a row; a value is - "ROI >100" forty
     // times a week says what the app is for.
-    if (value?.trim()) track('filter', { key, value: String(value).slice(0, 40) })
+    clearTimeout(filterLogTimers.current[key])
+    if (value?.trim()) {
+      filterLogTimers.current[key] = setTimeout(
+        () => track('filter', { key, value: String(value).slice(0, 40) }), 1200)
+    }
     setColFilters((prev) => ({ ...prev, [key]: value }))
   }
 
@@ -561,6 +568,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
         Price selected with AI
       </button>
       <button style={smallBtn} onClick={handleBulkComps} disabled={queuing}
+              data-track="Comps only (selected lots)"
               title="Sold-comps lookup on the selected lots' titles as-is. No AI cost (asks first, shows the request count)">
         Comps only, no AI
       </button>
@@ -830,6 +838,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched, 
           <th style={{ width: 28 }}
               title={`Select all ${sorted.length.toLocaleString()} lots matching the current filters`}>
             <input type="checkbox"
+                   title="Select every lot in view"
                    checked={allSelected(selected, sorted)}
                    onChange={(ev) => setSelected(ev.target.checked ? selectAll(sorted) : new Set())} />
           </th>

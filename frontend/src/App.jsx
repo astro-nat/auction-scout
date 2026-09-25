@@ -394,6 +394,23 @@ export default function App() {
     } catch (e) { alertOnce(e.message) }
   }
 
+  // One pricing action at a time, and say so the moment it's pressed. The
+  // count behind each button takes a few seconds before its confirm box
+  // appears; with nothing on screen in between, buttons got pressed twice.
+  // The ref blocks a second click synchronously - state alone updates too
+  // late to stop a quick double-click.
+  const [starting, setStarting] = useState('')
+  const startingRef = useRef(false)
+  const startOnce = (label, fn) => async (...args) => {
+    if (startingRef.current) return
+    startingRef.current = true
+    setStarting(label)
+    try { await fn(...args) } finally {
+      startingRef.current = false
+      setStarting('')
+    }
+  }
+
   async function handleRefreshBids() {
     // No popup on success — the status bar showing the job IS the feedback,
     // and this runs often (button + hourly timer).
@@ -845,6 +862,11 @@ Skipping ${hard} HARD-to-ship lots.`
           </button>
         ))}
       </div>
+      {starting && (
+        <div style={{ fontSize: 13, color: 'var(--muted)', margin: '8px 0 0' }}>
+          <span className="spinner" /> {starting}
+        </div>
+      )}
       {/* The view switch under the open tab */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '10px 0 1rem' }}>
         {(TABS.find((t) => t.views.includes(view)) ?? TABS[0]).views.map((v) => (
@@ -1116,8 +1138,8 @@ Skipping ${hard} HARD-to-ship lots.`
                       <button style={{ flex: '1 1 70px', minWidth: 70, padding: 8 }}
                               onClick={() => openAuctionItems(a.id)}>View</button>
                       <button style={{ flex: '1 1 90px', minWidth: 90, padding: 8 }}
-                              disabled={!(a.lots_pending + a.lots_failed)}
-                              onClick={() => handleEnrichAll(a.id)}>{enrichAllLabel(a)}</button>
+                              disabled={!(a.lots_pending + a.lots_failed) || !!starting}
+                              onClick={startOnce('Queueing the auction…', () => handleEnrichAll(a.id))}>{enrichAllLabel(a)}</button>
                     </>
                   )}
                 </div>
@@ -1208,8 +1230,8 @@ Skipping ${hard} HARD-to-ship lots.`
                     {a.imported_at && (
                       <>
                         <button onClick={() => openAuctionItems(a.id)}>View</button>{' '}
-                        <button disabled={!(a.lots_pending + a.lots_failed)}
-                                onClick={() => handleEnrichAll(a.id)}>{enrichAllLabel(a)}</button>
+                        <button disabled={!(a.lots_pending + a.lots_failed) || !!starting}
+                                onClick={startOnce('Queueing the auction…', () => handleEnrichAll(a.id))}>{enrichAllLabel(a)}</button>
                       </>
                     )}
                   </td>
@@ -1303,8 +1325,8 @@ Skipping ${hard} HARD-to-ship lots.`
             const cat = lotCategories.find((c) => c.category === categoryFilter)
             return (
               <button
-                onClick={handleEnrichCategory}
-                disabled={!cat?.enrichable}
+                onClick={startOnce('Counting items in the category…', handleEnrichCategory)}
+                disabled={!cat?.enrichable || !!starting}
                 title="Work out a value for every unpriced item in this category, across ALL imported open auctions (asks first, shows cost)"
                 style={{ padding: 8, fontSize: 14 }}
               >
@@ -1315,25 +1337,29 @@ Skipping ${hard} HARD-to-ship lots.`
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8,
                         marginLeft: isMobile ? 0 : 'auto' }}>
             <button style={isMobile ? { flex: '1 1 45%', padding: 8 } : undefined}
-                    onClick={handleRefreshBids}
+                    onClick={startOnce('Starting the bid refresh…', handleRefreshBids)}
+                    disabled={!!starting}
                     title="Re-pull current bids from HiBid for every imported open auction and recompute ROI. Free — progress shows in the top bar.">
               Refresh bids
             </button>
             {!pricedOnly && (<>
             <button style={isMobile ? { flex: '1 1 45%', padding: 8 } : undefined}
-                    onClick={handleCompsOnly}
+                    onClick={startOnce('Counting unpriced items…', handleCompsOnly)}
+                    disabled={!!starting}
                     title="For every unpriced item in an open auction: look up sold comps on its auction title as-is. No AI cost - about one SoldComps request per item (asks first, shows the count)">
               Comps only, no AI
             </button>
             <button style={isMobile ? { flex: '1 1 45%', padding: 8 } : undefined}
-                    onClick={handleInspectNoValue}
+                    onClick={startOnce('Counting items with no value…', handleInspectNoValue)}
+                    disabled={!!starting}
                     title="For every item still showing no value: AI reads the photo, identifies what is in it and prices it (asks first, shows cost)">
               Price the unpriced with AI
             </button>
             </>)}
             <button className="danger"
                     style={isMobile ? { flex: '1 1 45%', padding: 8 } : undefined}
-                    onClick={handleFlushClosed}
+                    onClick={startOnce('Counting closed items…', handleFlushClosed)}
+                    disabled={!!starting}
                     title="Permanently delete all items whose auction has closed (asks first)">
               Flush closed items
             </button>
