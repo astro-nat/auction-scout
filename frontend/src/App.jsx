@@ -1459,10 +1459,15 @@ export default function App() {
             /> BOLO only
           </label>
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
+            {/* data-track names this explicitly because the visible label now
+                carries a count, and the tracker reads the label text: without
+                it the event name became "Gold mines only (N of N)" and split
+                the metric away from its own 13 events of history. */}
             <input
               type="checkbox"
               checked={goldOnly}
               onChange={(ev) => setGoldOnly(ev.target.checked)}
+              data-track="Gold mines only"
             /> Gold mines only
             <span style={{ color: 'var(--muted)' }}>
               ({goldCount.toLocaleString()} of {lotsBeforeGold.length.toLocaleString()})

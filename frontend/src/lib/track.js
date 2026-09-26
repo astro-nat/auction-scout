@@ -114,15 +114,32 @@ export function installTracking(root = document) {
     track('check', { name: checkboxName(el), on: !!el.checked })
   }
   // The last few seconds of activity when the tab closes or goes to the
-  // background: a beacon survives page unload where fetch may not.
+  // background. A keepalive fetch survives unload the way a beacon does,
+  // and unlike a beacon it can be sent WITHOUT credentials.
+  //
+  // This was sendBeacon, and every one of them was blocked. A beacon always
+  // sends in credentials mode 'include', which makes it a credentialed
+  // cross-origin request, and the API sets no Access-Control-Allow-
+  // Credentials - so the browser refused it at the preflight, in production
+  // as much as in dev, and the tail of every session was lost. The fallback
+  // could not save it either: an ordinary fetch started during unload may
+  // never leave the tab, which is the whole reason a beacon was used.
+  //
+  // The alternative was allow_credentials on the API. Not worth it: the app
+  // has no cookie to send, and turning credentials on for every origin to
+  // fix one request is the wrong trade.
   const onHide = () => {
     if (document.visibilityState !== 'hidden') return
     const events = tracker.drain()
     if (!events.length) return
     try {
-      const sent = navigator.sendBeacon?.(`${API_BASE}/events`,
-        new Blob([JSON.stringify({ events })], { type: 'application/json' }))
-      if (!sent) postEvents(events).catch(() => {})
+      fetch(`${API_BASE}/events`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ events }),
+        keepalive: true,
+        credentials: 'omit',
+      }).catch(() => {})
     } catch { /* never surface */ }
   }
   root.addEventListener('click', onClick, true)

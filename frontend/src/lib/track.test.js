@@ -140,6 +140,18 @@ describe('checkboxName', () => {
     expect(checkboxName(el({ label: ' Hide HARD ship ' }))).toBe('Hide HARD ship')
   })
 
+  it('keeps its name when the visible label gains a count', () => {
+    // "Gold mines only" grew a count so it could be read without
+    // toggling, and that silently renamed the metric: the tracker reads the
+    // label text. data-track is what holds a series together across a
+    // label change.
+    expect(checkboxName(el({ label: 'Gold mines only (132 of 4,701)' })))
+      .toBe('Gold mines only (N of N)')
+    expect(checkboxName(el({ data: { track: 'Gold mines only' },
+                             label: 'Gold mines only (132 of 4,701)' })))
+      .toBe('Gold mines only')
+  })
+
   it('prefers the box\'s own name', () => {
     expect(checkboxName(el({ title: 'Select every lot in view', label: 'x' })))
       .toBe('Select every lot in view')
