@@ -1071,6 +1071,7 @@ export default function App() {
               type="checkbox"
               checked={hideUnshippable}
               onChange={(ev) => setHideUnshippable(ev.target.checked)}
+              data-track="Hide no-ship outside my radius"
             /> Hide no-ship outside my radius
             {hideUnshippable && auctions.length - visibleAuctions.length > 0 && (
               <span style={{ color: 'var(--muted)' }}>
@@ -1374,6 +1375,7 @@ export default function App() {
                       checked={selectedAuctions.includes(a.id)}
                       onChange={() => toggleAuctionSelected(a.id)}
                       style={{ marginTop: 2 }}
+                      data-track="Select this auction"
                     />
                     <span style={{ lineHeight: 1.3 }}>
                       {a.name}
@@ -1536,6 +1538,7 @@ export default function App() {
               type="checkbox"
               checked={showHiddenLots}
               onChange={(ev) => setShowHiddenLots(ev.target.checked)}
+              data-track="Show hidden lots"
             /> Show hidden ({lots.filter((l) => l.hidden).length})
           </label>
           {(hideLowValue || hideHardShip || hideNoUsShip || hideClosed || !showHiddenLots || lots.some((l) => l.unreachable_pickup)) && hiddenCount > 0 && (
