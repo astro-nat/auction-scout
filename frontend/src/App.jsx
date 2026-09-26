@@ -5,6 +5,7 @@ import { houseRatioLabel, houseRatioTitle } from './lib/calibration'
 import { initialView, saveView, viewFromHash, viewUrl } from './lib/view'
 import { queueCount } from './lib/queue'
 import { unpricedAcross } from './lib/pricing'
+import { isGoldMine } from './lib/filters'
 import { matchCountFor, importLabel as matchLabel } from './lib/matching'
 import QueueView from './components/QueueView'
 import { installTracking, track } from './lib/track'
@@ -85,7 +86,12 @@ export default function App() {
   const [categoryFilter, setCategoryFilter] = useState('')
   const [lotCategories, setLotCategories] = useState([])
   const [lots, setLots] = useState([])
-  const [filters, setFilters] = useState({ boloOnly: false, roiStatus: '', flaggedOnly: false })
+  const [filters, setFilters] = useState({ boloOnly: false, flaggedOnly: false })
+  const [goldOnly, setGoldOnly] = useState(false)
+  // Gold is NOT in `filters`, deliberately. loadLots depends on that whole
+  // object, so a gold toggle living in it refetched every page - which is
+  // what made a comparison cost a round trip. Its own state, applied in the
+  // browser, is what makes the toggle free.
   const [hideLowValue, setHideLowValue] = useState(true)
   const [lowValueCutoff, setLowValueCutoff] = useState(25)
   // HARD-ship lots (furniture, appliances) rarely clear the ROI bar and
@@ -181,7 +187,9 @@ export default function App() {
       auctionIds: selectedAuctions,
       category: categoryFilter || undefined,
       boloOnly: filters.boloOnly,
-      roiStatus: filters.roiStatus || undefined,
+      // roiStatus is deliberately NOT sent: it is applied in the browser
+      // (lib/filters.isGoldMine), so toggling it costs no round trip.
+      // Every lot is fetched either way; this only chooses what is shown.
       flaggedOnly: filters.flaggedOnly,
       pricedOnly,
     }
@@ -854,7 +862,9 @@ export default function App() {
     l.auction_closed || /^(closed|sold|ended|passed|archived)/i.test(l.status || '')
     || (l.closes_at && parseUtc(l.closes_at) < new Date())
 
-  const visibleLots = useMemo(() => {
+  // Two stages, so the count beside the box can say what turning it on
+  // would leave without anything being turned on.
+  const lotsBeforeGold = useMemo(() => {
     const auctionNames = { ...auctionIndex, ...Object.fromEntries(auctions.map((a) => [a.id, a.name])) }
     return lots
       .filter((l) => {
@@ -878,7 +888,13 @@ export default function App() {
                      item_closed: isClosedItem(l) }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lots, auctions, auctionIndex, showHiddenLots, hideLowValue, lowValueCutoff, hideHardShip, hideNoUsShip, hideClosed])
-  const hiddenCount = lots.length - visibleLots.length
+  const goldCount = useMemo(
+    () => lotsBeforeGold.reduce((n, l) => n + (isGoldMine(l) ? 1 : 0), 0),
+    [lotsBeforeGold])
+  const visibleLots = useMemo(
+    () => (goldOnly ? lotsBeforeGold.filter(isGoldMine) : lotsBeforeGold),
+    [lotsBeforeGold, goldOnly])
+  const hiddenCount = lots.length - lotsBeforeGold.length
 
   return (
     <div style={{ fontFamily: 'system-ui' }}>
@@ -1445,9 +1461,12 @@ export default function App() {
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
             <input
               type="checkbox"
-              checked={filters.roiStatus === 'GOLD MINE'}
-              onChange={(ev) => setFilters((f) => ({ ...f, roiStatus: ev.target.checked ? 'GOLD MINE' : '' }))}
+              checked={goldOnly}
+              onChange={(ev) => setGoldOnly(ev.target.checked)}
             /> Gold mines only
+            <span style={{ color: 'var(--muted)' }}>
+              ({goldCount.toLocaleString()} of {lotsBeforeGold.length.toLocaleString()})
+            </span>
           </label>
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
                  title="Lots you've flagged as having wrong comps — a worklist for fixing the algorithm">

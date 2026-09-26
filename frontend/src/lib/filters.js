@@ -67,3 +67,16 @@ export function hoursUntil(closesAt, now, parse = (s) => new Date(s)) {
   if (!Number.isFinite(ms) || ms <= 0) return null
   return ms / 3600000
 }
+
+// Is this lot a gold mine - its bid still clears the target return after
+// fees? The grade is computed server-side and stored, so this only reads it.
+//
+// It lives here because "Gold mines only" stopped being a server filter. It
+// was one, so every toggle refetched every page; the usage log shows it
+// turned on and off six times in 44 hours, which is a comparison being made,
+// not a filter being set. The lots are already in the browser and already
+// carry the grade, so the answer is instant and the count can be shown
+// beside the box - which is what the toggling was asking for.
+export function isGoldMine(lot) {
+  return (lot?.enrichment?.roi_status || '') === 'GOLD MINE'
+}

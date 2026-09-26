@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CLOSING_RANGES, MONEY_RANGES, ROI_RANGES, hoursUntil, matchesFilter, optionOf, presetsFor, roiPercent } from './filters'
+import { CLOSING_RANGES, MONEY_RANGES, ROI_RANGES, hoursUntil, matchesFilter, optionOf, presetsFor, roiPercent, isGoldMine } from './filters'
 
 describe('matchesFilter', () => {
   it('reads > as more than and < as less than', () => {
@@ -106,5 +106,32 @@ describe('presetsFor', () => {
   it('gives a text column nothing - it gets a search box, not a dropdown', () => {
     expect(presetsFor({ key: 'title', filter: 'text' })).toEqual([])
     expect(presetsFor({ key: 'lot_number', filter: null })).toEqual([])
+  })
+})
+
+describe('isGoldMine', () => {
+  it('reads the stored grade', () => {
+    expect(isGoldMine({ enrichment: { roi_status: 'GOLD MINE' } })).toBe(true)
+    expect(isGoldMine({ enrichment: { roi_status: 'PASS' } })).toBe(false)
+  })
+
+  it('is false for a lot with no grade yet', () => {
+    expect(isGoldMine({ enrichment: { roi_status: null } })).toBe(false)
+    expect(isGoldMine({ enrichment: {} })).toBe(false)
+    expect(isGoldMine({})).toBe(false)
+  })
+
+  it('never throws on a missing lot', () => {
+    expect(isGoldMine(null)).toBe(false)
+    expect(isGoldMine(undefined)).toBe(false)
+  })
+
+  it('counts a set without the server being asked', () => {
+    const lots = [
+      { enrichment: { roi_status: 'GOLD MINE' } },
+      { enrichment: { roi_status: 'PASS' } },
+      { enrichment: { roi_status: 'GOLD MINE' } },
+    ]
+    expect(lots.filter(isGoldMine)).toHaveLength(2)
   })
 })
