@@ -4,6 +4,7 @@ import { auctionClosed } from './lib/pacing'
 import { houseRatioLabel, houseRatioTitle } from './lib/calibration'
 import { initialView, saveView, viewFromHash, viewUrl } from './lib/view'
 import { queueCount } from './lib/queue'
+import { unpricedAcross } from './lib/pricing'
 import { matchCountFor, importLabel as matchLabel } from './lib/matching'
 import QueueView from './components/QueueView'
 import { installTracking, track } from './lib/track'
@@ -474,6 +475,17 @@ export default function App() {
   }
 
   // One auction's "Price N" button: the same comps pass, just that auction.
+  // Pricing the saved auctions one at a time was the second-biggest click
+  // cluster in the usage log: 17 of 21 "Price N" presses arrived in runs of
+  // seven, four, four and two within two minutes. The backend already took
+  // a list of auction ids, so one press does the run.
+  function handleCompsAllSaved() {
+    const { ids } = unpricedAcross(importedAuctions, isClosed)
+    if (!ids.length) { alert('Every saved auction is already priced.'); return }
+    return compsFor({ auctionIds: ids },
+                    `${ids.length} saved auction${ids.length === 1 ? '' : 's'}`)
+  }
+
   function handleCompsAuction(auctionId) {
     const a = importedRows[auctionId] || auctions.find((x) => x.id === auctionId)
     return compsFor({ auctionIds: [auctionId] }, `"${a?.name ?? 'this auction'}"`)
@@ -827,6 +839,8 @@ export default function App() {
 
   const isClosed = (a) => auctionClosed(a)
 
+  const savedUnpriced = unpricedAcross(importedAuctions, isClosed)
+
   // Stamp each lot with its auction's name so the table can show/filter it.
   // Memoized: with several thousand lots streamed in, rebuilding this array
   // of copies on every unrelated render is real work on a phone.
@@ -1098,6 +1112,22 @@ export default function App() {
             </div>
           </div>
         ))}
+        {view === 'saved' && savedUnpriced.lots > 0 && (
+          <div style={{ marginTop: '0.75rem' }}>
+            <button className="primary"
+                    disabled={!!busy['comps-all-saved']}
+                    onClick={runBusy('comps-all-saved', 'Counting unpriced items…',
+                                     handleCompsAllSaved)}
+                    data-track="Price all saved with comps (no AI)"
+                    title="Look up sold comps for every unpriced lot across your saved auctions - no AI (asks first, shows the count)"
+                    style={isMobile ? { width: '100%', padding: 10, fontSize: 15 }
+                                    : { padding: '8px 18px' }}>
+              {busy['comps-all-saved']
+                ? <><span className="spinner" />Counting…</>
+                : `Price ${savedUnpriced.lots.toLocaleString()} across ${savedUnpriced.auctions} saved auction${savedUnpriced.auctions === 1 ? '' : 's'} with comps (no AI)`}
+            </button>
+          </div>
+        )}
         {listedAuctions > 0 && (isMobile ? (
           <details style={{ marginTop: '0.75rem' }} open={!selectedAuctions.length}>
             <summary style={{ fontWeight: 600, padding: '4px 0' }}>

@@ -25,3 +25,18 @@ export function rowAction(e, working) {
                   + 'then prices it again. A box of many items is priced item by item. '
                   + 'After this the lot is locked.' }
 }
+
+// How much pricing is waiting across a set of auctions, for the one-press
+// label on the saved view. Pricing them one at a time was the second-biggest
+// click cluster in the usage log - 17 of 21 presses in runs of seven, four,
+// four and two - so the label has to say what one press will do.
+//
+// A closed auction is left out: nothing in it can be bought, and paying for
+// comps on it is the spend this app exists to avoid.
+export function unpricedAcross(auctions, isClosed = () => false) {
+  return (auctions || []).reduce((acc, a) => {
+    const n = a?.lots_unpriced ?? 0
+    if (n <= 0 || isClosed(a)) return acc
+    return { lots: acc.lots + n, auctions: acc.auctions + 1, ids: [...acc.ids, a.id] }
+  }, { lots: 0, auctions: 0, ids: [] })
+}

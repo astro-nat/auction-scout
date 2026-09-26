@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { aiDone, rowAction } from './pricing'
+import { aiDone, rowAction, unpricedAcross } from './pricing'
 
 describe('aiDone', () => {
   it('is a success the AI actually saw', () => {
@@ -39,5 +39,35 @@ describe('rowAction', () => {
   it('is busy while anything is running on it', () => {
     expect(rowAction({ status: 'queued' }).disabled).toBe(true)
     expect(rowAction({ status: 'pending' }, true).step).toBe('working')
+  })
+})
+
+describe('unpricedAcross', () => {
+  const A = (id, unpriced, closed = false) => ({ id, lots_unpriced: unpriced, closed })
+  const isClosed = (a) => !!a.closed
+
+  it('adds up what is waiting and names the auctions', () => {
+    const r = unpricedAcross([A(1, 20), A(2, 5), A(3, 0)], isClosed)
+    expect(r).toEqual({ lots: 25, auctions: 2, ids: [1, 2] })
+  })
+
+  it('leaves out a closed auction — nothing in it can be bought', () => {
+    const r = unpricedAcross([A(1, 20), A(2, 99, true)], isClosed)
+    expect(r).toEqual({ lots: 20, auctions: 1, ids: [1] })
+  })
+
+  it('counts nothing when everything is priced', () => {
+    expect(unpricedAcross([A(1, 0), A(2, 0)], isClosed))
+      .toEqual({ lots: 0, auctions: 0, ids: [] })
+  })
+
+  it('survives missing fields and an empty list', () => {
+    expect(unpricedAcross([{ id: 9 }, null], isClosed).lots).toBe(0)
+    expect(unpricedAcross([]).lots).toBe(0)
+    expect(unpricedAcross(undefined).lots).toBe(0)
+  })
+
+  it('treats every auction as open when no closed test is given', () => {
+    expect(unpricedAcross([A(1, 4, true)]).lots).toBe(4)
   })
 })
