@@ -63,9 +63,27 @@ _FILLER = {
 _ALLOWED = _SUBJECTS | _FILLER
 
 
+# Instructions that settle it on their own, whatever else the title says.
+# "DO NOT BID ON THIS ITEM!" is a notice by any reading, and it turned up
+# three times at the head of a reprice queue, about to spend a sold-comps
+# lookup each on something nobody may buy.
+#
+# It needs its own rule because every word in it - do, not, bid, on, this,
+# item - is filler, and the word test asks for something a notice is ABOUT.
+# The alternative was to promote "bid" to a subject, which catches the same
+# three lots on today's inventory and strictly more later: a bid card is a
+# real thing an estate sale lists. An instruction not to bid is not.
+_NOTICE_PHRASES = (
+    "do not bid",
+)
+
+
 def is_boilerplate(title: Optional[str]) -> bool:
     """True when the title is one of the house's notices rather than a lot."""
-    words = re.findall(r"[a-z]+", (title or "").lower())
+    lowered = (title or "").lower()
+    if any(p in lowered for p in _NOTICE_PHRASES):
+        return True
+    words = re.findall(r"[a-z]+", lowered)
     if not words:
         return False
     if not any(w in _SUBJECTS for w in words):

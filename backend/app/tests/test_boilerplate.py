@@ -18,6 +18,7 @@ NOTICES = [
     "Shipping  **PLEASE READ**",
     "Payment Options, Credit Card Policy Update",
     "Pickup Process & Hours",
+    "DO NOT BID ON THIS ITEM!",
 ]
 
 # Same words, real lots, most of them with live bids.
@@ -33,6 +34,18 @@ LOTS = [
     "Drieaz Humidifier ~ IA-25158",
     "$291.00 Remanufactured A/C Compressor",
 ]
+
+
+def test_an_instruction_not_to_bid_is_a_notice_whatever_else_it_says():
+    """Every word in "DO NOT BID ON THIS ITEM!" is filler, so the word test
+    asks for something a notice is ABOUT and finds nothing. It gets its own
+    rule rather than promoting "bid" to a subject, because a bid card is a
+    real thing an estate sale lists and an instruction not to bid is not.
+    """
+    assert is_boilerplate("DO NOT BID ON THIS ITEM!")
+    assert is_boilerplate("do not bid - display only")
+    assert not is_boilerplate("Vintage Auction Bid Card Paddle No. 42")
+    assert not is_boilerplate("Bidder Number Card Lot")
 
 
 def test_every_notice_is_recognised():
