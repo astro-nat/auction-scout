@@ -32,7 +32,8 @@ from sqlalchemy.orm import Session
 
 from .. import config, models, schemas
 from ..database import get_db
-from ..services import vinted
+from ..services import jobs, vinted
+from ..workers.sellers import seller_ids_on_file
 from ..services.hibid import classify_logistics
 from .auctions import _attach_stats
 
@@ -136,6 +137,26 @@ def _save_items(db: Session, auction: models.Auction, items: list[dict],
             db.add(models.Enrichment(lot_id=row.id, status="pending"))
             created += 1
     return created, updated
+
+
+@router.post("/backfill-sellers", status_code=202)
+def backfill_sellers(db: Session = Depends(get_db)):
+    """Fill in seller history for the Vinted lots already here.
+
+    Scans fetch it now, but a lot imported before the seller gate existed
+    has none, and an unknown seller keeps the benefit of the doubt - so a
+    burner account's badge stands until somebody rescans that keyword.
+    Costs network and nothing else: no comps, no AI. The grades it changes
+    are recomputed from values already stored.
+    """
+    if jobs.has_pending("backfill-sellers"):
+        return {"sellers": 0, "queued": False, "already_running": True}
+    ids = seller_ids_on_file(db)
+    if not ids:
+        return {"sellers": 0, "queued": False}
+    jobs.enqueue("backfill-sellers", f"Looking up {len(ids)} Vinted sellers",
+                 total=len(ids), payload={"seller_ids": ids})
+    return {"sellers": len(ids), "queued": True}
 
 
 @router.post("/seller/{user_id}/import", response_model=List[schemas.AuctionOut])

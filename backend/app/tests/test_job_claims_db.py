@@ -103,7 +103,7 @@ def test_non_resumable_kinds_are_not_restartable():
     assert "import" not in jobs.RESUMABLE_KINDS
     assert set(jobs.RESUMABLE_KINDS) == {"reprice", "ship-analysis",
                                          "bid-refresh", "import-all",
-                                         "backfill-photos"}
+                                         "backfill-photos", "backfill-sellers"}
 
 
 def _backdate(job_id, seconds, db):
