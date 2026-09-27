@@ -6,7 +6,7 @@ from typing import Optional, List
 
 from .. import models, schemas
 from ..database import get_db
-from ..services import twins
+from ..services import jobs, twins
 from ..services.boilerplate import is_boilerplate
 
 router = APIRouter(prefix="/lots", tags=["lots"])
@@ -256,6 +256,27 @@ def flush_closed(dry_run: bool = False, db: Session = Depends(get_db)):
     """Manual flush — dry_run=true only counts, so the UI can put a real
     number in its confirm dialog."""
     return flush_closed_now(db, dry_run=dry_run)
+
+
+@router.post("/regrade", status_code=202)
+def regrade(db: Session = Depends(get_db)):
+    """Recompute every verdict from values already stored.
+
+    No comp lookups, no AI, no network - max_bid, profit, ROI and the gold
+    badge are arithmetic over numbers the database already holds. Settings
+    changes have always queued this; it needed a door of its own because a
+    new GATE reshapes verdicts the same way a new ROI target does, and
+    otherwise the only way to apply one is to re-price everything at the
+    cost of a comp lookup per lot.
+    """
+    if jobs.has_pending("regrade"):
+        return {"regrading": 0, "already_running": True}
+    n = (db.query(models.Enrichment)
+           .filter(models.Enrichment.est_resale.isnot(None)).count())
+    if n:
+        jobs.enqueue("regrade", "Re-grading items under the current rules",
+                     total=n)
+    return {"regrading": n}
 
 
 @router.post("/hide-boilerplate")
