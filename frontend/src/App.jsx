@@ -1129,7 +1129,7 @@ export default function App() {
             </div>
           </div>
         ))}
-        {view === 'saved' && savedUnpriced.lots > 0 && (
+        {isMobile && view === 'saved' && savedUnpriced.lots > 0 && (
           <div style={{ marginTop: '0.75rem' }}>
             <button className="primary"
                     disabled={!!busy['comps-all-saved']}
@@ -1254,7 +1254,22 @@ export default function App() {
                 <th>Auction</th>
                 <th>Where</th>
                 <th className="num">Lots</th><th>Closes</th>
-                <th className="num">Premium</th><th></th><th></th>
+                <th className="num">Premium</th><th></th>
+                <th style={{ whiteSpace: 'nowrap' }}>
+                  {view === 'saved' && savedUnpriced.lots > 0 && (
+                    <button
+                      disabled={!!busy['comps-all-saved']}
+                      onClick={runBusy('comps-all-saved', 'Counting unpriced items…',
+                                       handleCompsAllSaved)}
+                      data-track="Price all saved with comps (no AI)"
+                      title={`Sold comps for every unpriced lot across ${savedUnpriced.auctions} saved auctions - no AI. Asks first, with the count.`}
+                      style={{ fontSize: 12, padding: '3px 9px' }}>
+                      {busy['comps-all-saved']
+                        ? <><span className="spinner" />Counting…</>
+                        : `Price all ${savedUnpriced.lots.toLocaleString()}`}
+                    </button>
+                  )}
+                </th>
               </tr>
             </thead>
             <tbody>
