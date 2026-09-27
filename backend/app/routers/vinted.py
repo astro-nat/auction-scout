@@ -22,6 +22,7 @@ cost estimate.
 
 import logging
 import re
+import httpx
 from datetime import datetime
 from typing import List, Optional
 
@@ -54,8 +55,43 @@ def _seller_id(item: dict) -> str | None:
     return str(sid) if sid else None
 
 
+def _apply_seller_stats(row: models.Lot, stats: dict | None) -> None:
+    """Copy a seller's history onto the lot. Silent when the seller is
+    unknown, so a lookup that failed never reads as "no history"."""
+    s = (stats or {}).get(row.seller_id)
+    if not s:
+        return
+    row.seller_rating = s.get("rating")
+    row.seller_feedback_count = s.get("feedback_count")
+    row.seller_item_count = s.get("item_count")
+    row.seller_bought_count = s.get("bought_count")
+
+
+def _seller_stats(items: list[dict]) -> dict:
+    """Stats for every distinct seller in this batch, {id: stats}.
+
+    One lookup per seller, not per listing: a keyword scan of 377 items
+    is usually a couple of hundred sellers, and the same seller often
+    owns several of the hits. A seller that will not load is simply
+    absent, which leaves them unjudged.
+    """
+    ids = {sid for sid in (_seller_id(it) for it in items) if sid}
+    if not ids:
+        return {}
+    out = {}
+    with httpx.Client(headers={"User-Agent": vinted.UA,
+                               "Accept": "application/json"},
+                      follow_redirects=True, timeout=30) as client:
+        vinted._session(client)
+        for sid in ids:
+            out[sid] = vinted.seller_stats(int(sid), client=client)
+    logger.info("Vinted: looked up %d distinct sellers", len(out))
+    return out
+
+
 def _save_items(db: Session, auction: models.Auction, items: list[dict],
-                seller_name: str | None = None) -> tuple[int, int]:
+                seller_name: str | None = None,
+                stats: dict | None = None) -> tuple[int, int]:
     """Upsert listings onto an auction row. Same contract as every other
     import: prices and status refresh, analysis fields are left alone."""
     created = updated = 0
@@ -69,6 +105,7 @@ def _save_items(db: Session, auction: models.Auction, items: list[dict],
             row.thumbnail_url = it["thumbnail_url"] or row.thumbnail_url
             row.seller_id = row.seller_id or _seller_id(it)
             row.seller_name = seller_name or row.seller_name
+            _apply_seller_stats(row, stats)
             updated += 1
         else:
             detail = ", ".join(x for x in (
@@ -93,6 +130,7 @@ def _save_items(db: Session, auction: models.Auction, items: list[dict],
                 seller_id=_seller_id(it),
                 seller_name=seller_name,
             )
+            _apply_seller_stats(row, stats)
             db.add(row)
             db.flush()
             db.add(models.Enrichment(lot_id=row.id, status="pending"))
@@ -137,7 +175,8 @@ def import_seller(user_id: int, db: Session = Depends(get_db)):
     auction.imported_at = datetime.now()
     auction.closing_date = datetime(2099, 1, 1)
 
-    created, updated = _save_items(db, auction, items, seller_name=login)
+    created, updated = _save_items(db, auction, items, seller_name=login,
+                                   stats=_seller_stats(items))
 
     fresh = {it["lot_id"] for it in items}
     closed = 0
@@ -191,6 +230,10 @@ def scan(payload: VintedScanRequest, db: Session = Depends(get_db)):
     auction.closing_date = datetime(2099, 1, 1)
 
     created = updated = 0
+    # One lookup per distinct seller in the batch, so the scam shape - no
+    # ratings, one listing, never bought anything - is on the lot before
+    # anything grades it.
+    stats = _seller_stats(items)
     fresh_ids = {it["lot_id"] for it in items}
     for it in items:
         row = (db.query(models.Lot)
@@ -201,6 +244,7 @@ def scan(payload: VintedScanRequest, db: Session = Depends(get_db)):
             row.status = "OPEN"
             row.thumbnail_url = it["thumbnail_url"]
             row.seller_id = row.seller_id or _seller_id(it)
+            _apply_seller_stats(row, stats)
             updated += 1
         else:
             detail = ", ".join(x for x in (
@@ -224,6 +268,7 @@ def scan(payload: VintedScanRequest, db: Session = Depends(get_db)):
                 thumbnail_url=it["thumbnail_url"],
                 seller_id=_seller_id(it),
             )
+            _apply_seller_stats(row, stats)
             db.add(row)
             db.flush()
             db.add(models.Enrichment(lot_id=row.id, status="pending"))

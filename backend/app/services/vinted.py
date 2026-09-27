@@ -151,6 +151,50 @@ def _wardrobe_item(raw: dict) -> dict | None:
     }
 
 
+def seller_stats(user_id: int, client: "httpx.Client | None" = None) -> dict:
+    """What a seller account has behind it: rating, how many ratings, how
+    many things listed, how many bought.
+
+    Two calls, because Vinted splits them: /user_feedbacks/summary carries
+    the rating and its count, /users/<id> the closet size and what they have
+    bought. Neither is on the item payload, which is why a listing alone
+    cannot tell a burner account from a seller.
+
+    Never raises. A seller whose stats will not load is left unknown rather
+    than assumed guilty - services/seller.untrusted only acts on what it can
+    see, and an unknown seller keeps the benefit of the doubt.
+    """
+    out = {"rating": None, "feedback_count": None,
+           "item_count": None, "bought_count": None}
+    own = client is None
+    if own:
+        client = httpx.Client(headers={"User-Agent": UA, "Accept": "application/json"},
+                              follow_redirects=True, timeout=30)
+        _session(client)
+    try:
+        try:
+            r = client.get(f"{BASE}/api/v2/user_feedbacks/summary",
+                           params={"user_id": user_id})
+            if r.status_code == 200:
+                f = r.json().get("user_feedback_summary") or {}
+                out["rating"] = float(f["feedback_rating"]) if f.get("feedback_rating") else None
+                out["feedback_count"] = f.get("feedback_count")
+        except Exception as exc:  # noqa: BLE001 - unknown, not guilty
+            logger.debug("Vinted feedback lookup failed for %s: %s", user_id, exc)
+        try:
+            r = client.get(f"{BASE}/api/v2/users/{user_id}")
+            if r.status_code == 200:
+                u = r.json().get("user") or {}
+                out["item_count"] = u.get("item_count")
+                out["bought_count"] = u.get("taken_item_count")
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Vinted user lookup failed for %s: %s", user_id, exc)
+    finally:
+        if own:
+            client.close()
+    return out
+
+
 def fetch_wardrobe(user_id: int, max_pages: int = WARDROBE_PAGES_MAX) -> dict:
     """Everything a seller currently has for sale.
 

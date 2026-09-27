@@ -39,7 +39,7 @@ from sqlalchemy.orm import Session, joinedload
 from ..database import SessionLocal
 from .. import models, config
 from ..services import financials, gemini, hibid, jobs, price_log, pricing
-from ..services import funko, publicsurplus, shipping, twins
+from ..services import funko, publicsurplus, seller, shipping, twins
 from ..services import settings as settings_store
 from ..services.bolo import BoloMatcher
 from ..services.hibid import classify_logistics
@@ -956,9 +956,16 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
         # the item the comps describe, whatever they say it's worth.
         fk = funko.assess(f"{lot.title or ''} {lot.description or ''}")
         not_genuine = bool(fk and fk["block"])
+        # A Vinted account with no ratings, one or two listings and nothing
+        # ever bought is not a seller, it is a container for this listing.
+        # Its price is the bait, so the arithmetic that makes it a gold mine
+        # is the thing to distrust. The lot still shows and still carries its
+        # value - only the badge, which says "buy this", is withheld.
+        seller_note = seller.note(lot.seller_rating, lot.seller_feedback_count,
+                                  lot.seller_item_count, lot.seller_bought_count)
         e.roi_status = ("PASS" if (red_flag or lot.unreachable_pickup
                                    or titled_vehicle or not_genuine
-                                   or identity_uncertain
+                                   or identity_uncertain or seller_note
                                    or thin_evidence or demoted)
                         else lead.status)
         if demoted:
@@ -981,6 +988,8 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
             e.roi_reason = "titled vehicle — excluded by your settings"
         elif not_genuine:
             e.roi_reason = f"fraud check: listing says \"{fk['bootleg']}\" - not a genuine Funko"
+        elif seller_note:
+            e.roi_reason = seller_note
         elif identity_uncertain:
             e.roi_reason = (f"identity uncertain: AI added {e.identity_note} - not in "
                             "the listing. Priced from the listing title; correct the "

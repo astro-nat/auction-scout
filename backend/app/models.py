@@ -109,6 +109,13 @@ class Lot(Base):
     # house (Vinted). Clicking the name pulls up their whole closet.
     seller_id = Column(String, index=True)
     seller_name = Column(String)
+    # What the seller account has behind it. A fresh account with one
+    # underpriced listing prices as a gold mine, which is backwards;
+    # services/seller.py reads these three together.
+    seller_rating = Column(Float)
+    seller_feedback_count = Column(Integer)
+    seller_item_count = Column(Integer)
+    seller_bought_count = Column(Integer)
     created_at = Column(DateTime, server_default=func.now())
 
     auction = relationship("Auction", back_populates="lots")
