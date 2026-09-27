@@ -867,9 +867,19 @@ export default function App() {
     l.auction_closed || /^(closed|sold|ended|passed|archived)/i.test(l.status || '')
     || (l.closes_at && parseUtc(l.closes_at) < new Date())
 
-  // Two stages, so the count beside the box can say what turning it on
-  // would leave without anything being turned on.
-  const lotsBeforeGold = useMemo(() => {
+  // Lots the user just enriched or inspected are exempt from the hide rules
+  // for a while - a fresh result that instantly trips a filter vanishes
+  // before it can be read. (A manual hide still wins.) Named, because the
+  // over-max stage below has to honour the same exemption.
+  const isJustTouched = (l) =>
+    !!touchedRef.current[l.lot_id] &&
+    Date.now() - touchedRef.current[l.lot_id] < 15 * 60 * 1000
+
+  // Three stages, so each box can say how many IT removes. Counting against
+  // the whole inventory instead was misleading: the over-max box read 4,574
+  // while only 1,385 of those were still on screen for it to remove - the
+  // rest had already gone to "hide closed" and "hide low value".
+  const lotsBeforeOverMax = useMemo(() => {
     const auctionNames = { ...auctionIndex, ...Object.fromEntries(auctions.map((a) => [a.id, a.name])) }
     return lots
       .filter((l) => {
@@ -877,25 +887,32 @@ export default function App() {
         // A pickup-only lot in an auction outside the scan radius: HiBid
         // says it doesn't ship, and it's too far to collect. Never shown.
         if (l.unreachable_pickup) return false
-        // Lots the user just enriched/inspected are exempt from the hide
-        // rules for a while — a fresh result that instantly trips a filter
-        // vanishes before it can be read. (The manual hide still wins.)
-        if (touchedRef.current[l.lot_id] &&
-            Date.now() - touchedRef.current[l.lot_id] < 15 * 60 * 1000) return true
+        if (isJustTouched(l)) return true
         if (hideLowValue && isConfirmedLowValue(l)) return false
         if (hideHardShip && l.logistics_ease === 'HARD') return false
         if (hideNoUsShip && l.auction_no_us_ship) return false
         if (hideClosed && isClosedItem(l)) return false
-        if (hideOverMax && isOverMaxBid(l)) return false
         return true
       })
       .map((l) => ({ ...l,
                      auction_name: l.auction_name ?? auctionNames[l.auction_id] ?? '—',
                      item_closed: isClosedItem(l) }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lots, auctions, auctionIndex, showHiddenLots, hideLowValue, lowValueCutoff, hideHardShip, hideNoUsShip, hideClosed, hideOverMax])
+  }, [lots, auctions, auctionIndex, showHiddenLots, hideLowValue, lowValueCutoff, hideHardShip, hideNoUsShip, hideClosed])
+  // What the over-max box would remove from what is otherwise on screen -
+  // which is what its number should say. Exempt lots are not counted,
+  // because they are not removed either.
   const overMaxCount = useMemo(
-    () => lots.reduce((n, l) => n + (isOverMaxBid(l) ? 1 : 0), 0), [lots])
+    () => lotsBeforeOverMax.reduce(
+      (n, l) => n + (!isJustTouched(l) && isOverMaxBid(l) ? 1 : 0), 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [lotsBeforeOverMax])
+  const lotsBeforeGold = useMemo(
+    () => (hideOverMax
+      ? lotsBeforeOverMax.filter((l) => isJustTouched(l) || !isOverMaxBid(l))
+      : lotsBeforeOverMax),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [lotsBeforeOverMax, hideOverMax])
   const goldCount = useMemo(
     () => lotsBeforeGold.reduce((n, l) => n + (isGoldMine(l) ? 1 : 0), 0),
     [lotsBeforeGold])
