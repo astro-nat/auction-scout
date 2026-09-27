@@ -80,3 +80,22 @@ export function hoursUntil(closesAt, now, parse = (s) => new Date(s)) {
 export function isGoldMine(lot) {
   return (lot?.enrichment?.roi_status || '') === 'GOLD MINE'
 }
+
+// Prices that rest on something observed - a sale, a printed price, an
+// audit of those - rather than on a guess. Only these are firm enough to
+// hide a lot on.
+const TRUSTED_SOURCE = /sold|retail|audit|itemized/i
+
+// The bid has passed the point where the lot could earn anything: the ROI
+// cell is the red one. 82% of the inventory is in this state at any moment,
+// which is what the app is for - most of an auction is not worth buying.
+//
+// The evidence guard matters even though every red lot on file today has a
+// trusted source. Without it, one bad estimate quietly removes a lot from
+// view, and the same reasoning already governs isConfirmedLowValue.
+export function isOverMaxBid(lot) {
+  const e = lot && lot.enrichment
+  if (!e || e.est_roi == null) return false
+  if (Number(e.est_roi) >= 0) return false
+  return TRUSTED_SOURCE.test(e.price_source || '')
+}

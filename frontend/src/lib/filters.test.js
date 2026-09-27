@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CLOSING_RANGES, MONEY_RANGES, ROI_RANGES, hoursUntil, matchesFilter, optionOf, presetsFor, roiPercent, isGoldMine } from './filters'
+import { CLOSING_RANGES, MONEY_RANGES, ROI_RANGES, hoursUntil, matchesFilter, optionOf, presetsFor, roiPercent, isGoldMine, isOverMaxBid } from './filters'
 
 describe('matchesFilter', () => {
   it('reads > as more than and < as less than', () => {
@@ -133,5 +133,41 @@ describe('isGoldMine', () => {
       { enrichment: { roi_status: 'GOLD MINE' } },
     ]
     expect(lots.filter(isGoldMine)).toHaveLength(2)
+  })
+})
+
+describe('isOverMaxBid', () => {
+  const lot = (est_roi, price_source = 'sold (SoldComps)') =>
+    ({ enrichment: { est_roi, price_source } })
+
+  it('is the red ROI cell: the bid has passed what it could earn', () => {
+    expect(isOverMaxBid(lot(-0.42))).toBe(true)
+    expect(isOverMaxBid(lot(-0.01))).toBe(true)
+  })
+
+  it('leaves a lot that still earns, including break-even', () => {
+    expect(isOverMaxBid(lot(0))).toBe(false)
+    expect(isOverMaxBid(lot(1.4))).toBe(false)
+  })
+
+  it('never hides a lot priced by guess', () => {
+    // The same reasoning as isConfirmedLowValue: act on observed prices only.
+    expect(isOverMaxBid(lot(-0.5, 'ai estimate'))).toBe(false)
+    expect(isOverMaxBid(lot(-0.5, 'house estimate'))).toBe(false)
+    expect(isOverMaxBid(lot(-0.5, ''))).toBe(false)
+  })
+
+  it('accepts every trusted source', () => {
+    for (const src of ['sold (SoldComps)', 'retail', 'audit-corrected (comps said $46.5)',
+                       'itemized']) {
+      expect(isOverMaxBid(lot(-0.5, src)), src).toBe(true)
+    }
+  })
+
+  it('says nothing about a lot with no verdict yet', () => {
+    expect(isOverMaxBid({ enrichment: { est_roi: null } })).toBe(false)
+    expect(isOverMaxBid({ enrichment: {} })).toBe(false)
+    expect(isOverMaxBid({})).toBe(false)
+    expect(isOverMaxBid(null)).toBe(false)
   })
 })

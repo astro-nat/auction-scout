@@ -5,7 +5,7 @@ import { houseRatioLabel, houseRatioTitle } from './lib/calibration'
 import { initialView, saveView, viewFromHash, viewUrl } from './lib/view'
 import { queueCount } from './lib/queue'
 import { unpricedAcross } from './lib/pricing'
-import { isGoldMine } from './lib/filters'
+import { isGoldMine, isOverMaxBid } from './lib/filters'
 import { matchCountFor, importLabel as matchLabel } from './lib/matching'
 import QueueView from './components/QueueView'
 import { installTracking, track } from './lib/track'
@@ -103,6 +103,11 @@ export default function App() {
   // Closed auctions can't be bid on — hide their lots by default, but
   // keep them reachable: the enrichment work is still useful history.
   const [hideClosed, setHideClosed] = useState(true)
+  // On by default: a lot whose bid has passed its ceiling cannot be bought
+  // profitably, and at any moment that is most of the catalogue. It stays a
+  // box rather than a silent rule because it removes 4 lots in every 5, and
+  // an inventory that shrinks by 82% with no way back reads as a fault.
+  const [hideOverMax, setHideOverMax] = useState(true)
   // Every in-flight action (a scan, a flush, a "how many?" count-before-
   // confirm) gets its OWN key here, so one running action never disables
   // an unrelated button — clicking "Import" while a scan is still going,
@@ -881,13 +886,16 @@ export default function App() {
         if (hideHardShip && l.logistics_ease === 'HARD') return false
         if (hideNoUsShip && l.auction_no_us_ship) return false
         if (hideClosed && isClosedItem(l)) return false
+        if (hideOverMax && isOverMaxBid(l)) return false
         return true
       })
       .map((l) => ({ ...l,
                      auction_name: l.auction_name ?? auctionNames[l.auction_id] ?? '—',
                      item_closed: isClosedItem(l) }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lots, auctions, auctionIndex, showHiddenLots, hideLowValue, lowValueCutoff, hideHardShip, hideNoUsShip, hideClosed])
+  }, [lots, auctions, auctionIndex, showHiddenLots, hideLowValue, lowValueCutoff, hideHardShip, hideNoUsShip, hideClosed, hideOverMax])
+  const overMaxCount = useMemo(
+    () => lots.reduce((n, l) => n + (isOverMaxBid(l) ? 1 : 0), 0), [lots])
   const goldCount = useMemo(
     () => lotsBeforeGold.reduce((n, l) => n + (isGoldMine(l) ? 1 : 0), 0),
     [lotsBeforeGold])
@@ -1523,6 +1531,16 @@ export default function App() {
               onChange={(ev) => setLowValueCutoff(Number(ev.target.value) || 0)}
               style={{ width: 44 }}
             />)
+          </label>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
+                 title="The bid has passed what this lot could be resold for, after fees and shipping - the red ROI. Only lots priced from sold comps, a retail price or an audit of those are hidden, never one priced by guess.">
+            <input
+              type="checkbox"
+              checked={hideOverMax}
+              onChange={(ev) => setHideOverMax(ev.target.checked)}
+              data-track="Hide over max bid"
+            /> Hide over max bid
+            <span style={{ color: 'var(--muted)' }}>({overMaxCount.toLocaleString()})</span>
           </label>
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
             <input
