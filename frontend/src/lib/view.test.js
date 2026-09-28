@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  DEFAULT_VIEW, VIEWS, VIEW_KEY, initialView, saveView, viewFromHash, viewUrl,
-} from './view'
+import { DEFAULT_VIEW, VIEWS, VIEW_KEY, initialView, saveView, viewFromHash, viewUrl } from './view'
 
 // A fake localStorage. The throwing variant is not hypothetical: Safari in
 // private mode throws on setItem, and some privacy extensions throw on read
@@ -120,5 +118,28 @@ describe('viewUrl', () => {
       const url = viewUrl(v, { pathname: '/', search: '' })
       expect(viewFromHash(url.slice(url.indexOf('#')))).toBe(v)
     }
+  })
+})
+
+describe('the watched view', () => {
+  it('is a view the hash can name', () => {
+    expect(viewFromHash('#watched')).toBe('watched')
+    expect(VIEWS).toContain('watched')
+  })
+
+  it('sits between the inventory it leaves and the queue', () => {
+    // Watching is a decision already made, so the lot moves out of the
+    // priced inventory into its own list; the order reads that way.
+    expect(VIEWS.indexOf('watched')).toBeGreaterThan(VIEWS.indexOf('priced'))
+    expect(VIEWS.indexOf('watched')).toBeLessThan(VIEWS.indexOf('queue'))
+  })
+
+  it('survives a round trip through storage', () => {
+    const store = (() => {
+      let v = null
+      return { getItem: () => v, setItem: (_, x) => { v = x } }
+    })()
+    saveView('watched', store)
+    expect(initialView('', store)).toBe('watched')
   })
 })

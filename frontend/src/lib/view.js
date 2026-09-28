@@ -10,8 +10,11 @@
 
 export const VIEW_KEY = 'auctionscout.view'
 // Find auctions, the auctions you have imported from, every imported lot,
-// just the lots the app has put a value on, and the work still to do.
-export const VIEWS = ['auctions', 'saved', 'items', 'priced', 'queue']
+// just the lots the app has put a value on, the ones you are watching, and
+// the work still to do. Watching is a decision already made, so a watched
+// lot leaves the priced inventory for its own view - what stays in the list
+// is what still needs deciding.
+export const VIEWS = ['auctions', 'saved', 'items', 'priced', 'watched', 'queue']
 export const DEFAULT_VIEW = 'auctions'
 
 // Anyone can type anything after the #, and an unrecognised value would

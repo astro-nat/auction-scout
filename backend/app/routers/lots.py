@@ -22,12 +22,15 @@ def count_lots(
     bolo_only: bool = False,
     priced_only: bool = False,
     flagged_only: bool = False,
+    watched_only: bool = False,
     include_closed: bool = False,
     db: Session = Depends(get_db),
 ):
     """How many lots match these filters — so the UI can say 'showing 2000 of
     10,559' instead of implying the page size is the whole database."""
     q = db.query(models.Lot)
+    if watched_only:
+        q = q.filter(models.Lot.watched.is_(True))
     if category:
         q = q.filter(models.Lot.category == category)
     if auction_id:
@@ -117,6 +120,7 @@ def list_lots(
     bolo_only: bool = False,
     priced_only: bool = Query(False, description="only lots with an est_resale"),
     flagged_only: bool = Query(False, description="only lots flagged as wrong comps"),
+    watched_only: bool = Query(False, description="only lots the user is watching"),
     include_comps: bool = Query(False, description="send each lot's comp records too"),
     include_closed: bool = False,
     limit: int = 2000,
@@ -133,6 +137,11 @@ def list_lots(
     q = (db.query(models.Lot)
            .options(joinedload(models.Lot.enrichment),
                     joinedload(models.Lot.auction)))
+    # Watching a lot is a decision already made about it: it leaves the
+    # inventory it came from and lives in its own view, so what is left in
+    # the list is what still needs one.
+    if watched_only:
+        q = q.filter(models.Lot.watched.is_(True))
     if category:
         q = q.filter(models.Lot.category == category)
     if auction_id:

@@ -42,7 +42,7 @@ export default function App() {
   // the view; the tab reopens on whichever of its views was used last.
   const TABS = [
     { key: 'auctions', label: 'Auctions', views: ['auctions', 'saved'] },
-    { key: 'inventory', label: 'Inventory', views: ['items', 'priced', 'queue'] },
+    { key: 'inventory', label: 'Inventory', views: ['items', 'priced', 'watched', 'queue'] },
   ]
   const lastViewIn = useRef({ auctions: 'auctions', inventory: 'items' })
   // How much is in the queue, for its pill. The status bar already polls
@@ -170,12 +170,19 @@ export default function App() {
   // The two inventory tabs are one panel with one difference: Priced
   // inventory asks the server for only the lots that carry a value.
   const pricedOnly = view === 'priced'
+  // Watching is a decision already made, so those lots get their own view
+  // and leave the priced inventory - what stays there is what still needs
+  // one. Fetched by the server rather than filtered here, because a watched
+  // lot need not be priced and would not be in a priced-only page at all.
+  const watchedOnly = view === 'watched'
   // Unscoped totals for the tab labels - lotTotal follows the filters in
   // view, and a tab label that changed with the filters read as a bug.
-  const [tabCounts, setTabCounts] = useState({ items: null, priced: null })
+  const [tabCounts, setTabCounts] = useState({ items: null, priced: null, watched: null })
   const loadTabCounts = useCallback(() => {
-    Promise.all([fetchLotCount({}), fetchLotCount({ pricedOnly: true })])
-      .then(([all, priced]) => setTabCounts({ items: all.total, priced: priced.total }))
+    Promise.all([fetchLotCount({}), fetchLotCount({ pricedOnly: true }),
+                 fetchLotCount({ watchedOnly: true })])
+      .then(([all, priced, watched]) => setTabCounts({
+        items: all.total, priced: priced.total, watched: watched.total }))
       .catch(console.error)
   }, [])
   useEffect(() => { loadTabCounts() }, [loadTabCounts])
@@ -197,6 +204,7 @@ export default function App() {
       // Every lot is fetched either way; this only chooses what is shown.
       flaggedOnly: filters.flaggedOnly,
       pricedOnly,
+      watchedOnly,
     }
     // Pages of 2000, fetched AT ONCE rather than one after another. One
     // 6000-row payload crashed phone tabs, so the paging stays; chaining it
@@ -244,7 +252,7 @@ export default function App() {
       console.error(e)
       setLotsLoadState('error')
     })
-  }, [selectedAuctions, categoryFilter, filters, pricedOnly])
+  }, [selectedAuctions, categoryFilter, filters, pricedOnly, watchedOnly])
 
   // Accumulate imported auctions as FULL rows, separately from the visible
   // list: scans replace `auctions` with whatever HiBid returned, and your
@@ -892,13 +900,16 @@ export default function App() {
         if (hideHardShip && l.logistics_ease === 'HARD') return false
         if (hideNoUsShip && l.auction_no_us_ship) return false
         if (hideClosed && isClosedItem(l)) return false
+        // Out of the priced inventory once it is watched, so what is left
+        // there is what has not been decided about yet.
+        if (pricedOnly && l.watched) return false
         return true
       })
       .map((l) => ({ ...l,
                      auction_name: l.auction_name ?? auctionNames[l.auction_id] ?? '—',
                      item_closed: isClosedItem(l) }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lots, auctions, auctionIndex, showHiddenLots, hideLowValue, lowValueCutoff, hideHardShip, hideNoUsShip, hideClosed])
+  }, [lots, auctions, auctionIndex, showHiddenLots, hideLowValue, lowValueCutoff, hideHardShip, hideNoUsShip, hideClosed, pricedOnly])
   // What the over-max box would remove from what is otherwise on screen -
   // which is what its number should say. Exempt lots are not counted,
   // because they are not removed either.
@@ -974,6 +985,7 @@ export default function App() {
               saved: `Imported Auctions (${importedAuctions.length})`,
               items: `All Inventory (${(tabCounts.items ?? lotTotal).toLocaleString()})`,
               priced: `Priced Inventory (${(tabCounts.priced ?? 0).toLocaleString()})`,
+              watched: `Watched (${(tabCounts.watched ?? 0).toLocaleString()})`,
               queue: queueN ? `Queue (${queueN.toLocaleString()})` : 'Queue',
             }[v]}
           </button>
@@ -1385,7 +1397,10 @@ export default function App() {
 
       {view === 'queue' && <QueueView isMobile={isMobile} />}
 
-      {(view === 'items' || view === 'priced') && (<>
+      {/* The watched list is the same table over a different set, so it
+          renders through the same panel - leaving it out was why the
+          view came up blank rather than empty. */}
+      {(view === 'items' || view === 'priced' || view === 'watched') && (<>
       <section style={{ marginBottom: 6, display: 'flex',
                         flexDirection: 'column', gap: 6 }}>
         {/* Row 1: scope (auctions + category) on the left, bulk actions on
