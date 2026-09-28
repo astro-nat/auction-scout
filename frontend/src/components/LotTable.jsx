@@ -1109,7 +1109,28 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
               </span>
             </th>
           ))}
-          <th></th>
+          {/* The set-level AI action, in the column its per-row twin lives
+              in. The usage log is unambiguous: 34 one-at-a-time presses of
+              the row button against 11 of every bulk path combined, in runs
+              of up to nine - and each row press spends money. The toolbar
+              already had this button and it was used once. Moving the saved-
+              auction equivalent next to its rows took that one from 0 to used
+              and stopped the per-row clicking, so this is the same move. */}
+          <th style={{ whiteSpace: 'nowrap' }}>
+            {aiTargets.length > 1 && (
+              <button
+                disabled={queuing}
+                onClick={handleEnrichMatching}
+                data-track="AI check worth (header)"
+                title={`AI-check the ${aiTargets.length} lots in view worth $${aiMin}+ that `
+                       + `have not had one, most valuable first. Same action as the `
+                       + `button above the table; it asks first and shows the cost.`}
+                style={{ fontSize: 12, padding: '3px 9px' }}>
+                {queuing ? <><span className="spinner" />Queuing…</>
+                         : `AI check ${aiTargets.length.toLocaleString()}`}
+              </button>
+            )}
+          </th>
         </tr>
         <tr className="filter-row">
           <th></th>
