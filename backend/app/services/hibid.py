@@ -510,6 +510,60 @@ async def fetch_lots(hibid_auction_id: int, auction_ctx: dict | None = None,
             if l["status"] != "CLOSED" and l["time_left"] != "Bidding Closed"]
 
 
+def _same_lot_number(a, b) -> bool:
+    """Lot numbers are strings with letters in them ("1a", "162w"), so
+    compare them as trimmed, case-folded text rather than as numbers."""
+    return str(a or "").strip().lower() == str(b or "").strip().lower()
+
+
+async def fetch_lots_by_number(hibid_auction_id: int, lot_numbers: list,
+                               auction_ctx: dict | None = None,
+                               should_cancel=None) -> tuple[list[dict], list]:
+    """Just these lots, found by lot number, instead of paging the catalogue.
+
+    lotSearch has no by-id lookup, but its searchText filter is selective
+    enough to stand in for one: on a 385-lot sale, searching "1" returned 4
+    results, "250" returned 2, and the exact lot was on the first page every
+    time. So a handful of lots costs a handful of small requests instead of
+    reading the whole catalogue to reach them.
+
+    Returns (lots, missing_numbers). CLOSED lots are NOT filtered out here,
+    unlike fetch_lots: a caller refreshing a specific lot needs to be told it
+    closed, and silence would read as "not found". Anything genuinely not
+    found is returned in `missing` so the caller can decide - absence is not
+    evidence of closure when the search itself might simply have missed.
+    """
+    ctx = auction_ctx or {}
+    found: list[dict] = []
+    missing: list = []
+    seen: set = set()
+    async with httpx.AsyncClient() as client:
+        await _assert_event_exists(client, hibid_auction_id)
+        for number in lot_numbers:
+            if should_cancel and should_cancel():
+                break
+            if number is None or str(number).strip() == "":
+                missing.append(number)      # nothing to search on
+                continue
+            data = await _graphql(client, "LotSearch", LOT_SEARCH_QUERY, {
+                "auctionId": hibid_auction_id, "pageNumber": 1,
+                "searchText": str(number), "category": -1,
+            })
+            paged = (data.get("lotSearch") or {}).get("pagedResults") or {}
+            hit = None
+            for raw in (paged.get("results") or []):
+                lot = _process_lot(raw, ctx)
+                if _same_lot_number(lot["lot_number"], number):
+                    hit = lot
+                    break
+            if hit is None:
+                missing.append(number)
+            elif hit["lot_id"] not in seen:
+                seen.add(hit["lot_id"])
+                found.append(hit)
+    return found, missing
+
+
 async def download_image(url: str) -> Optional[bytes]:
     """Pull a thumbnail from HiBid's CDN — Referer header is mandatory."""
     if not url:

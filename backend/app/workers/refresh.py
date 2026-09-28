@@ -70,10 +70,18 @@ def run_bid_refresh(auction_ids: list[int], resume_job_id: str | None = None) ->
         row = jobs.get(job)
         start_at = (row or {}).get("current") or 0
     else:
+        row = None
         job = jobs.start("bid-refresh", "Refreshing current bids",
                          total=len(auction_ids),
                          payload={"auction_ids": auction_ids})
         start_at = 0
+    # A selection asked for THESE lots. Reading a whole catalogue to reach
+    # three of them is the wrong trade when lotSearch's text filter is
+    # selective enough to find them one at a time - and it also stops a
+    # refresh re-grading two thousand lots nobody asked about.
+    # Absent (the auction-level button, the hourly loop) everything still
+    # goes through the catalogue, which is cheaper per lot in bulk.
+    wanted_ids = set((row or {}).get("payload", {}).get("lot_ids") or [])
     updated_total = 0
     try:
         remaining = auction_ids[start_at:]
@@ -96,23 +104,54 @@ def run_bid_refresh(auction_ids: list[int], resume_job_id: str | None = None) ->
                         auction.hibid_id, auction_ctx=ctx,
                         should_cancel=lambda: jobs.is_cancelled(job))
 
-                fresh = asyncio.run(_fetch())
+                picked = ([l for l in db.query(models.Lot)
+                                        .filter(models.Lot.auction_id == auction_id,
+                                                models.Lot.lot_id.in_(wanted_ids)).all()]
+                          if wanted_ids else [])
+                targeted = None
+                if picked:
+                    async def _fetch_some():
+                        return await hibid.fetch_lots_by_number(
+                            auction.hibid_id, [l.lot_number for l in picked],
+                            auction_ctx=ctx,
+                            should_cancel=lambda: jobs.is_cancelled(job))
+
+                    found, missed = asyncio.run(_fetch_some())
+                    if missed:
+                        # One we could not find. Absence in a targeted search
+                        # is not evidence of anything - the lot may have
+                        # closed, or the search may simply have missed it -
+                        # and guessing would mark a live lot closed. Pay for
+                        # the catalogue, where absence IS authoritative.
+                        logger.info(
+                            "Targeted refresh missed %d of %d lots in auction "
+                            "%s; reading the full catalogue instead",
+                            len(missed), len(picked), auction_id)
+                    else:
+                        targeted, fresh = picked, found
+                if targeted is None:
+                    fresh = asyncio.run(_fetch())
             except Exception as exc:  # noqa: BLE001 — one bad auction must not stop the run
                 logger.warning("Bid refresh fetch failed for auction %s: %s",
                                auction_id, exc)
                 continue
 
             by_lot_id = {str(f["lot_id"]): f for f in fresh}
-            hammered_through = live_hammered_through(fresh)
-            rows = (db.query(models.Lot)
-                      .filter(models.Lot.auction_id == auction_id).all())
+            # Where the catalog has got to only reads correctly off the whole
+            # catalogue. A targeted fetch holds a few lots, so the furthest
+            # hammered one among them says nothing about the rest.
+            hammered_through = None if targeted else live_hammered_through(fresh)
+            rows = targeted or (db.query(models.Lot)
+                                  .filter(models.Lot.auction_id == auction_id).all())
             for lot in rows:
                 data = by_lot_id.get(str(lot.lot_id))
                 if not data:
                     # fetch_lots returns every still-OPEN lot; one of ours
                     # missing from it has individually closed (HiBid soft-
                     # closes catalogs progressively) — record that, or its
-                    # status reads OPEN forever.
+                    # status reads OPEN forever. Only sound on a full read:
+                    # the targeted path never gets here, because a lot it
+                    # could not find sends the whole auction down this one.
                     if (lot.status or "").upper() in ("OPEN", "POSTED"):
                         lot.status = "CLOSED"
                         lot.time_left = None

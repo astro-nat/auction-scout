@@ -375,9 +375,12 @@ def refresh_bids_for_lots(payload: schemas.LotIdsRequest,
     if not info["auction_ids"]:
         return {**info, "queued": False,
                 "reason": "none of the selected lots are in an open HiBid sale"}
+    # lot_ids rides along so the worker can fetch just these lots by number
+    # instead of paging whole catalogues to reach them.
     jobs.enqueue("bid-refresh", "Refreshing current bids",
                  total=info["auctions"],
-                 payload={"auction_ids": info["auction_ids"]})
+                 payload={"auction_ids": info["auction_ids"],
+                          "lot_ids": list(payload.lot_ids)})
     return {**info, "queued": True}
 
 
