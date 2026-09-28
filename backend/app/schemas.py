@@ -88,6 +88,9 @@ class LotOut(BaseModel):
     unreachable_pickup: bool = False
     watched: bool = False
     hidden: bool = False
+    # Its worth turns on a motor running, which a photo cannot show and the
+    # buyer cannot test. Derived from the title (services/powered.py).
+    powered_tool: bool = False
     lot_link: Optional[str] = None
     thumbnail_url: Optional[str] = None
     # How many photos the listing has. One integer, so it costs nothing in a

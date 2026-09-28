@@ -121,6 +121,18 @@ class Lot(Base):
     auction = relationship("Auction", back_populates="lots")
     enrichment = relationship("Enrichment", back_populates="lot", uselist=False)
 
+    @property
+    def powered_tool(self) -> bool:
+        """Does this lot's worth depend on a motor nobody can test?
+
+        Derived from the title on the way out rather than stored: it is a
+        pure reading of words already on the row, so a column would need a
+        migration, a backfill and a second place for the rule to drift.
+        The views read it to keep these out of sight by default.
+        """
+        from .services.powered import is_powered_tool
+        return is_powered_tool(self.title)
+
 
 class Enrichment(Base):
     __tablename__ = "enrichment"

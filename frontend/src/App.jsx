@@ -108,6 +108,11 @@ export default function App() {
   // box rather than a silent rule because it removes 4 lots in every 5, and
   // an inventory that shrinks by 82% with no way back reads as a fault.
   const [hideOverMax, setHideOverMax] = useState(true)
+  // On by default: the only thing that matters about a saw or a compressor
+  // is whether the motor runs, and that is exactly what a listing photo
+  // cannot show. Not a judgement about the tools - a judgement about what
+  // can be checked before bidding.
+  const [hidePowered, setHidePowered] = useState(true)
   // Every in-flight action (a scan, a flush, a "how many?" count-before-
   // confirm) gets its OWN key here, so one running action never disables
   // an unrelated button — clicking "Import" while a scan is still going,
@@ -900,6 +905,7 @@ export default function App() {
         if (hideHardShip && l.logistics_ease === 'HARD') return false
         if (hideNoUsShip && l.auction_no_us_ship) return false
         if (hideClosed && isClosedItem(l)) return false
+        if (hidePowered && l.powered_tool) return false
         // Out of the priced inventory once it is watched, so what is left
         // there is what has not been decided about yet.
         if (pricedOnly && l.watched) return false
@@ -909,7 +915,14 @@ export default function App() {
                      auction_name: l.auction_name ?? auctionNames[l.auction_id] ?? '—',
                      item_closed: isClosedItem(l) }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lots, auctions, auctionIndex, showHiddenLots, hideLowValue, lowValueCutoff, hideHardShip, hideNoUsShip, hideClosed, pricedOnly])
+  }, [lots, auctions, auctionIndex, showHiddenLots, hideLowValue, lowValueCutoff, hideHardShip, hideNoUsShip, hideClosed, hidePowered, pricedOnly])
+  // What this box removes from what is otherwise on screen, counted the
+  // same way the others are.
+  const poweredCount = useMemo(
+    () => lotsBeforeOverMax.reduce(
+      (n, l) => n + (!isJustTouched(l) && l.powered_tool ? 1 : 0), 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [lotsBeforeOverMax])
   // What the over-max box would remove from what is otherwise on screen -
   // which is what its number should say. Exempt lots are not counted,
   // because they are not removed either.
@@ -1573,6 +1586,16 @@ export default function App() {
               data-track="Hide over max bid"
             /> Hide over max bid
             <span style={{ color: 'var(--muted)' }}>({overMaxCount.toLocaleString()})</span>
+          </label>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
+                 title="Saws, sanders, compressors, mowers and the like - anything whose worth depends on a motor running, which a photo cannot show and you cannot test before bidding. Hand tools are not affected.">
+            <input
+              type="checkbox"
+              checked={hidePowered}
+              onChange={(ev) => setHidePowered(ev.target.checked)}
+              data-track="Hide power tools"
+            /> Hide power tools
+            <span style={{ color: 'var(--muted)' }}>({poweredCount.toLocaleString()})</span>
           </label>
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
             <input
