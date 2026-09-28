@@ -6,6 +6,7 @@ from typing import Optional, List
 
 from .. import models, schemas
 from ..database import get_db
+from ..services import hidden as hidden_lots
 from ..services import jobs, twins
 from ..services.boilerplate import is_boilerplate
 
@@ -297,6 +298,8 @@ def hide_boilerplate(dry_run: bool = False, db: Session = Depends(get_db)):
         (db.query(models.Lot)
            .filter(models.Lot.id.in_([r.id for r in todo]))
            .update({models.Lot.hidden: True}, synchronize_session=False))
+        # Remember it past the row, or the next import brings them back.
+        hidden_lots.add_many(db, todo)
         db.commit()
     return {"changed": len(todo), "dry_run": dry_run,
             "titles": [r.title for r in todo[:20]]}
@@ -337,9 +340,15 @@ def hide_like(lot_id: str, hidden: bool = True, dry_run: bool = False,
         return {"key": key, "matched": len(same), "changed": len(todo),
                 "titles": [r[1] for r in todo[:5]]}
     if todo:
+        ids = [r[0] for r in todo]
         (db.query(models.Lot)
-           .filter(models.Lot.id.in_([r[0] for r in todo]))
+           .filter(models.Lot.id.in_(ids))
            .update({models.Lot.hidden: hidden}, synchronize_session=False))
+        rows = db.query(models.Lot).filter(models.Lot.id.in_(ids)).all()
+        if hidden:
+            hidden_lots.add_many(db, rows)
+        else:
+            hidden_lots.remove_many(db, [r.lot_id for r in rows])
         db.commit()
     return {"key": key, "matched": len(same), "changed": len(todo),
             "titles": [r[1] for r in todo[:5]]}
@@ -372,6 +381,13 @@ def set_hidden(lot_id: str, hidden: bool = True, db: Session = Depends(get_db)):
     if not lot:
         raise HTTPException(status_code=404, detail="Lot not found")
     lot.hidden = hidden
+    # The flag lives on a row that gets deleted when the lot closes and
+    # re-created by the next import. Remember the decision separately so
+    # it survives that; unhiding forgets it, so an import cannot re-hide.
+    if hidden:
+        hidden_lots.add(db, lot.lot_id, lot.title)
+    else:
+        hidden_lots.remove(db, lot.lot_id)
     db.commit()
     db.refresh(lot)
     return lot

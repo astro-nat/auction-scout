@@ -24,6 +24,7 @@ from ..services import shipping
 from ..services.timing import timed
 from .enrich import _apply_roi, apply_bolo_match, looks_multi_item
 from ..services.boilerplate import is_boilerplate
+from ..services import hidden as hidden_lots
 from ..services.bolo import category_hint
 
 logger = logging.getLogger(__name__)
@@ -85,6 +86,10 @@ def save_lots(db: Session, auction: models.Auction, lots: list[dict], *,
     new_rows: list = []
     new_data: list = []
     notices = 0
+    # Hiding is recorded against the SOURCE's lot id, because this row is not
+    # durable: a lot is deleted an hour after it closes and re-created here
+    # from the catalogue, which used to bring it back unhidden. Read once.
+    hidden_ids = hidden_lots.ids(db)
     for i, data in enumerate(incoming, 1):
         if i % 200 == 0 or i == total:
             if should_cancel and should_cancel():
@@ -118,6 +123,8 @@ def save_lots(db: Session, auction: models.Auction, lots: list[dict], *,
             # Pure arithmetic over stored values: no comps, no AI, no network.
             if row.current_bid != bid_before and row.enrichment is not None:
                 _apply_roi(row, row.enrichment)
+            if row.lot_id in hidden_ids:
+                row.hidden = True
             updated += 1
             continue
 
@@ -149,7 +156,10 @@ def save_lots(db: Session, auction: models.Auction, lots: list[dict], *,
                 skipped += 1
                 continue
 
-        new_rows.append(models.Lot(auction_id=auction.id, **data))
+        fresh = models.Lot(auction_id=auction.id, **data)
+        if fresh.lot_id in hidden_ids:
+            fresh.hidden = True
+        new_rows.append(fresh)
         new_data.append(data)
 
     # --- 3. one flush for every new lot, then one for their enrichments

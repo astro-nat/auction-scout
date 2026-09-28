@@ -307,6 +307,25 @@ class EstimateObservation(Base):
     created_at = Column(DateTime, server_default=func.now())
 
 
+class HiddenLot(Base):
+    """A lot the user has hidden - remembered past the row itself.
+
+    Lot.hidden is the flag the views read, but the row is deleted an hour
+    after the lot closes and re-created by the next import of a live sale,
+    with hidden back at its default. Keyed on the source's lot id, this
+    outlives that, so "hide" means hide.
+
+    Same reasoning as DismissedAuction below, one level down.
+    """
+    __tablename__ = "hidden_lots"
+
+    id = Column(Integer, primary_key=True, index=True)
+    lot_id = Column(String, unique=True, index=True, nullable=False)
+    # Kept for reading the table by eye; nothing depends on it.
+    title = Column(String)
+    created_at = Column(DateTime, server_default=func.now())
+
+
 class DismissedAuction(Base):
     """An auction the user has forgotten — never show it again.
 
