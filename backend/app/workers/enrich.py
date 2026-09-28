@@ -2198,7 +2198,7 @@ def run_ship_analysis(auction_ids: list[int], resume_job_id: str | None = None) 
                          total=len(auction_ids),
                          payload={"auction_ids": auction_ids})
         start_at = 0
-    analyzed = no_info = 0
+    analyzed = no_info = unfetched = 0
     try:
         remaining = auction_ids[start_at:]
         auctions = {a.id: a for a in
@@ -2224,7 +2224,18 @@ def run_ship_analysis(auction_ids: list[int], resume_job_id: str | None = None) 
             if not auction:
                 jobs.update(job, current=i)
                 continue
-            m = meta.get(auction.hibid_id) or {}
+            m = meta.get(auction.hibid_id)
+            if m is None:
+                # The fetch brought nothing back for this auction. That is
+                # NOT the same as the house posting nothing, and recording it
+                # as such is worse than recording nothing: ship_analyzed_at
+                # would be set, the default filter skips analysed auctions,
+                # and the wrong answer becomes permanent without force=true.
+                # A whole run once wrote "No shipping details posted" over
+                # 146 auctions whose terms pages were perfectly readable.
+                unfetched += 1
+                jobs.update(job, current=i, detail=(auction.name or "")[:40])
+                continue
             ship_text = (m.get("ship_text") or "").strip()
             terms_text = (m.get("terms_text") or "").strip()
             try:
@@ -2262,4 +2273,7 @@ def run_ship_analysis(auction_ids: list[int], resume_job_id: str | None = None) 
     finally:
         jobs.finish(job)
         db.close()
-    print(f"Shipping analysis complete: {analyzed} read, {no_info} had no info posted")
+    tail = (f", {unfetched} LEFT UNREAD — their terms never arrived, so they "
+            f"stay unanalysed and the next run retries them" if unfetched else "")
+    print(f"Shipping analysis complete: {analyzed} read, "
+          f"{no_info} had no info posted{tail}")
