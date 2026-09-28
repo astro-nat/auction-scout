@@ -102,3 +102,77 @@ def test_reason_refreshes_when_the_gate_changes():
     enrich._apply_roi(lot, e)
     assert e.roi_status == "GOLD MINE"
     assert e.roi_reason is None                   # stale reason cleared
+
+# --- precedence among the newer gates ---------------------------------
+#
+# Two gates went in this week, both in the middle of the chain, and the only
+# ordering the suite pinned was "red flag beats thin evidence". A gate that
+# quietly moves changes which sentence the user reads about a lot they were
+# about to buy, and nothing would have failed.
+
+BURNER = dict(seller_id="1", seller_rating=None, seller_feedback_count=None,
+              seller_item_count=1, seller_bought_count=0)
+VINTED = models.Auction(name="Vinted: gpu", auctioneer="Vinted",
+                        source="Ship", buyer_premium_mult=1.05)
+
+
+def _vinted_lot(**over):
+    """A fixed-price listing, which is the only kind the bait gate reads."""
+    defaults = dict(lot_id="v1", title="Apple Mac Studio 2022",
+                    logistics_ease="EASY", source="Ship",
+                    current_bid=213, next_bid=213, unreachable_pickup=False,
+                    auction=VINTED)
+    defaults.update(over)
+    lot = models.Lot(**defaults)
+    e = models.Enrichment(lot_id=1, user_overrides=[])
+    lot.enrichment = e
+    return lot, e
+
+
+def test_a_burner_seller_is_named_before_a_bait_price():
+    """Both gates fire on the same listing - most of the bait on file belongs
+    to burner accounts. The account is the more damning fact, and it is the
+    one the user should read."""
+    lot, e = _vinted_lot(**BURNER)
+    _grade(lot, e, resale=1200)
+    assert e.roi_status == "PASS"
+    assert e.roi_reason.startswith("seller has no ratings")
+
+
+def test_a_bait_price_is_named_when_the_seller_is_ordinary():
+    lot, e = _vinted_lot(seller_id="2", seller_feedback_count=27,
+                         seller_item_count=51, seller_bought_count=26)
+    _grade(lot, e, resale=1200)
+    assert e.roi_status == "PASS"
+    assert "its own comps value at" in e.roi_reason
+
+
+def test_a_condition_red_flag_still_beats_both():
+    lot, e = _vinted_lot(**BURNER)
+    _grade(lot, e, resale=1200, verdict="broken, damaged, or for parts")
+    assert e.roi_reason.startswith("condition red flag")
+
+
+def test_bait_is_named_before_thin_evidence():
+    lot, e = _vinted_lot(seller_id="2", seller_feedback_count=27,
+                         seller_item_count=51, seller_bought_count=26)
+    _grade(lot, e, resale=1200, comps=1)
+    assert "its own comps value at" in e.roi_reason
+
+
+def test_an_auction_lot_with_the_same_numbers_reports_thin_evidence():
+    """The bait gate does not apply to a bid on its way up, so the next gate
+    in the chain is the one that answers."""
+    lot, e = _lot(current_bid=213, next_bid=213)
+    _grade(lot, e, resale=1200, comps=1)
+    assert "comp" in e.roi_reason
+    assert "its own comps value at" not in e.roi_reason
+
+
+def test_a_seller_nobody_looked_up_changes_nothing():
+    """Every auction-house lot has NULL seller columns; they must not read as
+    "no history"."""
+    lot, e = _lot()
+    _grade(lot, e, resale=100)
+    assert e.roi_status == "GOLD MINE"
+    assert e.roi_reason is None
