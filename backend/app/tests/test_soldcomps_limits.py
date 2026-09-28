@@ -248,13 +248,47 @@ def test_every_reply_is_recorded_for_the_status_bar(monkeypatch):
     monkeypatch.setattr(pricing.httpx, "Client", FakeClient)
     pricing._soldcomps_lookup("nothing")
     assert RECORDED[-1] == {"query": "nothing", "status": 200,
-                            "total_items": 0, "items": 0, "parsed": 0}
+                            "total_items": 0, "items": 0, "parsed": 0,
+                            # No items, so nothing to describe.
+                            "note": None}
 
     Broken, _ = _client([_Resp(503)])
     monkeypatch.setattr(pricing.httpx, "Client", Broken)
     pricing._soldcomps_lookup("broken")
     assert RECORDED[-1]["query"] == "broken"
     assert RECORDED[-1]["status"] == 503
+
+
+def test_the_trace_names_the_fields_a_reply_carried(monkeypatch):
+    """Temporary, and the reason it exists: the parser only ever read price,
+    title, url and date, so whether SoldComps also returns an IMAGE has been
+    invisible. An image would let a comp be judged by what it shows rather
+    than what it is called - which is where prices go wrong, since 62% of
+    the lots flagged as wrongly comped drew more than 40 comps against 1%
+    of the rest.
+
+    Names only. A trace that carried listing text would be a new place for
+    data to leak, for no gain.
+    """
+    item = {"soldPrice": "$25.00", "title": "A Real Thing",
+            "link": "https://example.com/i", "soldDate": "2026-09-01",
+            "imageUrl": "https://example.com/i.jpg"}
+    FakeClient, _ = _client([_Resp(200, [item], total=1)])
+    monkeypatch.setattr(pricing.httpx, "Client", FakeClient)
+    pricing._soldcomps_lookup("a real thing")
+
+    note = RECORDED[-1]["note"]
+    assert note == "fields: imageUrl,link,soldDate,soldPrice,title"
+    for value in ("A Real Thing", "25.00", "example.com"):
+        assert value not in note, f"a value reached the trace: {value}"
+
+
+def test_a_reply_shaped_unexpectedly_records_nothing_rather_than_failing():
+    """The item shape is not contractual - a lookup must not die describing
+    itself."""
+    assert pricing._item_fields([]) is None
+    assert pricing._item_fields(["not a dict"]) is None
+    assert pricing._item_fields(None) is None
 
 
 def test_a_missing_key_is_recorded_once_not_per_variant(monkeypatch):

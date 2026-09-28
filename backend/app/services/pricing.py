@@ -730,6 +730,25 @@ _REPLIES_SHOWN = 20
 _no_key_noted = False
 
 
+def _item_fields(items: list) -> str | None:
+    """The field NAMES on a reply item, never the values.
+
+    Answers one question the code cannot: does SoldComps hand back an image
+    for each sold listing? The parser only ever asked for price, title, url
+    and date, so anything else it returns has been invisible. If there is an
+    image, comparing it against the lot's own photo would judge a comp the
+    way a title match cannot - and that is where prices actually go wrong:
+    62% of the lots flagged as wrongly comped drew more than 40 comps,
+    against 1% of the rest.
+
+    Names only, and only from the first item, so no listing data and no key
+    can reach the log. Temporary: delete once the answer is known.
+    """
+    if not items or not isinstance(items[0], dict):
+        return None
+    return ("fields: " + ",".join(sorted(items[0].keys())))[:200]
+
+
 def _note_response(query: str, status, *, total_items=None, items=None,
                    parsed=None, note=None) -> None:
     """Write one reply row. Never raises - a lost trace must not cost the
@@ -1008,7 +1027,8 @@ def _soldcomps_lookup(query: str, count: int = 120) -> list[tuple[float, str]]:
                                     or item.get("date"),
                             "kind": "sold"})
         _note_response(query, 200, total_items=body.get("totalItems"),
-                       items=len(items), parsed=len(out))
+                       items=len(items), parsed=len(out),
+                       note=_item_fields(items))
         # Cached even when empty: "nothing sold matching this" is an answer,
         # and re-asking it per variant is what built the burst.
         _cache_put(key, out)
