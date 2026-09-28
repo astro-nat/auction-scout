@@ -5,7 +5,7 @@
 // pinned. Cases and numbers preserved from the original.
 import { describe, expect, it } from 'vitest'
 
-import { etaText, sampleProgress } from './progress.js'
+import { etaText, sampleProgress, etaLabel } from './progress.js'
 
 // Phase 1: fetch, 100 lots per page, ~1s per page, total = HiBid's count.
 // Phase 2: save — current RESETS to 0 and total changes to the open-lot count.
@@ -124,5 +124,44 @@ describe('the rest of the contract', () => {
       sampleProgress(m, [{ id: 'c', total: 999, current: i }], i * 1000)
     }
     expect(m.get('c')).toHaveLength(20)
+  })
+})
+
+describe('etaLabel', () => {
+  // The estimate has to stand on its own, because the status bar puts it in
+  // a slot beside the progress bar rather than at the end of the label. On
+  // a phone that label is ellipsised, and the estimate was always the part
+  // that got cut - "how long will this import take" was the one question a
+  // phone could never answer.
+  const movingJob = () => {
+    const map = new Map()
+    const job = { id: 'imp', total: 2400, current: 0 }
+    let t = 0
+    for (const current of [0, 200, 400, 600]) {
+      t += 30000
+      sampleProgress(map, [{ ...job, current }], t)
+    }
+    return { map, job: { ...job, current: 600 } }
+  }
+
+  it('is the estimate with no separator in front of it', () => {
+    const { map, job } = movingJob()
+    const withSep = etaText(map, job)
+    const bare = etaLabel(map, job)
+    expect(withSep).not.toBe('')
+    expect(withSep.startsWith(' · ')).toBe(true)
+    expect(bare).toBe(withSep.replace(' · ', ''))
+    expect(bare.startsWith('·')).toBe(false)
+    expect(bare.startsWith(' ')).toBe(false)
+  })
+
+  it('says nothing when there is nothing to say', () => {
+    // No samples: refuses to guess, and an empty label renders no slot.
+    expect(etaLabel(new Map(), { id: 'imp', total: 100, current: 1 })).toBe('')
+  })
+
+  it('reads as a whole phrase, so it can sit on its own', () => {
+    const { map, job } = movingJob()
+    expect(etaLabel(map, job)).toMatch(/left$/)
   })
 })

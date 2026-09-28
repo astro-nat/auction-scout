@@ -39,6 +39,19 @@ export function sampleProgress(map, jobs, now = Date.now()) {
 }
 
 /** " - ~4 min left", or '' when there isn't enough signal to say. */
+// The same estimate with no separator, for showing on its own.
+//
+// The bar gives it a slot of its own rather than appending it to the label,
+// because the label is ellipsised on a phone and the estimate is at the end
+// of it - so "how long will this take" was the one thing a phone never
+// showed. The counts were moved to the front of that label for the same
+// reason once already; putting the estimate on the tail put it right back
+// in the part that gets cut.
+export function etaLabel(map, job) {
+  return etaText(map, job).replace(/^\s*·\s*/, '')
+}
+
+
 export function etaText(map, job) {
   const arr = map.get(job.id)
   if (!arr || arr.length < MIN_SAMPLES || job.total == null) return ''

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { cancelEnrichment, cancelJob, fetchStatus } from '../api'
-import { etaText, sampleProgress } from '../lib/progress'
+import { etaLabel, sampleProgress } from '../lib/progress'
 
 // Publish the bar's current height as a CSS variable so sticky table
 // headers can offset themselves below it instead of hiding under it.
@@ -68,10 +68,11 @@ export default function StatusBar({ onQuiet, onStatus }) {
     // auction name) — the counts alone made the bar feel vague.
     const detail = job.detail ? ` — ${job.detail}` : ''
     const text = (job.total
-      ? `${job.current} of ${job.total} · ${job.label}${etaText(progressRef.current, job)}`
+      ? `${job.current} of ${job.total} · ${job.label}`
       : job.label) + detail
     lines.push({
       key: job.id, text, current: job.current, total: job.total,
+      eta: etaLabel(progressRef.current, job),
       onCancel: job.cancelled ? null : () => cancelJob(job.id),
     })
   }
@@ -90,7 +91,10 @@ export default function StatusBar({ onQuiet, onStatus }) {
       : ''
     lines.push({
       key: 'enrichment',
-      text: `Queue: ${enrichment.queued}${mix}${rate}${lot}${stage}`,
+      // Same reasoning: the estimate rides beside the bar, not on the end of
+      // a label that gets cut.
+      eta: rate.replace(/^\s*·\s*/, ''),
+      text: `Queue: ${enrichment.queued}${mix}${lot}${stage}`,
       onCancel: async () => {
         const r = await cancelEnrichment()
         alert(`Stopped ${r.cancelled} queued lots. The one in progress will finish.`)
@@ -135,6 +139,12 @@ export default function StatusBar({ onQuiet, onStatus }) {
                              fontWeight: l.warn ? 600 : undefined }}>
                 {l.text}
               </span>
+              {/* Its own slot, like the percentage: never ellipsised, however
+                  long the auction name is. */}
+              {l.eta && (
+                <span style={{ flexShrink: 0, whiteSpace: 'nowrap',
+                               color: 'var(--muted)' }}>{l.eta}</span>
+              )}
               {pct !== null && (
                 <strong style={{ flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{pct}%</strong>
               )}
