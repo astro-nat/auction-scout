@@ -2199,6 +2199,9 @@ def run_ship_analysis(auction_ids: list[int], resume_job_id: str | None = None) 
                          payload={"auction_ids": auction_ids})
         start_at = 0
     analyzed = no_info = unfetched = 0
+    # Auctions whose per-item estimate actually moved. Only their lots
+    # need re-costing, so a run that learns nothing new costs nothing.
+    changed_auctions: list[int] = []
     try:
         remaining = auction_ids[start_at:]
         auctions = {a.id: a for a in
@@ -2238,6 +2241,7 @@ def run_ship_analysis(auction_ids: list[int], resume_job_id: str | None = None) 
                 continue
             ship_text = (m.get("ship_text") or "").strip()
             terms_text = (m.get("terms_text") or "").strip()
+            was = auction.ship_cost_estimate
             try:
                 if not ship_text and not terms_text:
                     auction.ship_summary = "No shipping details posted"
@@ -2264,12 +2268,38 @@ def run_ship_analysis(auction_ids: list[int], resume_job_id: str | None = None) 
                     analyzed += 1
                 auction.ship_analyzed_at = datetime.now(timezone.utc).replace(tzinfo=None)
                 db.commit()
+                if auction.ship_cost_estimate != was:
+                    changed_auctions.append(auction.id)
             except Exception as exc:  # noqa: BLE001 — one bad auction must not stop the run
                 logger.warning("Shipping analysis failed for auction %s: %s",
                                auction_id, exc)
                 db.rollback()
             # `current` advances on every auction — it's the resume checkpoint.
             jobs.update(job, current=i, detail=(auction.name or "")[:40])
+        # Spend what was just read. Reading an auction's terms and then
+        # costing its lots at the $15 default is what this job did for its
+        # whole life: the estimate was stored and nothing ever looked at it.
+        # Re-costing is arithmetic over numbers already on file - no network,
+        # no AI - so it runs here rather than asking for a second job.
+        #
+        # Every priced lot of a changed sale, not only the ones a user ticked:
+        # they are all mis-costed by the same amount, and leaving the rest
+        # wrong would mean the same sale showing two different shipping
+        # assumptions side by side.
+        recosted = lost = 0
+        if changed_auctions:
+            jobs.update(job, label="Re-costing lots at the shipping just read")
+            rows = (db.query(models.Lot)
+                      .join(models.Enrichment)
+                      .options(joinedload(models.Lot.enrichment),
+                               joinedload(models.Lot.auction))
+                      .filter(models.Lot.auction_id.in_(changed_auctions),
+                              models.Enrichment.est_resale.isnot(None))
+                      .all())
+            recosted, lost = _regrade_rows(db, rows)
+            print(f"Re-costed {len(rows)} lots across {len(changed_auctions)} "
+                  f"sales: {recosted} verdicts changed"
+                  + (f", {lost} LOST to failed commits" if lost else ""))
     finally:
         jobs.finish(job)
         db.close()

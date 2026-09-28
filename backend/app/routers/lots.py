@@ -1,6 +1,6 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 from typing import Optional, List
 
@@ -294,6 +294,113 @@ def regrade(db: Session = Depends(get_db)):
         jobs.enqueue("regrade", "Re-grading items under the current rules",
                      total=n)
     return {"regrading": n}
+
+
+def _auctions_behind(db: Session, lot_ids: list[str]) -> dict:
+    """The auctions the selected lots came from, and what cannot be reached.
+
+    Both actions below are per-auction underneath: HiBid serves a whole
+    catalogue at a time, and an auction's shipping terms are one page for all
+    its lots. So a selection of 5 lots from 2 sales is 2 units of work that
+    also refresh their siblings - worth saying out loud in what we return,
+    because the number the user ticked and the number that moves are not the
+    same.
+
+    A lot whose sale is not a HiBid one (Vinted, GovDeals, PublicSurplus) has
+    neither a bid feed nor a terms page here, and is reported as skipped
+    rather than silently dropped.
+    """
+    rows = (db.query(models.Lot.lot_id, models.Lot.auction_id,
+                     models.Auction.id, models.Auction.hibid_id,
+                     models.Auction.name, models.Auction.closing_date)
+              .outerjoin(models.Auction,
+                         models.Auction.id == models.Lot.auction_id)
+              .filter(models.Lot.lot_id.in_(lot_ids)).all())
+    now = datetime.now()
+    ids, names, no_house, closed, covered = [], [], 0, 0, 0
+    seen = set()
+    for _lid, _aid, aid, hibid_id, name, closes in rows:
+        if aid is None or hibid_id is None:
+            no_house += 1
+            continue
+        if closes is not None and closes < now:
+            closed += 1
+            continue
+        covered += 1
+        if aid not in seen:
+            seen.add(aid)
+            ids.append(aid)
+            names.append(name or "(unnamed sale)")
+    # How many lots actually move, which is every lot of those auctions and
+    # not just the ticked ones.
+    total_lots = (db.query(func.count(models.Lot.id))
+                    .filter(models.Lot.auction_id.in_(ids)).scalar() or 0) if ids else 0
+    return {"auction_ids": ids, "auctions": len(ids), "auction_names": names[:8],
+            "selected": len(rows), "covered": covered,
+            "lots_affected": int(total_lots),
+            "skipped_not_hibid": no_house, "skipped_closed": closed}
+
+
+@router.post("/refresh-bids", status_code=202)
+def refresh_bids_for_lots(payload: schemas.LotIdsRequest,
+                          dry_run: bool = False,
+                          db: Session = Depends(get_db)):
+    """Re-pull current bids for the auctions behind the selected lots.
+
+    The auction-level endpoint only covers what closes inside the refresh
+    window, on the reasoning that a sale three weeks out is not moving. A
+    selection is an explicit request for these lots, so no window applies:
+    if the user ticked it, they want its number now.
+
+    Free - no AI. Recomputes each lot's verdict at the new bid.
+    """
+    info = _auctions_behind(db, payload.lot_ids)
+    # Not a block: a different selection is different work, and refusing it
+    # because something similar is queued would be wrong. Reported so the
+    # dialog can say so - a second shipping read is real money spent twice.
+    info["already_queued"] = jobs.has_pending("bid-refresh")
+    if dry_run:
+        return {**info, "dry_run": True}
+    if not info["auction_ids"]:
+        return {**info, "queued": False,
+                "reason": "none of the selected lots are in an open HiBid sale"}
+    jobs.enqueue("bid-refresh", "Refreshing current bids",
+                 total=info["auctions"],
+                 payload={"auction_ids": info["auction_ids"]})
+    return {**info, "queued": True}
+
+
+@router.post("/analyze-shipping", status_code=202)
+def analyze_shipping_for_lots(payload: schemas.LotIdsRequest,
+                              dry_run: bool = False,
+                              db: Session = Depends(get_db)):
+    """Read the shipping terms of the auctions behind the selected lots, and
+    re-cost their lots with what it finds.
+
+    Deliberately unconditional, unlike the sweep over every auction: that one
+    skips sales it has already read, and a run whose fetch came back empty
+    marked 146 of them read while learning nothing - so "already read" cannot
+    be trusted as a reason to skip. Asking for a specific selection is asking
+    for it to be read again.
+
+    The re-costing is the point and happens inside the job: an estimate
+    nothing spends is what this feature was before (see
+    workers.enrich.run_ship_analysis).
+    """
+    info = _auctions_behind(db, payload.lot_ids)
+    # Not a block: a different selection is different work, and refusing it
+    # because something similar is queued would be wrong. Reported so the
+    # dialog can say so - a second shipping read is real money spent twice.
+    info["already_queued"] = jobs.has_pending("ship-analysis")
+    if dry_run:
+        return {**info, "dry_run": True}
+    if not info["auction_ids"]:
+        return {**info, "queued": False,
+                "reason": "none of the selected lots are in an open HiBid sale"}
+    jobs.enqueue("ship-analysis", "Reading shipping terms per auction",
+                 total=info["auctions"],
+                 payload={"auction_ids": info["auction_ids"]})
+    return {**info, "queued": True}
 
 
 @router.post("/hide-boilerplate")

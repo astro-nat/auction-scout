@@ -400,3 +400,16 @@ export function deleteNeverRule(id) {
 export function previewNeverRule(rule) {
   return request('/never/preview', { method: 'POST', body: JSON.stringify(rule) })
 }
+
+// Bid refresh and shipping, scoped to a lot selection. Both are per-auction
+// underneath, so the response says how many sales and how many lots that
+// really is; pass dryRun to get those numbers without queueing anything.
+export function refreshBidsForLots(lotIds, { dryRun = false } = {}) {
+  return request(`/lots/refresh-bids?dry_run=${dryRun}`,
+                 { method: 'POST', body: JSON.stringify({ lot_ids: lotIds }) })
+}
+
+export function analyzeShippingForLots(lotIds, { dryRun = false } = {}) {
+  return request(`/lots/analyze-shipping?dry_run=${dryRun}`,
+                 { method: 'POST', body: JSON.stringify({ lot_ids: lotIds }) })
+}

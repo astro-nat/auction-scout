@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { enrichLot, compsLot, recheckLot, fetchLot, patchEnrichment, flagComp, enrichBatch, repriceSelected, setWatch, setHidden, hideLike, alertOnce, parseUtc } from '../api'
+import { enrichLot, compsLot, recheckLot, fetchLot, patchEnrichment, flagComp, enrichBatch, repriceSelected, setWatch, setHidden, hideLike, refreshBidsForLots, analyzeShippingForLots, alertOnce, parseUtc } from '../api'
 import { aiDone, rowAction } from '../lib/pricing'
 import { PAGE_SIZES, pageButtons, pageWindow, savePageSize, savedPageSize, searchMatches, showingText } from '../lib/paging'
 import { compRows, ebaySoldUrl } from '../lib/comps'
@@ -741,6 +741,57 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     finally { setQueuing(false) }
   }
 
+  // Both of these are per-auction underneath: HiBid serves a whole catalogue
+  // at a time, and a sale's shipping terms are one page for all its lots. So
+  // ticking one lot of a 300-lot sale moves all 300 - which the dialog says
+  // outright, from the server's own count, rather than letting the user find
+  // out afterwards.
+  async function handleSelectionJob(kind) {
+    const ids = selectedInView.map((l) => l.lot_id)
+    if (!ids.length) return
+    const call = kind === 'bids' ? refreshBidsForLots : analyzeShippingForLots
+    setQueuing(true)
+    try {
+      const plan = await call(ids, { dryRun: true })
+      if (!plan.auctions) {
+        alert('None of the selected lots are in an open HiBid sale.\n\n'
+              + 'Vinted, GovDeals and PublicSurplus lots have no bid feed or '
+              + 'terms page here, and a sale that has already closed is left alone.')
+        return
+      }
+      const sales = `${plan.auctions} sale${plan.auctions === 1 ? '' : 's'}`
+      const what = kind === 'bids'
+        ? `Re-pull current bids for the ${sales} behind your ${plan.selected} selected `
+          + `lot${plan.selected === 1 ? '' : 's'}?\n\n`
+          + `That refreshes all ${plan.lots_affected.toLocaleString()} lots of `
+          + `${plan.auctions === 1 ? 'that sale' : 'those sales'} and re-grades each at its `
+          + `new bid. Free - no AI.`
+        : `Read the shipping terms of the ${sales} behind your ${plan.selected} selected `
+          + `lot${plan.selected === 1 ? '' : 's'}?\n\n`
+          + `One AI call per sale, roughly $${(plan.auctions * 0.01).toFixed(2)}. Whatever it `
+          + `finds is then spent: every priced lot of `
+          + `${plan.auctions === 1 ? 'that sale' : 'those sales'} is re-costed with the real `
+          + `shipping instead of the $15 default - up to `
+          + `${plan.lots_affected.toLocaleString()} lots.`
+      const notes = [
+        plan.skipped_not_hibid
+          ? `${plan.skipped_not_hibid} selected lot${plan.skipped_not_hibid === 1 ? '' : 's'} `
+            + `skipped - no HiBid sale behind ${plan.skipped_not_hibid === 1 ? 'it' : 'them'}.`
+          : '',
+        plan.skipped_closed
+          ? `${plan.skipped_closed} skipped - already closed.` : '',
+        plan.already_queued
+          ? `One of these is already queued; this adds another.` : '',
+        plan.auction_names.length
+          ? `Sales: ${plan.auction_names.join(', ')}` : '',
+      ].filter(Boolean)
+      if (!window.confirm([what, ...notes].join('\n\n'))) return
+      await call(ids)
+      onRefresh?.()
+    } catch (e) { alertOnce(e.message) }
+    finally { setQueuing(false) }
+  }
+
   const handleBulkHide = (hidden) =>
     bulkEach(selectedInView.map((l) => l.lot_id), (id) => setHidden(id, hidden))
   const handleBulkWatch = (watched) =>
@@ -781,6 +832,18 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
       <button style={smallBtn} onClick={handleBulkPrice} disabled={queuing}
               title="AI reads each selected lot's photo and listing for condition and a closer identification, then prices it (asks first, shows cost)">
         AI check selected
+      </button>
+      <button style={smallBtn} onClick={() => handleSelectionJob('bids')}
+              disabled={queuing}
+              data-track="Refresh bids (selected lots)"
+              title="Re-pull the current bid from HiBid for the sales behind the selected lots, and re-grade each lot at its new bid. Free - no AI (asks first, and says how many lots that really moves)">
+        Refresh bids
+      </button>
+      <button style={smallBtn} onClick={() => handleSelectionJob('shipping')}
+              disabled={queuing}
+              data-track="Calculate shipping (selected lots)"
+              title="Read the shipping terms of the sales behind the selected lots and re-cost their lots with the real figure instead of the $15 default (asks first, shows cost)">
+        Calculate shipping
       </button>
       <button style={smallBtn} onClick={() => handleBulkHide(true)}>Hide</button>
       <button style={smallBtn} onClick={() => handleBulkHide(false)}>Unhide</button>

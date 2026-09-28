@@ -171,6 +171,14 @@ class EnrichBatchRequest(BaseModel):
     lot_ids: list[str]
 
 
+class LotIdsRequest(BaseModel):
+    """A selection of lots, for an action that works on whatever the user
+    ticked. The work itself may be per-auction (a bid refresh pulls a whole
+    catalogue at a time, because that is the shape of HiBid's API) - the
+    endpoint says so in what it returns rather than pretending otherwise."""
+    lot_ids: list[str]
+
+
 class RepriceRequest(BaseModel):
     """An explicit selection for the re-price job. The user ticked these
     lots, so no scope filter applies: a lot with no AI title is searched on
