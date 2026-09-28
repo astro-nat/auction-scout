@@ -316,3 +316,39 @@ def test_an_unpriced_lot_is_left_alone(monkeypatch, sale):
     db.expire_all()
     lot = db.query(models.Lot).filter(models.Lot.lot_id == "sel-a3").first()
     assert lot.enrichment is None
+
+
+# --- what the fetch really costs -----------------------------------------
+
+def test_the_page_count_follows_the_sale_not_the_selection(sale):
+    """HiBid has no per-lot bid. The only way in is LotSearch over a whole
+    catalogue at 100 lots a page, so reading 1 lot out of a 2,000-lot sale
+    still reads all 2,000 - and that is the number worth showing, because it
+    is the only part that is not free."""
+    db, a, _b, _v = sale
+    a.lot_count = 2000
+    db.commit()
+    got = _post("/lots/refresh-bids", ["sel-a1"], dry_run=True)
+    assert got["catalogue_lots"] == 2000
+    assert got["fetch_pages"] == 20
+    assert got["selected"] == 1
+
+
+def test_the_page_count_never_undercounts_what_is_on_file(sale):
+    """A sale whose catalogue size was never recorded still has lots here;
+    reporting 0 pages for it would understate the work."""
+    db, a, _b, _v = sale
+    a.lot_count = None
+    db.commit()
+    got = _post("/lots/refresh-bids", ["sel-a1"], dry_run=True)
+    assert got["catalogue_lots"] == got["lots_affected"] == 3
+    assert got["fetch_pages"] == 1
+
+
+def test_pages_are_summed_across_the_sales(sale):
+    db, a, b, _v = sale
+    a.lot_count, b.lot_count = 150, 250
+    db.commit()
+    got = _post("/lots/refresh-bids", ["sel-a1", "sel-b1"], dry_run=True)
+    assert got["catalogue_lots"] == 400
+    assert got["fetch_pages"] == 4

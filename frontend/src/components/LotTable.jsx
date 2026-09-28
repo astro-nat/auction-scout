@@ -760,12 +760,23 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
         return
       }
       const sales = `${plan.auctions} sale${plan.auctions === 1 ? '' : 's'}`
+      // Lots of those sales that the user did NOT tick. They ride along on
+      // pages already being fetched, so they cost nothing - but they do get
+      // re-graded, and that is worth saying before the fact, not after.
+      const others = Math.max(0, plan.lots_affected - plan.selected)
       const what = kind === 'bids'
-        ? `Re-pull current bids for the ${sales} behind your ${plan.selected} selected `
+        ? `Re-pull current bids for your ${plan.selected} selected `
           + `lot${plan.selected === 1 ? '' : 's'}?\n\n`
-          + `That refreshes all ${plan.lots_affected.toLocaleString()} lots of `
-          + `${plan.auctions === 1 ? 'that sale' : 'those sales'} and re-grades each at its `
-          + `new bid. Free - no AI.`
+          + `HiBid serves no single lot's bid - the only way to read one is to page `
+          + `through its whole catalogue - so this reads `
+          + `${plan.fetch_pages.toLocaleString()} page${plan.fetch_pages === 1 ? '' : 's'} `
+          + `across ${plan.auctions === 1 ? 'that sale' : `those ${sales}`}. Free - no AI.\n\n`
+          + (others > 0
+            ? `Also updates the other ${others.toLocaleString()} `
+              + `lot${others === 1 ? '' : 's'} you have imported from `
+              + `${plan.auctions === 1 ? 'it' : 'them'}, out of the same pages, at no extra `
+              + `cost. Every priced lot is re-graded at its new bid.`
+            : `Every priced lot is re-graded at its new bid.`)
         : `Read the shipping terms of the ${sales} behind your ${plan.selected} selected `
           + `lot${plan.selected === 1 ? '' : 's'}?\n\n`
           + `One AI call per sale, roughly $${(plan.auctions * 0.01).toFixed(2)}. Whatever it `

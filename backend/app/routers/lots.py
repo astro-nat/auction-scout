@@ -331,13 +331,24 @@ def _auctions_behind(db: Session, lot_ids: list[str]) -> dict:
             seen.add(aid)
             ids.append(aid)
             names.append(name or "(unnamed sale)")
-    # How many lots actually move, which is every lot of those auctions and
-    # not just the ticked ones.
+    # How many lots actually move, which is every lot of those auctions we
+    # have on file and not just the ticked ones.
     total_lots = (db.query(func.count(models.Lot.id))
                     .filter(models.Lot.auction_id.in_(ids)).scalar() or 0) if ids else 0
+    # What the fetch itself costs. HiBid serves no per-lot bid - the only way
+    # in is LotSearch over a whole catalogue, 100 lots to a page - so the
+    # work is set by the size of the SALE, not by how much of it was
+    # imported. Pulling 24 lots out of a 2,000-lot catalogue still reads all
+    # 2,000. Worth putting in front of the user, because it is the one number
+    # here that is not free.
+    catalogue = (db.query(func.coalesce(func.sum(models.Auction.lot_count), 0))
+                   .filter(models.Auction.id.in_(ids)).scalar() or 0) if ids else 0
+    catalogue = max(int(catalogue), int(total_lots))
     return {"auction_ids": ids, "auctions": len(ids), "auction_names": names[:8],
             "selected": len(rows), "covered": covered,
             "lots_affected": int(total_lots),
+            "catalogue_lots": catalogue,
+            "fetch_pages": -(-catalogue // 100),      # 100 to a page, rounded up
             "skipped_not_hibid": no_house, "skipped_closed": closed}
 
 
