@@ -376,3 +376,27 @@ export function reinspectNoComps(dryRun = false) {
 // parseUtc moved to lib/time.js (pure modules and tests need it without the
 // fetch layer); re-exported here so existing imports keep working.
 export { parseUtc } from './lib/time'
+
+// The never list - kinds of thing the user does not buy. Stored server-side
+// so a new one takes a POST rather than a deploy.
+export function fetchNeverRules() {
+  return request('/never')
+}
+
+export function addNeverRule(rule) {
+  return request('/never', { method: 'POST', body: JSON.stringify(rule) })
+}
+
+export function patchNeverRule(id, patch) {
+  return request(`/never/${id}`, { method: 'PATCH', body: JSON.stringify(patch) })
+}
+
+export function deleteNeverRule(id) {
+  return request(`/never/${id}`, { method: 'DELETE' })
+}
+
+// What a rule would hide, before it is saved. Writing "blade" without
+// looking is how a Blade Runner DVD ends up hidden.
+export function previewNeverRule(rule) {
+  return request('/never/preview', { method: 'POST', body: JSON.stringify(rule) })
+}

@@ -8,6 +8,8 @@ from .. import models, schemas
 from ..database import get_db
 from ..services import hidden as hidden_lots
 from ..services import jobs, twins
+from ..services import never
+from . import never as never_routes
 from ..services.boilerplate import is_boilerplate
 
 router = APIRouter(prefix="/lots", tags=["lots"])
@@ -162,6 +164,10 @@ def list_lots(
     # has to be deterministic.
     rows = q.order_by(models.Lot.id).offset(offset).limit(limit).all()
     house_ratios = calibration.ratios(db)
+    # The never list, read once for the page rather than per lot. These are
+    # kinds of thing the user does not buy, so the label is the reason the
+    # UI shows when its toggle hides the row.
+    never_rules = never_routes.rules_for_matching(db)
     for lot in rows:
         # Serve the auction's name and closed-state with the lot, so the UI
         # never has to guess from a separately-fetched auction list.
@@ -177,6 +183,7 @@ def list_lots(
         cal = house_ratios.get(lot.auction.auctioneer_id) if lot.auction else None
         lot.house_ratio = cal["ratio"] if cal else None
         lot.house_ratio_n = cal["n"] if cal else 0
+        lot.never_label = never.label_for(lot.title, never_rules)
     if not include_comps:
         # The comp records are 60% of this response - 2.8 MB a page - and
         # they are only read when one row's evidence panel is opened, which

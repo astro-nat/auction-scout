@@ -91,6 +91,10 @@ class LotOut(BaseModel):
     # Its worth turns on a motor running, which a photo cannot show and the
     # buyer cannot test. Derived from the title (services/powered.py).
     powered_tool: bool = False
+    # Which never-list rule covers this lot, or null. The label is the
+    # reason shown when the never-list toggle hides it, and the rules are
+    # the user's own (see routers/never.py) - editable without a deploy.
+    never_label: Optional[str] = None
     lot_link: Optional[str] = None
     thumbnail_url: Optional[str] = None
     # How many photos the listing has. One integer, so it costs nothing in a

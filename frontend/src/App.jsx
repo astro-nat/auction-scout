@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, scanGovDeals, importGovDeals, scanPublicSurplus, importPublicSurplus, scanVinted, importLots, importAllAuctions, importVintedSeller, flushClosed, refreshBids, reinspectNoComps, repriceUnpriced, fetchSettings, saveTargetRoi, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
+import { fetchNeverRules } from './api'
 import { auctionClosed } from './lib/pacing'
 import { houseRatioLabel, houseRatioTitle } from './lib/calibration'
 import { initialView, saveView, viewFromHash, viewUrl } from './lib/view'
@@ -12,6 +13,7 @@ import { installTracking, track } from './lib/track'
 import LotTable from './components/LotTable'
 import StatusBar from './components/StatusBar'
 import useMediaQuery from './useMediaQuery'
+import NeverListEditor from './components/NeverListEditor'
 
 export default function App() {
   const isMobile = useMediaQuery('(max-width: 768px)')
@@ -113,6 +115,12 @@ export default function App() {
   // cannot show. Not a judgement about the tools - a judgement about what
   // can be checked before bidding.
   const [hidePowered, setHidePowered] = useState(true)
+  // Kinds of thing the user does not buy at all (the never list - the
+  // inverse of BOLO). The rules live in the database so they can be added
+  // without a deploy; the server stamps never_label on each lot it covers.
+  const [hideNever, setHideNever] = useState(true)
+  const [neverRules, setNeverRules] = useState([])
+  const [neverOpen, setNeverOpen] = useState(false)
   // Every in-flight action (a scan, a flush, a "how many?" count-before-
   // confirm) gets its OWN key here, so one running action never disables
   // an unrelated button — clicking "Import" while a scan is still going,
@@ -295,6 +303,14 @@ export default function App() {
   }, [])
   useEffect(() => { loadLotCategories() }, [loadLotCategories])
   useEffect(() => { loadLots() }, [loadLots])
+  // The never list is small and changes only when the user edits it, so it
+  // loads once. Editing it changes which lots carry a never_label, which
+  // only the server knows - so a change reloads the lots too.
+  const loadNeverRules = useCallback(
+    () => fetchNeverRules().then(setNeverRules).catch(() => setNeverRules([])), [])
+  useEffect(() => { loadNeverRules() }, [loadNeverRules])
+  const onNeverChanged = useCallback(
+    async () => { await loadNeverRules(); loadLots() }, [loadNeverRules, loadLots])
 
   const scanIsAnywhere = Number(scan.radius_miles) === -1
 
@@ -888,11 +904,14 @@ export default function App() {
     !!touchedRef.current[l.lot_id] &&
     Date.now() - touchedRef.current[l.lot_id] < 15 * 60 * 1000
 
-  // Three stages, so each box can say how many IT removes. Counting against
-  // the whole inventory instead was misleading: the over-max box read 4,574
+  // Staged, so each box can say how many IT removes. Counting against the
+  // whole inventory instead was misleading: the over-max box read 4,574
   // while only 1,385 of those were still on screen for it to remove - the
-  // rest had already gone to "hide closed" and "hide low value".
-  const lotsBeforeOverMax = useMemo(() => {
+  // rest had already gone to "hide closed" and "hide low value". A box must
+  // also not be counted against a list its own filter has already emptied,
+  // or it reads (0) exactly when it is doing something - which is why the
+  // two kind-of-thing hides below come after this stage, not inside it.
+  const lotsBeforeKinds = useMemo(() => {
     const auctionNames = { ...auctionIndex, ...Object.fromEntries(auctions.map((a) => [a.id, a.name])) }
     return lots
       .filter((l) => {
@@ -905,7 +924,6 @@ export default function App() {
         if (hideHardShip && l.logistics_ease === 'HARD') return false
         if (hideNoUsShip && l.auction_no_us_ship) return false
         if (hideClosed && isClosedItem(l)) return false
-        if (hidePowered && l.powered_tool) return false
         // Out of the priced inventory once it is watched, so what is left
         // there is what has not been decided about yet.
         if (pricedOnly && l.watched) return false
@@ -915,14 +933,32 @@ export default function App() {
                      auction_name: l.auction_name ?? auctionNames[l.auction_id] ?? '—',
                      item_closed: isClosedItem(l) }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lots, auctions, auctionIndex, showHiddenLots, hideLowValue, lowValueCutoff, hideHardShip, hideNoUsShip, hideClosed, hidePowered, pricedOnly])
-  // What this box removes from what is otherwise on screen, counted the
-  // same way the others are.
+  }, [lots, auctions, auctionIndex, showHiddenLots, hideLowValue, lowValueCutoff, hideHardShip, hideNoUsShip, hideClosed, pricedOnly])
+  // What each of these two boxes removes from what the other boxes leave -
+  // counted before either of them runs, so the number holds whether the box
+  // is ticked or not. Counted independently of each other: a lot that is
+  // both a power tool and on the never list counts in both.
   const poweredCount = useMemo(
-    () => lotsBeforeOverMax.reduce(
+    () => lotsBeforeKinds.reduce(
       (n, l) => n + (!isJustTouched(l) && l.powered_tool ? 1 : 0), 0),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [lotsBeforeOverMax])
+    [lotsBeforeKinds])
+  const neverCount = useMemo(
+    () => lotsBeforeKinds.reduce(
+      (n, l) => n + (!isJustTouched(l) && l.never_label ? 1 : 0), 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [lotsBeforeKinds])
+  // Now apply them. A just-touched lot is exempt here as it is above: a
+  // result that vanishes the moment it arrives cannot be read.
+  const lotsBeforeOverMax = useMemo(
+    () => lotsBeforeKinds.filter((l) => {
+      if (isJustTouched(l)) return true
+      if (hidePowered && l.powered_tool) return false
+      if (hideNever && l.never_label) return false
+      return true
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [lotsBeforeKinds, hidePowered, hideNever])
   // What the over-max box would remove from what is otherwise on screen -
   // which is what its number should say. Exempt lots are not counted,
   // because they are not removed either.
@@ -1597,6 +1633,21 @@ export default function App() {
             /> Hide power tools
             <span style={{ color: 'var(--muted)' }}>({poweredCount.toLocaleString()})</span>
           </label>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
+                 title="Kinds of thing you never want to see at all - the opposite of the BOLO list. Edit the categories yourself with the button beside this.">
+            <input
+              type="checkbox"
+              checked={hideNever}
+              onChange={(ev) => setHideNever(ev.target.checked)}
+              data-track="Hide never list"
+            /> Hide never-buy
+            <span style={{ color: 'var(--muted)' }}>({neverCount.toLocaleString()})</span>
+          </label>
+          <button onClick={() => setNeverOpen((v) => !v)}
+                  data-track="Edit never list"
+                  style={{ fontSize: 12, padding: '1px 6px' }}>
+            {neverOpen ? 'Done editing' : 'Edit never list'}
+          </button>
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
             <input
               type="checkbox"
@@ -1635,6 +1686,9 @@ export default function App() {
             </span>
           )}
         </div>
+        {neverOpen && (
+          <NeverListEditor rules={neverRules} onChanged={onNeverChanged} />
+        )}
 
       </section>
 

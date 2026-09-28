@@ -319,6 +319,34 @@ class EstimateObservation(Base):
     created_at = Column(DateTime, server_default=func.now())
 
 
+class NeverRule(Base):
+    """A kind of thing the user never wants to see - the inverse of BOLO.
+
+    BOLO says "flag this, it is worth money to me". This says "hide this, I
+    do not buy it", and for the same reason it is a list rather than code:
+    the user thinks of a new one every few minutes - power tools, then
+    blades, then chandeliers, then vacuums - and none of those should need
+    a deploy.
+
+    `phrases` are what to match, whole-word. `except_phrases` are the traps,
+    and they are why this is not a plain keyword list: "blade" is also Blade
+    Runner, "jigsaw" is also a children's book series, "razor" is also a
+    scooter, and a glass souvenir hatchet has no edge on it. Both lists are
+    editable, and the seeded rules ship with the exceptions already found.
+    """
+    __tablename__ = "never_rules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    label = Column(String, nullable=False)          # "Vacuum cleaners"
+    phrases = Column(JSONB, nullable=False)         # ["vacuum", "shop vac"]
+    except_phrases = Column(JSONB)                  # ["vacuum sealer"]
+    enabled = Column(Boolean, default=True, nullable=False)
+    # Seeded rules are the ones shipped with the app; the user's own are not.
+    # Only used to decide what a reseed may overwrite.
+    seeded = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+
+
 class HiddenLot(Base):
     """A lot the user has hidden - remembered past the row itself.
 
