@@ -26,6 +26,7 @@ _MIGRATIONS = [
     "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS category_lot_count INTEGER",
     "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS category_count_for INTEGER",
     "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS ship_cost_estimate FLOAT",
+    "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS ship_freight_estimate FLOAT",
     "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS ship_summary VARCHAR",
     "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS ship_analyzed_at TIMESTAMP",
     "ALTER TABLE enrichment ADD COLUMN IF NOT EXISTS queued_task VARCHAR",

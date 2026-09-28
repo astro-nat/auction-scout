@@ -92,8 +92,30 @@ DEFAULT_INBOUND_SHIP = 15.0
 # industrial audit had 52 of its 62 golds on HARD lots costed at $21,
 # including a ceiling-mounted air purification station.
 #
+# It is a stand-in for not knowing, NOT a verdict about freight. When the
+# house's own terms say what an oversized lot costs, that figure wins: a
+# floor that overrides a real quote makes reading the terms pointless for
+# exactly the lots where shipping decides the deal.
+#
 # Only bites when the lot actually ships; local pickup still costs nothing.
 FREIGHT_FLOOR = {"HARD": float(os.environ.get("HARD_FREIGHT_FLOOR", "150"))}
+
+
+def _house_freight(auction, small_parcel: float):
+    """What this house says an oversized lot costs, when it says anything.
+
+    None when the terms were silent - and also when the figure cannot be what
+    it claims to be. Freight cannot cost less than a shoebox from the same
+    house, so a number under the small-parcel rate is a misread rather than a
+    bargain. That test is the house's own quote against itself instead of
+    another invented threshold, and a misread slipping under it is exactly
+    what manufactures a gold mine out of a pallet.
+    """
+    quoted = getattr(auction, "ship_freight_estimate", None) if auction else None
+    if not quoted:
+        return None
+    q = float(quoted)
+    return q if q >= small_parcel else None
 
 
 def _inbound_shipping(lot: models.Lot) -> float:
@@ -110,6 +132,12 @@ def _inbound_shipping(lot: models.Lot) -> float:
     tier = lot.logistics_ease or "NEUTRAL"
     quoted = getattr(auction, "ship_cost_estimate", None) if auction else None
     base = float(quoted) if quoted else DEFAULT_INBOUND_SHIP
+    if tier == "HARD":
+        # A real freight quote beats both the multiplier and the floor, and
+        # takes no tier multiple: it is already the oversized price.
+        freight = _house_freight(auction, base)
+        if freight is not None:
+            return round(freight, 2)
     scaled = base * INBOUND_TIER_MULT.get(tier, 1.5)
     return round(max(scaled, FREIGHT_FLOOR.get(tier, 0.0)), 2)
 
@@ -295,10 +323,11 @@ Terms and conditions (may repeat or contradict the shipping info — the more sp
 Produce:
 - ships: true if the auctioneer or a third party will ship, false if pickup-only, null if the text doesn't say
 - cost_estimate: your rough TOTAL cost in USD to ship one typical small-to-medium item (a shoebox-sized package): carrier postage + any handling/packing/per-item/flat fees mentioned. Use mid-range carrier rates (~$10-15 postage for such a package) when the text only gives fees on top. null ONLY when ships is false or null — if shipping exists but the fees are vague or "determined after packing", still commit to your best mid-range guess rather than null.
+- freight_estimate: rough TOTAL cost in USD to get ONE oversized item (furniture, an appliance, anything going on a pallet rather than in a parcel) to a buyer's address: crating/palletizing + LTL freight + any fees. Answer ONLY from what the text actually says about large, oversized, freight or palletized items. null when the text says nothing about them, when large items are pickup-only, or when you would be guessing a general freight rate from nothing - a wrong number here is worse than no number, because no number falls back to a deliberately conservative default.
 - summary: one plain-English sentence a reseller can act on, e.g. "Ships in-house: $5/item handling + carrier rate, so roughly $18 for a small box" or "Third-party UPS Store — expect $25+ minimum" or "Pickup only, no shipping"
 - ships_to_us: the buyer is in the United States. true if the text says items can be shipped to a US address (or to international / worldwide destinations), false if shipping is limited to Canada or domestic addresses or the text rules out international shipping, null if the text does not say. A US-based house that ships at all is true.
 
-Return ONLY valid JSON: {{"ships": boolean or null, "cost_estimate": number or null, "summary": string, "ships_to_us": boolean or null}}
+Return ONLY valid JSON: {{"ships": boolean or null, "cost_estimate": number or null, "freight_estimate": number or null, "summary": string, "ships_to_us": boolean or null}}
 """
 
 VISION_PROMPT = """Identify this auction lot from its photo for an eBay search.
@@ -2241,11 +2270,12 @@ def run_ship_analysis(auction_ids: list[int], resume_job_id: str | None = None) 
                 continue
             ship_text = (m.get("ship_text") or "").strip()
             terms_text = (m.get("terms_text") or "").strip()
-            was = auction.ship_cost_estimate
+            was = (auction.ship_cost_estimate, auction.ship_freight_estimate)
             try:
                 if not ship_text and not terms_text:
                     auction.ship_summary = "No shipping details posted"
                     auction.ship_cost_estimate = None
+                    auction.ship_freight_estimate = None
                     auction.ships_to_us = shipping.resolve(auction.state, "", "", None)
                     no_info += 1
                 else:
@@ -2262,13 +2292,18 @@ def run_ship_analysis(auction_ids: list[int], resume_job_id: str | None = None) 
                     cost = result.get("cost_estimate")
                     auction.ship_cost_estimate = (round(float(cost), 2)
                                                   if isinstance(cost, (int, float)) else None)
+                    freight = result.get("freight_estimate")
+                    auction.ship_freight_estimate = (round(float(freight), 2)
+                                                     if isinstance(freight, (int, float))
+                                                     else None)
                     auction.ship_summary = (result.get("summary") or "")[:500] or None
                     auction.ships_to_us = shipping.resolve(
                         auction.state, ship_text, terms_text, result)
                     analyzed += 1
                 auction.ship_analyzed_at = datetime.now(timezone.utc).replace(tzinfo=None)
                 db.commit()
-                if auction.ship_cost_estimate != was:
+                if (auction.ship_cost_estimate,
+                        auction.ship_freight_estimate) != was:
                     changed_auctions.append(auction.id)
             except Exception as exc:  # noqa: BLE001 — one bad auction must not stop the run
                 logger.warning("Shipping analysis failed for auction %s: %s",

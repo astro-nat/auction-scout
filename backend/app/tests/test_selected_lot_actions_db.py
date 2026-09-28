@@ -91,6 +91,7 @@ def sale():
     _lot(db, a, "sel-a1", resale=200)
     _lot(db, a, "sel-a2", resale=200)
     _lot(db, a, "sel-a3")                 # unpriced: nothing to re-cost
+    _lot(db, a, "sel-a4", resale=900, ease="HARD")   # a pallet, not a parcel
     _lot(db, b, "sel-b1", resale=200)
     _lot(db, v, "sel-v1", resale=200)
     db.commit()
@@ -100,7 +101,8 @@ def sale():
     for lot in db.query(models.Lot).options(
             joinedload(models.Lot.enrichment),
             joinedload(models.Lot.auction)).filter(
-                models.Lot.lot_id.in_(["sel-a1", "sel-a2", "sel-b1", "sel-v1"])).all():
+                models.Lot.lot_id.in_(
+                    ["sel-a1", "sel-a2", "sel-a4", "sel-b1", "sel-v1"])).all():
         enrich._apply_roi(lot, lot.enrichment)
     db.commit()
     yield db, a, b, v
@@ -142,11 +144,11 @@ def test_lots_from_two_sales_are_two(path, sale):
 
 @pytest.mark.parametrize("path", BOTH)
 def test_it_says_how_many_lots_actually_move(path, sale):
-    """Ticking one lot of a three-lot sale refreshes all three. Reporting "1"
+    """Ticking one lot of a four-lot sale refreshes all four. Reporting "1"
     would be a lie the user only discovers afterwards."""
     got = _post(path, ["sel-a1"], dry_run=True)
     assert got["selected"] == 1
-    assert got["lots_affected"] == 3
+    assert got["lots_affected"] == 4
 
 
 @pytest.mark.parametrize("path", BOTH)
@@ -204,17 +206,23 @@ def test_a_second_selection_is_reported_but_not_refused(path, kind, sale):
     """A different selection is different work. Refusing it would be wrong;
     saying nothing would let a second shipping read spend the money twice
     without the dialog mentioning it."""
+    db, *_ = sale
+    # has_pending() asks about the KIND, so an unclaimed row any other test
+    # queued under its own label answers for us. Clear the kind first, or
+    # this reads whatever ran before it.
+    db.query(models.Job).filter(models.Job.kind == kind).delete(
+        synchronize_session=False)
+    db.commit()
     first = _post(path, ["sel-a1"])
     assert first["already_queued"] is False
     second = _post(path, ["sel-b1"], dry_run=True)
     assert second["already_queued"] is True
-    db, *_ = sale
     assert len(_queued(db, kind)) == 1, "the dry run still queued nothing"
 
 
 # --- the shipping read now costs something -------------------------------
 
-def _stub_read(monkeypatch, auctions, cost):
+def _stub_read(monkeypatch, auctions, cost, freight=None):
     """No network and no AI: what is under test is what the app does with
     the answer, not how it gets one."""
     meta = {a.hibid_id: {"ship_text": f"Flat ${cost} per item",
@@ -227,6 +235,7 @@ def _stub_read(monkeypatch, auctions, cost):
     # _call_with_retry hands back the PARSED reply, not raw text.
     monkeypatch.setattr(enrich, "_call_with_retry",
                         lambda fn: {"cost_estimate": cost,
+                                    "freight_estimate": freight,
                                     "summary": f"Flat ${cost} per item"})
 
 
@@ -341,7 +350,7 @@ def test_the_page_count_never_undercounts_what_is_on_file(sale):
     a.lot_count = None
     db.commit()
     got = _post("/lots/refresh-bids", ["sel-a1"], dry_run=True)
-    assert got["catalogue_lots"] == got["lots_affected"] == 3
+    assert got["catalogue_lots"] == got["lots_affected"] == 4
     assert got["fetch_pages"] == 1
 
 
@@ -352,3 +361,61 @@ def test_pages_are_summed_across_the_sales(sale):
     got = _post("/lots/refresh-bids", ["sel-a1", "sel-b1"], dry_run=True)
     assert got["catalogue_lots"] == 400
     assert got["fetch_pages"] == 4
+
+
+# --- the HARD freight floor gives way to a real quote ---------------------
+
+def test_the_freight_figure_it_reads_lands_on_the_auction(monkeypatch, sale):
+    db, a, _b, _v = sale
+    _stub_read(monkeypatch, [a], 12.0, freight=300.0)
+    enrich.run_ship_analysis([a.id])
+    db.expire_all()
+    got = db.query(models.Auction).filter(models.Auction.id == a.id).first()
+    assert got.ship_cost_estimate == 12.0
+    assert got.ship_freight_estimate == 300.0
+
+
+def test_a_hard_lot_follows_the_house_freight_quote(monkeypatch, sale):
+    """The whole point of the fix: before this, a HARD lot sat at the $150
+    floor whatever the terms said, because the read only ever produced a
+    small-parcel rate and max(anything sane, 150) is 150."""
+    db, a, _b, _v = sale
+    before = float(db.query(models.Lot).filter(models.Lot.lot_id == "sel-a4")
+                     .first().enrichment.all_in_cost)
+    _stub_read(monkeypatch, [a], 12.0, freight=300.0)
+    enrich.run_ship_analysis([a.id])
+    db.expire_all()
+    after = float(db.query(models.Lot).filter(models.Lot.lot_id == "sel-a4")
+                    .first().enrichment.all_in_cost)
+    assert after - before == pytest.approx(300.0 - enrich.FREIGHT_FLOOR["HARD"])
+
+
+def test_a_house_that_says_nothing_about_freight_keeps_the_floor(monkeypatch, sale):
+    """Silence is not a cheap quote. A read that only learns the parcel rate
+    must leave a pallet costed conservatively."""
+    db, a, _b, _v = sale
+    before = float(db.query(models.Lot).filter(models.Lot.lot_id == "sel-a4")
+                     .first().enrichment.all_in_cost)
+    _stub_read(monkeypatch, [a], 12.0, freight=None)
+    enrich.run_ship_analysis([a.id])
+    db.expire_all()
+    after = float(db.query(models.Lot).filter(models.Lot.lot_id == "sel-a4")
+                    .first().enrichment.all_in_cost)
+    assert after == before
+
+
+def test_a_freight_read_alone_counts_as_a_change(monkeypatch, sale):
+    """The parcel rate can stay identical while the freight figure moves -
+    the re-cost has to trigger on either, or the HARD lots keep the floor."""
+    db, a, _b, _v = sale
+    _stub_read(monkeypatch, [a], 12.0, freight=None)
+    enrich.run_ship_analysis([a.id])
+    db.expire_all()
+    settled = float(db.query(models.Lot).filter(models.Lot.lot_id == "sel-a4")
+                      .first().enrichment.all_in_cost)
+    _stub_read(monkeypatch, [a], 12.0, freight=300.0)   # same parcel rate
+    enrich.run_ship_analysis([a.id])
+    db.expire_all()
+    after = float(db.query(models.Lot).filter(models.Lot.lot_id == "sel-a4")
+                    .first().enrichment.all_in_cost)
+    assert after != settled, "a freight-only change did not re-cost anything"

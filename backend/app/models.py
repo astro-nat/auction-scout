@@ -46,6 +46,11 @@ class Auction(Base):
     # (fees + handling), a one-line plain-English summary of the policy, and
     # when the analysis ran (so re-runs skip auctions already read).
     ship_cost_estimate = Column(Float)
+    # What an OVERSIZED lot costs from this house - a pallet, an appliance,
+    # anything that will not go in a parcel. Separate from the figure above
+    # because that one is explicitly a shoebox rate, and no multiple of a
+    # shoebox rate is an LTL freight quote. Null means the terms didn't say.
+    ship_freight_estimate = Column(Float)
     ship_summary = Column(String)
     ship_analyzed_at = Column(DateTime)
     # For a house outside the US (province in `state`): will it ship into
