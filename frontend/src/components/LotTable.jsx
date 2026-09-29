@@ -7,6 +7,7 @@ import { houseRatioLabel, houseRatioTitle } from '../lib/calibration'
 import { CLOSING_RANGES, ROI_RANGES, hoursUntil, matchesFilter, presetsFor, roiPercent } from '../lib/filters'
 import { allSelected, chunked, inView, selectAll, toggle } from '../lib/selection'
 import { track } from '../lib/track'
+import { offerFrom, offerLabel } from '../lib/hideLike'
 import useMediaQuery from '../useMediaQuery'
 
 // The homework behind a resale number: the comp records the pricer actually
@@ -384,6 +385,11 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
   // reload when a batch finishes. Actions act on the ticked lots
   // still in the current result (see lib/selection.inView).
   const [selected, setSelected] = useState(() => new Set())
+  // The "more like this" offer raised by the last hide, and the product keys
+  // already answered - a ref, because saying no to one changes nothing on
+  // screen and should not re-render the table.
+  const [likeOffer, setLikeOffer] = useState(null)
+  const dismissedKeys = useRef(new Set())
 
   // Lots still queued, for the note above the table. The table itself is
   // not reloaded while they run - it updates once, when the batch finishes.
@@ -594,7 +600,46 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     try {
       const updated = await setHidden(lotId, hidden)
       onLotUpdated(updated)
+      if (hidden) offerTheRest(lotId, updated)
     } catch (e) { alertOnce(e.message) }
+  }
+
+  // Hiding is 21% of every button press here, and half of those presses land
+  // in unbroken runs of three or more - the same product dismissed over and
+  // over, because a liquidation sale lists it once per asset tag. The
+  // one-click version of that has existed for a while as a dim "+ all" beside
+  // the hide button, and in five days it was pressed once against 131 hides.
+  //
+  // So it asks AFTER the click instead of hoping to be noticed before it:
+  // the offer appears where the decision was just made, about a product the
+  // user has this second proved they do not want. Nothing is hidden without
+  // a second press.
+  async function offerTheRest(lotId, lot) {
+    try {
+      const offer = offerFrom(await hideLike(lotId, true, true),
+                              dismissedKeys.current)
+      if (offer) setLikeOffer({ lotId, ...offer })
+    } catch {
+      // The hide itself worked. A failed offer is a missing bonus, not an
+      // error worth a popup.
+    }
+  }
+
+  async function acceptLikeOffer() {
+    const offer = likeOffer
+    if (!offer) return
+    setLikeOffer(null)
+    try {
+      await hideLike(offer.lotId, true, false)
+      onRefresh?.()
+    } catch (e) { alertOnce(e.message) }
+  }
+
+  function dismissLikeOffer() {
+    // Answered once is answered. Asking again about a product the user has
+    // just said no to is how a helpful prompt becomes a nag.
+    if (likeOffer) dismissedKeys.current.add(likeOffer.key)
+    setLikeOffer(null)
   }
 
   function poll(lotId) {
@@ -816,6 +861,29 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
               style={{ width: 56 }} />+
     </span>
   )
+  const likeBar = likeOffer && (
+    <div role="status"
+         style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center',
+                  margin: '6px 0', padding: '6px 8px', borderRadius: 6,
+                  border: '1px solid var(--border, #555)' }}>
+      <span>
+        <strong>{offerLabel(likeOffer)}</strong>
+        {likeOffer.titles[0] && (
+          <span style={{ color: 'var(--muted)' }}> — {likeOffer.titles[0].slice(0, 60)}
+            {likeOffer.count > 1 ? ' and others' : ''}</span>
+        )}
+      </span>
+      <button className="primary" style={smallBtn} onClick={acceptLikeOffer}
+              data-track="Hide the rest like this"
+              title={`Hide every lot matching "${likeOffer.key}" — the same product, listed once per asset tag`}>
+        Hide {likeOffer.count.toLocaleString()} more
+      </button>
+      <button style={smallBtn} onClick={dismissLikeOffer}
+              data-track="Keep the rest like this">
+        Keep them
+      </button>
+    </div>
+  )
   const bulkBar = selectedInView.length > 0 && (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center',
                   margin: '6px 0', padding: 6, borderRadius: 6,
@@ -959,6 +1027,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
               Select all {sorted.length.toLocaleString()}
             </button>
           )}
+          {likeBar && <div style={{ flexBasis: '100%' }}>{likeBar}</div>}
           {bulkBar && <div style={{ flexBasis: '100%' }}>{bulkBar}</div>}
           {anyQueued && <span style={{ flexBasis: '100%' }}><span className="spinner" />{lots.filter((l) => l.enrichment?.status === 'queued').length} lots in the queue… updates when they finish</span>}
           {/* Length menu up here; the count and pager sit under the cards,
@@ -1129,6 +1198,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
       <span style={{ marginLeft: 8 }}>{aiCheck}</span>
       {anyQueued && <span style={{ marginLeft: '0.75rem' }}><span className="spinner" />{lots.filter((l) => l.enrichment?.status === 'queued').length} lots in the queue… updates when they finish</span>}
     </div>
+    {likeBar}
     {bulkBar}
     {/* DataTables' top bar: page length left, the one search box right. */}
     <div className="table-toolbar">
