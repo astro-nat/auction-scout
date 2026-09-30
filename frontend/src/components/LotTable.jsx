@@ -390,6 +390,9 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
   // screen and should not re-render the table.
   const [likeOffer, setLikeOffer] = useState(null)
   const dismissedKeys = useRef(new Set())
+  // Rows with a request already on the way. A ref, not state, because the
+  // guard has to be right for two clicks landing inside one render.
+  const inFlight = useRef(new Set())
 
   // Lots still queued, for the note above the table. The table itself is
   // not reloaded while they run - it updates once, when the batch finishes.
@@ -484,22 +487,58 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     setColFilters((prev) => ({ ...prev, [key]: value }))
   }
 
+  // The row button turns to "Working…" off pollingIds, and both of these
+  // used to add the lot to it only AFTER the request came back. For the
+  // length of that round trip the button still read "Further inspect with
+  // AI" and was still live, so a press looked like it had done nothing.
+  //
+  // The usage log is full of the consequence: 98 presses of this button,
+  // 47% of them less than five seconds apart and nine pairs in the SAME
+  // second. A second press on a lot the worker has already claimed clears
+  // claimed_at and re-queues it, so the AI runs twice and is paid for
+  // twice.
+  //
+  // So the lot is claimed here, before the await, and released again if
+  // the request fails. The ref is what the guard reads: two clicks inside
+  // one render both see the same stale state Set, while a ref is updated
+  // the moment the first one runs.
+  function claimRow(lotId) {
+    if (inFlight.current.has(lotId)) return false
+    inFlight.current.add(lotId)
+    setPollingIds((prev) => new Set(prev).add(lotId))
+    pinLot(lotId)
+    return true
+  }
+
+  function releaseRow(lotId) {
+    inFlight.current.delete(lotId)
+    setPollingIds((prev) => {
+      const next = new Set(prev)
+      next.delete(lotId)
+      return next
+    })
+  }
+
   async function handleEnrich(lotId) {
+    if (!claimRow(lotId)) return
     try {
-      pinLot(lotId)
       await enrichLot(lotId)
-      setPollingIds((prev) => new Set(prev).add(lotId))
       poll(lotId)
-    } catch (e) { alertOnce(e.message) }
+    } catch (e) {
+      releaseRow(lotId)
+      alertOnce(e.message)
+    }
   }
 
   async function handleComps(lotId) {
+    if (!claimRow(lotId)) return
     try {
-      pinLot(lotId)
       await compsLot(lotId)
-      setPollingIds((prev) => new Set(prev).add(lotId))
       poll(lotId)
-    } catch (e) { alertOnce(e.message) }
+    } catch (e) {
+      releaseRow(lotId)
+      alertOnce(e.message)
+    }
   }
 
   // The lock is the point, so getting past it costs a confirmation and
@@ -507,12 +546,14 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
   async function handleRecheck(lotId) {
     if (!window.confirm('This lot was already priced by AI. Re-checking it '
                         + 'spends another AI call on this one lot. Continue?')) return
+    if (!claimRow(lotId)) return
     try {
-      pinLot(lotId)
       await recheckLot(lotId)
-      setPollingIds((prev) => new Set(prev).add(lotId))
       poll(lotId)
-    } catch (e) { alertOnce(e.message) }
+    } catch (e) {
+      releaseRow(lotId)
+      alertOnce(e.message)
+    }
   }
 
   // The row's one button: comps if unpriced, AI if comps-priced, locked
@@ -657,11 +698,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
       }
       onLotUpdated(updated)
       if (updated.enrichment?.status !== 'queued') {
-        setPollingIds((prev) => {
-          const next = new Set(prev)
-          next.delete(lotId)
-          return next
-        })
+        releaseRow(lotId)   // clears the ref too, or the row never unlocks
         return
       }
       setTimeout(tick, 4000)
