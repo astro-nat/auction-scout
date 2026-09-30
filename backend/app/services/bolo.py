@@ -93,18 +93,15 @@ DEFAULT_BOLO_PATHS: List[Path] = [
     _DATA_DIR / "apple_products_bolo.json",
     _DATA_DIR / "golf_equipment_bolo.json",
     _DATA_DIR / "audio_watches_bolo.json",
-    # Luxury watches load BEFORE watch_accessories so a "Rolex Submariner
-    # 116610LN" with a watch model code routes to the watch entry
-    # ($8-12K) instead of the accessory entry ($60-700).
-    _DATA_DIR / "luxury_watches_bolo.json",
+    # luxury_watches used to load before this one, so a "Rolex Submariner
+    # 116610LN" routed to the watch entry ($8-12K) rather than the
+    # accessory entry ($60-700). Dropped for never matching a lot in 4,204
+    # scanned - which means a real Rolex now lands here and is underpriced.
+    # Restore it from git the day watches start turning up.
     _DATA_DIR / "watch_accessories_bolo.json",
-    # Designer eyewear / sunglass-case-as-collectible — loads BEFORE
-    # clothing_brand designer entries so Chrome Hearts / Bentley OEM /
-    # Oakley X-Metal / Tom Ford / Jacques Marie Mage route to the
-    # eyewear-specific tier with case-only comp ranges, instead of the
-    # generic "Designer luxury" clothing entry.
-    _DATA_DIR / "designer_eyewear_bolo.json",
-    _DATA_DIR / "musical_instruments_bolo.json",
+    # designer_eyewear and musical_instruments were dropped beside it, for
+    # the same reason and with the same caveat: Chrome Hearts and Tom Ford
+    # now fall through to the generic "Designer luxury" clothing entry.
     _DATA_DIR / "camera_equipment_bolo.json",
     _DATA_DIR / "auto_parts_bolo.json",
     _DATA_DIR / "lightweight_collectibles_bolo.json",
@@ -525,53 +522,6 @@ _BRAND_ALIASES: Dict[str, List[str]] = {
     "Bentley OEM eyewear cases":              ["bentley continental", "bentley flying spur", "bentley oem", "bentley sunglasses case", "bentley glasses case", "bentley eyeglass case", "bentley console case"],
     "Maui Jim dealer display cases":          ["maui jim display", "maui jim sunglasses display", "maui readers display"],
     "Oakley X-Metal vault & display cases":   ["oakley x-metal", "oakley x metal", "oakley xmetal", "oakley vault", "oakley romeo", "oakley juliet", "oakley mars", "oakley penny", "oakley c six", "oakley c-six", "oakley pit boss", "oakley plasma", "oakley display case", "oakley display cabinet", "oakley sunglasses tower", "ferrari oakley", "ferrari × oakley", "oakley ferrari"],
-    "Premium designer eyewear (Tom Ford / Persol Ratti / DITA / Oliver Peoples / Jacques Marie Mage)": [
-        "tom ford sunglasses", "tom ford eyeglasses", "tom ford optical",
-        "tom ford lennox", "tom ford prescott", "tom ford velvet case",
-        "tom ford case", "tom ford brown velvet",
-        "persol ratti", "persol meflecto",
-        "dita eyewear", "dita eclipse",
-        "oliver peoples", "oliver peoples lilletto",
-        "jacques marie mage", "marie mage", "jmm sunglasses",
-    ],
-    "Designer sunglass cases & pouches (Christian Louboutin / Valentino / Celine / Brighton / BAPE / Miu Miu / Saint Laurent / Balmain / Harveys)": [
-        "christian louboutin pouch", "louboutin pouch eyewear",
-        "louboutin sole logo pouch",
-        "valentino garavani sunglass case",
-        "valentino sunglass case",
-        "celine sunglasses case", "celine sunglass case",
-        "brighton fashionista", "brighton pretty tough",
-        "brighton sunglass case", "brighton eyeglass case",
-        "miu miu sunglasses case", "miu miu glasses case",
-        "miu miu velvet hard case",
-        "saint laurent sl 51", "saint laurent sunglasses cloth case",
-        "balmain sunglasses case", "balmain oval case",
-        "bape camo clamshell", "bathing ape clamshell",
-        "harveys seatbelt barbie",
-        "tiffany tf4105hb", "tiffany co havana blue",
-        "chopard schf",
-        "wildfox lolita",
-        "jean paul gaultier 75-8207", "jean paul gaultier limited 500",
-        "gentle monster", "gm sunglasses maison",
-        "jean lafont paris",
-        "budd leather sunglasses case",
-        "vintage ray-ban bausch lomb leather case",
-        "chopard sunglasses", "chopard schf",
-        "maybach the primadonna", "maybach primadonna",
-        "maybach sunglasses",
-        "elvis presley tcb", "elvis tcb sunglasses",
-        "tcb sunglasses concert",
-        "gargoyles 85s", "gargoyles made in usa",
-        "vtg gargoyles",
-        "balenciaga demna led", "balenciaga led sunglasses",
-        "balenciaga by demna led",
-        "vintage ray ban b&l", "ray-ban b&l 12k", "ray ban b&l 12k gf",
-        "1/10 12k gf aviator",
-        "louis vuitton x kusama", "lv x kusama", "kusama yayoi sunglasses",
-        "ray ban saint laurent wayfarer",
-        "meta ray-ban display ai", "ray-ban meta gen",
-        "cartier ct0092o", "cartier moustique",
-    ],
     "Original Furby (1998-2000)":             [
         # Bare "furby" hits modern Hasbro reissues too — narrow
         # to vintage-context aliases via models[] in the JSON.
@@ -1294,12 +1244,6 @@ _BRAND_ALIASES: Dict[str, List[str]] = {
         "polyphon", "symphonion",
         # "sankyo" / "regina" / "stella" too generic; model-context.
     ],
-    "Drum machines + samplers (small format)": [
-        "teenage engineering", "akai mpc",
-        "elektron model:",
-        # "roland" / "korg" / "boss" / "akai" / "pioneer" all
-        # too generic — model-context matched.
-    ],
     "DJ cartridges / needles":                [
         "ortofon concorde",
         # "shure" already aliased on microphones, "stanton"
@@ -1352,217 +1296,6 @@ _BRAND_ALIASES: Dict[str, List[str]] = {
         "platinum earring", "platinum pendant",
         "platinum wedding band", "platinum engagement",
         "iridplat", "iridium platinum", "solid platinum",
-    ],
-    # Luxury watches (data/luxury_watches_bolo.json — added 2026-05-05)
-    # These entries come BEFORE the accessories entries below in load
-    # order, so a "Rolex Submariner 116610LN" routes to the watch
-    # entry ($8-12K) rather than the accessory entry ($60-700).
-    "Rolex watches": [
-        "rolex submariner", "rolex gmt-master", "rolex gmt master",
-        "rolex daytona", "rolex cosmograph daytona",
-        "rolex day-date", "rolex datejust",
-        "rolex explorer", "rolex yacht-master", "rolex yacht master",
-        "rolex sea-dweller", "rolex deepsea",
-        "rolex sky-dweller", "rolex air-king", "rolex milgauss",
-        "rolex oyster perpetual", "rolex president",
-        "rolex cellini", "rolex land-dweller",
-        # Common bare reference numbers (Rolex-only patterns)
-        "submariner 116610", "submariner 126610", "submariner 16610",
-        "submariner 5512", "submariner 5513", "submariner 1680",
-        "gmt-master 116710", "gmt-master 126710",
-        "gmt-master 116719", "gmt-master 126719",
-        "daytona 116500", "daytona 116508", "daytona 126500",
-        "daytona 6263", "daytona 6265", "daytona 6239",
-        "day-date 228235", "day-date 228238", "day-date 228239",
-        "datejust 126200", "datejust 126233", "datejust 126234",
-        "datejust 126300", "datejust 16234",
-        "explorer 214270", "explorer 124270",
-        "yacht-master 116622", "yacht-master 126622",
-        "sea-dweller 126600", "sky-dweller 326933",
-    ],
-    "Tudor watches": [
-        "tudor black bay", "tudor pelagos",
-        "tudor heritage", "tudor ranger", "tudor royal",
-        "tudor 1926", "tudor north flag", "tudor glamour",
-        "tudor style", "tudor fastrider",
-        "tudor submariner", "tudor mini-sub",
-        "tudor 79030", "tudor 79230", "tudor 79090",
-        "black bay 58", "black bay gmt", "black bay pro",
-        "black bay chrono", "bb58", "bb58 79030",
-        "pelagos 39", "pelagos fxd", "pelagos lhd",
-    ],
-    "Patek Philippe watches": [
-        "patek philippe nautilus", "patek nautilus",
-        "patek philippe aquanaut", "patek aquanaut",
-        "patek philippe calatrava", "patek calatrava",
-        "patek philippe complications",
-        "patek philippe annual calendar",
-        "patek philippe perpetual calendar",
-        "patek philippe world time", "patek philippe twenty-4",
-        "patek philippe gondolo", "patek philippe ellipse",
-        "patek golden ellipse", "patek philippe pilot",
-        "patek philippe cubitus",
-        "nautilus 5711", "nautilus 5712", "nautilus 5740",
-        "nautilus 5980", "nautilus 5990", "nautilus 5811",
-        "aquanaut 5167", "aquanaut 5168g", "aquanaut 5164",
-        "aquanaut 5172", "aquanaut 5269",
-        "calatrava 5196", "calatrava 5119", "calatrava 5227",
-        "calatrava 5320g", "calatrava 6119",
-        "patek 5930", "patek 5930p",
-        "twenty-4 7300", "twenty-4 4910",
-    ],
-    "Audemars Piguet watches": [
-        "audemars piguet royal oak", "ap royal oak",
-        "audemars piguet code", "ap code 11.59",
-        "royal oak 15202", "royal oak 15400", "royal oak 15500",
-        "royal oak 15510", "royal oak 15710",
-        "royal oak 26331", "royal oak 26334", "royal oak 26320",
-        "royal oak 26240", "royal oak 26420", "royal oak 26430",
-        "royal oak offshore",
-        "code 11.59 41", "code 11.59 26393",
-        "royal oak concept", "royal oak frosted",
-    ],
-    "Cartier watches": [
-        "cartier tank", "cartier santos", "cartier panthère",
-        "cartier panthere", "cartier ballon bleu",
-        "cartier calibre", "cartier drive", "cartier roadster",
-        "cartier pasha", "cartier crash", "cartier tortue",
-        "cartier tonneau", "cartier coussin", "cartier baignoire",
-        "cartier 21 must", "cartier la dona",
-        "cartier cle", "cartier privé", "cartier prive",
-        "tank française", "tank francaise",
-        "tank americaine", "tank anglaise",
-        "tank louis", "tank cintrée", "tank asymmetrique",
-        "santos galbée", "santos galbee",
-        "santos dumont", "santos 100",
-        "santos de cartier",
-        "panthère de cartier", "panthere de cartier",
-        # Bare Cartier reference codes
-        "wspn0006", "wspn0007", "wspn0009", "wspn0010", "wspn0019",
-        "wssa0006", "wssa0010", "wssa0029", "wssa0030",
-        "wjsa0021",
-    ],
-    "Richard Mille watches": [
-        "richard mille",
-        "rm 011", "rm 010", "rm 016", "rm 027", "rm 028",
-        "rm 030", "rm 035", "rm 052", "rm 055", "rm 056",
-        "rm 057", "rm 067", "rm 38", "rm 50", "rm 65",
-        "rm 72-01", "rm 35-01", "rm 35-02", "rm 35-03",
-        "rm up-01", "rm bonbon",
-        "rm tourbillon", "rm skeleton",
-        "rm016", "rm011", "rm010", "rm035", "rm055",
-    ],
-    "A. Lange & Söhne watches": [
-        "a. lange & söhne", "a. lange söhne", "a lange & sohne",
-        "a lange sohne", "a lange & söhne", "a.lange&sohne",
-        "lange söhne", "lange sohne",
-        "a. lange",
-        "lange 1", "lange 1 moon", "lange 1 time zone",
-        "lange 31", "lange zeitwerk",
-        "lange saxonia", "lange datograph",
-        "lange odysseus", "lange 1815",
-        "lange richard lange", "lange cabaret",
-        "datograph up down", "datograph perpetual",
-        "saxonia thin", "saxonia outsize",
-        "odysseus steel", "odysseus white gold",
-        "zeitwerk date", "zeitwerk striking",
-        "1815 up down", "1815 chronograph",
-        "tourbograph pour le mérite",
-        "ALS lange", "109.049", "191.039",
-    ],
-    "Omega watches": [
-        "omega speedmaster", "omega seamaster",
-        "omega constellation", "omega de ville",
-        "omega railmaster", "omega aqua terra",
-        "omega specialities",
-        "speedmaster moonwatch", "speedmaster professional",
-        "speedmaster moonphase", "speedmaster reduced",
-        "speedmaster mark ii", "speedmaster snoopy",
-        "speedmaster apollo", "speedmaster dark side",
-        "speedmaster grey side",
-        "seamaster diver", "seamaster 300", "seamaster 300m",
-        "seamaster aqua terra", "seamaster planet ocean",
-        "seamaster bullhead",
-        "constellation globemaster",
-        "constellation manhattan",
-        "de ville trésor", "de ville prestige",
-        "de ville tourbillon",
-        # Bare Omega ref codes — full reference numbers only.
-        # Short forms like "311.32" are too broad (false-positive on
-        # any "311 ... 32" combo in jewelry / silverware titles).
-        "311.30.42.30", "310.30.42.50", "210.30.42.20",
-        "220.10.41.21", "232.30.42.21",
-        "145.022", "105.012", "145.012",
-    ],
-    "Other Swiss luxury watches": [
-        # IWC
-        "iwc pilot", "iwc big pilot", "iwc top gun",
-        "iwc mark xviii", "iwc spitfire",
-        "iwc portuguese", "iwc portugieser",
-        "iwc portofino", "iwc aquatimer",
-        "iwc da vinci", "iwc ingenieur",
-        "iw501001", "iw387901", "iw500705", "iw371417",
-        # Breitling
-        "breitling navitimer", "breitling superocean",
-        "breitling avenger", "breitling premier",
-        "breitling endurance", "breitling aerospace",
-        "breitling chronomat", "breitling top time",
-        "navitimer b01", "ab0142", "a1738830",
-        # Vacheron Constantin
-        "vacheron constantin overseas", "vacheron overseas",
-        "vacheron constantin patrimony",
-        "vacheron constantin traditionnelle",
-        "vacheron constantin fiftysix",
-        "vacheron constantin historiques",
-        "4500v", "4500s", "5500v", "7900v",
-        # Jaeger-LeCoultre
-        "jaeger-lecoultre reverso", "jlc reverso",
-        "reverso tribute", "reverso classic",
-        "reverso duoface",
-        "jaeger-lecoultre master",
-        "jlc master ultra thin", "jlc master compressor",
-        "jlc polaris", "jlc memovox",
-        "jlc master geographic",
-        # Panerai
-        "panerai luminor", "panerai luminor marina",
-        "panerai luminor 1950", "panerai submersible",
-        "panerai radiomir", "panerai mare nostrum",
-        "pam00422", "pam00111", "pam00112", "pam00382",
-        # TAG Heuer (NB: bare 'tag' is too generic)
-        "tag heuer carrera", "tag heuer monaco",
-        "tag heuer aquaracer", "tag heuer formula 1",
-        "tag heuer connected", "tag heuer autavia",
-        "tag heuer link",
-        "cv2a1u", "cbn2010", "cbm2110",
-        # Hublot
-        "hublot big bang", "hublot classic fusion",
-        "hublot spirit of big bang", "hublot mp",
-        "hublot king power",
-        # Zenith
-        "zenith el primero", "zenith defy",
-        "zenith chronomaster", "zenith pilot",
-        "zenith elite",
-        # Bell & Ross
-        "bell & ross br", "bell ross br",
-        "bell & ross 03-92", "bell ross 03-92",
-        "bell & ross br-x1",
-        "bell & ross vintage",
-        # Grand Seiko
-        "grand seiko", "grand-seiko",
-        "sbga211", "sbga", "sbge", "sbgn",
-        "sbgm", "sbgr", "slga",
-        "snowflake spring drive", "9f quartz",
-        # Blancpain
-        "blancpain fifty fathoms", "blancpain bathyscaphe",
-        "blancpain villeret",
-        # Glashütte Original
-        "glashütte original", "glashutte original",
-        "glashutte senator", "glashutte sixties",
-        "panomatic",
-        # Chopard
-        "chopard l.u.c", "chopard luc",
-        "chopard mille miglia", "chopard alpine eagle",
-        "chopard happy sport",
     ],
     # Watch accessories — luxury-only, brand-name aliases. Implicit
     # matching (e.g., "Submariner box" without "Rolex" in title) is
