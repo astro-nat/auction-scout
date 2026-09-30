@@ -1073,6 +1073,8 @@ export default function App() {
                 ))}
             </div>
           </details>
+  </>)
+  const invImportMissing = (<>
           {/* A selected auction with fewer lots in the DB than on HiBid gets
               a one-click "finish the import" — the usual arrival here is the
               View button or a lot's auction tag, where the gap is invisible. */}
@@ -1840,7 +1842,7 @@ export default function App() {
 
         {lots.length === 0 && (<>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-          {invScope}{invLenses}{invActions}
+          {invScope}{invImportMissing}{invLenses}{invActions}
         </div>
         {invPanel}
         </>)}
@@ -1921,6 +1923,8 @@ export default function App() {
         <LotTable lots={visibleLots} onLotUpdated={handleLotUpdated} onRefresh={loadLots}
                   toolbar={<>{invScope}{invLenses}</>}
                   toolbarEnd={invActions}
+                  toolbarAllLots={invImportMissing}
+                  onImportMissing={(id) => handleImport(id, -1, '')}
                   panel={invPanel}
                   auctions={importedRows}
                   driveFrom={driveFrom}

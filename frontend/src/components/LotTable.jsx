@@ -344,7 +344,8 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                                   onSelectAuction, onOpenCloset, auctions = {},
                                   driveFrom = null, driveAvailable = false,
                                   onSaveDriveFrom, onClearDriveFrom,
-                                  toolbar = null, toolbarEnd = null, panel = null }) {
+                                  toolbar = null, toolbarEnd = null, panel = null,
+                                  toolbarAllLots = null, onImportMissing }) {
   const isMobile = useMediaQuery('(max-width: 768px)')
   const [pollingIds, setPollingIds] = useState(new Set())
   // Row menus (the ⋯ at the end of a row) are <details>: close any open one
@@ -1266,6 +1267,10 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
       `${g.lots.length.toLocaleString()} ${g.lots.length === 1 ? 'lot' : 'lots'} shown`,
     ].filter(Boolean).join(' · ')
     const unwatched = g.featured.filter((l) => !l.watched)
+    const missing = a && a.lot_count != null && a.lots_imported != null
+      && a.lots_imported < a.lot_count
+      && !(a.closing_date && parseUtc(a.closing_date) < new Date())
+      ? a.lot_count - a.lots_imported : 0
     return (
       <div className="group-head-inner">
         <div className="group-title">
@@ -1276,6 +1281,13 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                     title="Show only this auction's items">
               <strong>{g.name}</strong>
             </button>
+            {missing > 0 && onImportMissing && (
+              <button type="button" className="group-import" data-track="Import N missing"
+                      title={`HiBid lists ${a.lot_count} lots for this sale; ${a.lots_imported} are imported. Import the rest (free, no AI calls).`}
+                      onClick={() => onImportMissing(g.auctionId)}>
+                Import {missing.toLocaleString()} missing
+              </button>
+            )}
             {g.auction?.drive_minutes != null && (
               <span className="group-drive"
                     title={`One way from ${driveFrom?.label || driveFrom?.address || 'your address'}, typical traffic`}>
@@ -1589,13 +1601,28 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
             {lotTags(lot, e)}
           </div>
           <div className="d-sub">
-            #{lot.lot_number || '—'} ·{' '}
-            <EditableCell
-              display={e.enriched_title || '(no enriched title)'}
-              rawValue={e.enriched_title}
-              edited={edited.has('enriched_title')}
-              onSave={(v) => handleCorrect(lot.lot_id, 'enriched_title', v)}
-            />
+            #{lot.lot_number || '—'}
+            {e.enriched_title && e.enriched_title !== lot.title && (
+              <>{' · '}
+                <EditableCell
+                  display={e.enriched_title}
+                  rawValue={e.enriched_title}
+                  edited={edited.has('enriched_title')}
+                  onSave={(v) => handleCorrect(lot.lot_id, 'enriched_title', v)}
+                />
+              </>
+            )}
+            {e.verdict && (
+              <>{' · '}
+                <EditableCell
+                  display={e.verdict}
+                  rawValue={e.verdict}
+                  options={VERDICTS}
+                  edited={edited.has('verdict')}
+                  onSave={(v) => handleCorrect(lot.lot_id, 'verdict', v)}
+                />
+              </>
+            )}
           </div>
           {lotNotes(e)}
         </td>
@@ -1607,21 +1634,9 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
         <td className="num" title={roiTooltip(lot, e)}
             style={{ cursor: roi != null ? 'help' : undefined }}>
           <span className={`d-roi d-roi-${kind}`}>{roi == null ? '—' : `${roi}%`}</span>
-          {e.all_in_cost != null && (
-            <div style={{ color: 'var(--muted)', fontSize: 11 }}>all-in {money(e.all_in_cost)}</div>
-          )}
         </td>
         <td>
           {verdictChip(lot, e, kind)}
-          <div className="d-sub">
-            <EditableCell
-              display={e.verdict ?? 'condition?'}
-              rawValue={e.verdict}
-              options={VERDICTS}
-              edited={edited.has('verdict')}
-              onSave={(v) => handleCorrect(lot.lot_id, 'verdict', v)}
-            />
-          </div>
           {e.status === 'failed' && e.error_message && (
             <div style={{ color: 'var(--error)', fontSize: 12 }}>{e.error_message.slice(0, 80)}</div>
           )}
@@ -1679,7 +1694,11 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
           </div>
         )}
         <div className="d-card-tags">{lotTags(lot, e)}</div>
-        {e.est_resale != null && <CompsPeek lot={lot} e={e} onLotUpdated={onLotUpdated} />}
+        {e.est_resale != null && (
+          <CompsPeek lot={lot} e={e} onLotUpdated={onLotUpdated}
+                     label={`${ev ? (EVIDENCE_LABEL[ev] || ev) : 'comps'}${e.comp_count ? ` · ${e.comp_count}` : ''}`}
+                     labelStyle={{ fontSize: 13, color: ev && isPaleEvidence(ev) ? 'var(--warn)' : 'var(--muted)' }} />
+        )}
         <div className="d-card-actions">
           {actionableButton(lot, { flex: 1, padding: 8 }) || <span style={{ flex: 1 }} />}
           {starButton(lot)}
@@ -1777,6 +1796,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
       <>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
           {toolbar}
+          {arrange !== 'auction' && toolbarAllLots}
           {toolbarEnd}
           {panel && <div style={{ flexBasis: '100%' }}>{panel}</div>}
           <input
@@ -2084,10 +2104,11 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
       {searchBox}
       {arrangeControl}
       {toolbar}
+      {arrange !== 'auction' && toolbarAllLots}
       {arrange !== 'auction' && lengthMenu}
       <span className="inv-spacer" />
       {anyQueued && <span className="inv-note"><span className="spinner" />{lots.filter((l) => l.enrichment?.status === 'queued').length} in the queue</span>}
-      {aiCheck}
+      {arrange !== 'auction' && aiCheck}
       {toolbarEnd}
       {priceButton}
     </div>

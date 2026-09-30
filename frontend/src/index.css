@@ -710,3 +710,7 @@ details.peek > summary::-webkit-details-marker { display: none; }
 
 .gold-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
 .gold-summary .addon-bar { margin-left: auto; font-size: 13px; color: var(--muted); white-space: nowrap; }
+
+/* "Import N missing" beside an auction's name: small, but a real button. */
+.group-import { font-size: 12.5px; padding: 2px 9px; font-weight: 600;
+  color: var(--accent); border-color: var(--accent); background: var(--surface); }
