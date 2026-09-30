@@ -48,9 +48,15 @@ def cleanup():
     db.close()
 
 
-def _scan_with(monkeypatch, items):
+def _scan_with(monkeypatch, items, complete=True):
+    """search_items reports coverage as well as results: the close-out only
+    runs over a complete read, because a lot missing from a window that
+    stopped early has not been shown to be sold."""
     monkeypatch.setattr(vt_router.vinted, "search_items",
-                        lambda *a, **k: items)
+                        lambda *a, **k: {"items": items, "complete": complete,
+                                         "pages_read": 1 if complete else 2,
+                                         "total_pages": 1 if complete else 10,
+                                         "total_entries": len(items)})
     r = client.post("/vinted/scan", json={"query": QUERY})
     assert r.status_code == 200
     return [a for a in r.json() if a.get("external_id") == CARD_KEY]
@@ -87,3 +93,57 @@ def test_rescan_refreshes_asks_and_closes_sold_items(monkeypatch, cleanup):
 
 def test_blank_query_is_refused(cleanup):
     assert client.post("/vinted/scan", json={"query": "  "}).status_code == 422
+
+
+# --- absence is only evidence over a complete read -----------------------
+
+def _statuses(db):
+    return {l.lot_id: l.status for l in db.query(models.Lot)
+            .filter(models.Lot.lot_id.like(f"{LOT_PREFIX}%")).all()}
+
+
+def test_a_complete_rescan_closes_what_is_gone(monkeypatch, cleanup):
+    """Vinted's search never shows a sold item, so over the WHOLE result set
+    a listing that stopped appearing has sold or been delisted."""
+    _scan_with(monkeypatch, [_item(1), _item(2)])
+    _scan_with(monkeypatch, [_item(1)], complete=True)
+    db = SessionLocal()
+    got = _statuses(db)
+    db.close()
+    assert got[f"{LOT_PREFIX}1"] == "OPEN"
+    assert got[f"{LOT_PREFIX}2"] == "CLOSED"
+
+
+def test_a_truncated_rescan_closes_nothing(monkeypatch, cleanup):
+    """The bug this fixes. Two pages of a ten-page search is 20% of it; a lot
+    absent from that window has not been shown to be sold, it has been shown
+    to be further down the list. Closing it loses a live listing."""
+    _scan_with(monkeypatch, [_item(1), _item(2)])
+    _scan_with(monkeypatch, [_item(1)], complete=False)
+    db = SessionLocal()
+    got = _statuses(db)
+    db.close()
+    assert got[f"{LOT_PREFIX}2"] == "OPEN", "closed a lot on a partial read"
+
+
+def test_a_truncated_rescan_still_refreshes_what_it_saw(monkeypatch, cleanup):
+    """Not closing is not the same as doing nothing: everything in the window
+    is confirmed live and gets its current ask."""
+    _scan_with(monkeypatch, [_item(1, price=20.0)])
+    _scan_with(monkeypatch, [_item(1, price=12.0)], complete=False)
+    db = SessionLocal()
+    lot = db.query(models.Lot).filter(
+        models.Lot.lot_id == f"{LOT_PREFIX}1").first()
+    price = float(lot.current_bid)
+    db.close()
+    assert price == 12.0
+
+
+def test_the_scan_reports_what_it_covered(monkeypatch, cleanup):
+    """So the UI can say "read 2 of 10 pages, nothing closed" rather than
+    implying the inventory is now accurate."""
+    card = _scan_with(monkeypatch, [_item(1)], complete=False)[0]
+    assert card["scan_complete"] is False
+    assert card["scan_total_pages"] == 10
+    card = _scan_with(monkeypatch, [_item(1)], complete=True)[0]
+    assert card["scan_complete"] is True

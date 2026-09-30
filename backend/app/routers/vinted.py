@@ -45,6 +45,11 @@ router = APIRouter(prefix="/vinted", tags=["vinted"])
 class VintedScanRequest(BaseModel):
     query: str
     max_price: Optional[float] = None
+    # How many catalogue pages to read, 96 listings each. None runs to the
+    # end of the result set (capped by services.vinted.PAGES_MAX). Lower it
+    # for a quick look; a short read closes nothing, because absence from a
+    # window that stopped early is not evidence of a sale.
+    max_pages: Optional[int] = None
 
 
 def _slug(query: str) -> str:
@@ -220,11 +225,12 @@ def scan(payload: VintedScanRequest, db: Session = Depends(get_db)):
     if not query:
         raise HTTPException(status_code=422, detail="query is required")
     try:
-        items = vinted.search_items(query, payload.max_price)
+        found = vinted.search_items(query, payload.max_price, payload.max_pages)
     except Exception as exc:  # noqa: BLE001 — surface it, don't 500 opaquely
         logger.warning("Vinted search failed: %s", exc)
         raise HTTPException(status_code=502,
                             detail=f"Vinted search failed: {exc}")
+    items = found["items"]
 
     external_id = f"vt-{_slug(query)}"
     auction = (db.query(models.Auction)
@@ -296,16 +302,32 @@ def scan(payload: VintedScanRequest, db: Session = Depends(get_db)):
             created += 1
 
     # Gone from the results = sold or delisted; either way not buyable.
+    #
+    # Only sound over a COMPLETE result set. Vinted's search never shows a
+    # sold item, so absence really is the signal - but absence from a
+    # TRUNCATED window means nothing at all, and the old two-page window was
+    # 20% of a "cd lots" search. That closed live lots for scrolling out of
+    # view, and kept sold ones alive because the window never reached them.
+    # When the read stopped short, nothing is closed and the response says so.
     closed = 0
-    for row in (db.query(models.Lot)
-                  .filter(models.Lot.auction_id == auction.id,
-                          models.Lot.status == "OPEN").all()):
-        if row.lot_id not in fresh_ids:
-            row.status = "CLOSED"
-            closed += 1
+    if found["complete"]:
+        for row in (db.query(models.Lot)
+                      .filter(models.Lot.auction_id == auction.id,
+                              models.Lot.status == "OPEN").all()):
+            if row.lot_id not in fresh_ids:
+                row.status = "CLOSED"
+                closed += 1
 
     db.commit()
     db.refresh(auction)
-    logger.info("Vinted scan %r: %d new, %d refreshed, %d closed",
-                query, created, updated, closed)
-    return _attach_stats(db, [auction])
+    logger.info("Vinted scan %r: %d new, %d refreshed, %d closed "
+                "(%d/%d pages, %d listings, complete=%s)",
+                query, created, updated, closed, found["pages_read"],
+                found["total_pages"], found["total_entries"], found["complete"])
+    rows = _attach_stats(db, [auction])
+    for r in rows:
+        r.scan_complete = found["complete"]
+        r.scan_pages_read = found["pages_read"]
+        r.scan_total_pages = found["total_pages"]
+        r.scan_total_entries = found["total_entries"]
+    return rows

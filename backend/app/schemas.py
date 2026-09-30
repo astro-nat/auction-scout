@@ -166,6 +166,13 @@ class AuctionOut(BaseModel):
     lots_inspected: int = 0
     lots_hard_pending: int = 0   # HARD-to-ship lots still awaiting enrichment
     lots_unpriced: int = 0       # no value yet - what its comps button would look up
+    # Set on a Vinted scan only: how much of the result set was actually read.
+    # complete=False means nothing was closed out, because a lot missing from
+    # a truncated window has not been shown to be sold.
+    scan_complete: Optional[bool] = None
+    scan_pages_read: Optional[int] = None
+    scan_total_pages: Optional[int] = None
+    scan_total_entries: Optional[int] = None
 
 
 class EnrichBatchRequest(BaseModel):
