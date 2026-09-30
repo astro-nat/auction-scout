@@ -16,7 +16,7 @@ import useMediaQuery from '../useMediaQuery'
 // used (raw observed prices — never scaled to match the conclusion), plus a
 // one-tap eBay sold-listings search so distrust costs thirty seconds, not a
 // Google detour. Rows enriched before comps were stored still get the link.
-function CompsPeek({ lot, e, onLotUpdated }) {
+function CompsPeek({ lot, e, onLotUpdated, label, labelStyle }) {
   const search = ebaySoldUrl(e.enriched_title || lot.title)
   // The list endpoint leaves the comp records out - they were 60% of its
   // payload and are read only here - so the first open fetches this one
@@ -56,9 +56,10 @@ function CompsPeek({ lot, e, onLotUpdated }) {
   }
 
   return (
-    <details style={{ marginTop: 2 }} onToggle={fill}>
-      <summary style={{ color: 'var(--muted)', fontSize: 11, cursor: 'pointer' }}>
-        evidence{(rows.length || expected) ? ` (${rows.length || expected})` : ''}
+    <details style={{ marginTop: 2 }} onToggle={fill} className={label ? 'peek' : undefined}>
+      <summary style={{ color: 'var(--muted)', fontSize: 11, cursor: 'pointer', ...labelStyle }}
+               title={label ? 'Show the comps behind this price' : undefined}>
+        {label ?? <>evidence{(rows.length || expected) ? ` (${rows.length || expected})` : ''}</>}
         {e.comp_flagged ? ' — flagged wrong' : ''}
       </summary>
       <div style={{ fontSize: 11, textAlign: 'left', maxWidth: 360, padding: '4px 0' }}>
@@ -342,7 +343,8 @@ const MOBILE_SORTS = [
 export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                                   onSelectAuction, onOpenCloset, auctions = {},
                                   driveFrom = null, driveAvailable = false,
-                                  onSaveDriveFrom, onClearDriveFrom }) {
+                                  onSaveDriveFrom, onClearDriveFrom,
+                                  toolbar = null, toolbarEnd = null, panel = null }) {
   const isMobile = useMediaQuery('(max-width: 768px)')
   const [pollingIds, setPollingIds] = useState(new Set())
   // Row menus (the ⋯ at the end of a row) are <details>: close any open one
@@ -1014,7 +1016,15 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     </div>
   )
 
-  if (!lots.length) return <p>No lots yet — scan auctions and import one above.</p>
+  if (!lots.length) {
+    return (
+      <>
+        {(toolbar || toolbarEnd) && <div className="inv-toolbar">{toolbar}<span className="inv-spacer" />{toolbarEnd}</div>}
+        {panel}
+        <p>Nothing to show. The filters above may be hiding everything; loosen one, or scan auctions and import one.</p>
+      </>
+    )
+  }
 
   // What's on screen vs. what the filters matched, and the pager.
   const pg = pageWindow(sorted.length, page, pageSize)
@@ -1228,20 +1238,6 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                 className={arrange === 'all' ? 'on' : undefined}
                 onClick={() => setArrange('all')}>All lots</button>
       </div>
-      {arrange === 'auction' && (
-        <label style={{ fontSize: 13, color: 'var(--muted)', whiteSpace: 'nowrap' }}
-               title="At an auction where you already have a gold mine, a lot with at least this ROI is worth adding - you're making the trip anyway">
-          Add-on at{' '}
-          <input type="number" min="0" step="10" value={addonFloor}
-                 data-track="Add-on ROI bar"
-                 onChange={(ev) => {
-                   const n = Number(ev.target.value)
-                   if (ev.target.value !== '' && Number.isFinite(n) && n >= 0) setAddonFloor(n)
-                 }}
-                 style={{ width: 64 }} />
-          {' '}% ROI
-        </label>
-      )}
       {arrange === 'auction' && onSaveDriveFrom && (
         <DriveFrom driveFrom={driveFrom} available={driveAvailable}
                    onSave={onSaveDriveFrom} onClear={onClearDriveFrom} />
@@ -1402,6 +1398,14 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     </button>
   )
 
+  // The row's price / AI button, but only when pressing it does something.
+  // A lot the AI already checked shows a disabled "AI checked" - true, and
+  // noise in every row; its way past the lock lives in the row menu.
+  const actionableButton = (lot, style) => {
+    const a = rowAction(lot.enrichment || {}, pollingIds.has(lot.lot_id))
+    return (a.step === 'comps' || a.step === 'ai') && !a.disabled ? rowButton(lot, style) : null
+  }
+
   const rowMenu = (lot) => (
     <details className="row-menu">
       <summary aria-label="More for this lot" title="Hide, hide similar, open the listing">
@@ -1418,6 +1422,13 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                 onClick={(ev) => { closeMenu(ev); handleHideLike(lot.lot_id, !lot.hidden) }}>
           {lot.hidden ? 'Show every lot like this' : 'Hide every lot like this'}
         </button>
+        {rowAction(lot.enrichment || {}, pollingIds.has(lot.lot_id)).step === 'locked' && (
+          <button type="button" data-track="Re-check with AI (row)"
+                  title="Release the lock on this one lot and price it again. Spends another AI call."
+                  onClick={(ev) => { closeMenu(ev); handleRecheck(lot.lot_id) }}>
+            Re-check with AI
+          </button>
+        )}
         <a href={lot.lot_link} target="_blank" rel="noreferrer" onClick={closeMenu}>Open the listing</a>
       </div>
     </details>
@@ -1485,10 +1496,10 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
           edited={edited.has('est_resale')}
           onSave={(v) => handleCorrect(lot.lot_id, 'est_resale', v)}
         />
-        {ev && (
-          <div title={(EVIDENCE_NOTE[ev] || '') + (e.comp_count ? ` (${e.comp_count} comps)` : '')}
-               style={{ color: isPaleEvidence(ev) ? 'var(--warn)' : 'var(--muted)', fontSize: 11.5, cursor: 'help' }}>
-            {EVIDENCE_LABEL[ev] || ev}{e.comp_count ? ` · ${e.comp_count}` : ''}
+        {ev && e.est_resale == null && (
+          <div title={EVIDENCE_NOTE[ev] || ''}
+               style={{ color: isPaleEvidence(ev) ? 'var(--warn)' : 'var(--muted)', fontSize: 11.5 }}>
+            {EVIDENCE_LABEL[ev] || ev}
           </div>
         )}
         {e.gold_check === 'demoted' && (
@@ -1504,7 +1515,11 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
             house {houseEstimate(lot)}
           </div>
         )}
-        {e.est_resale != null && <CompsPeek lot={lot} e={e} onLotUpdated={onLotUpdated} />}
+        {e.est_resale != null && (
+          <CompsPeek lot={lot} e={e} onLotUpdated={onLotUpdated}
+                     label={`${ev ? (EVIDENCE_LABEL[ev] || ev) : 'comps'}${e.comp_count ? ` · ${e.comp_count}` : ''}`}
+                     labelStyle={{ fontSize: 11.5, color: ev && isPaleEvidence(ev) ? 'var(--warn)' : 'var(--muted)' }} />
+        )}
       </>
     )
   }
@@ -1612,7 +1627,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
           )}
         </td>
         <td className="d-actions">
-          {kind !== 'unpriced' && rowButton(lot, { fontSize: 12, padding: '3px 8px' })}
+          {kind !== 'unpriced' && actionableButton(lot, { fontSize: 12, padding: '3px 8px' })}
           {starButton(lot)}
           {rowMenu(lot)}
         </td>
@@ -1666,7 +1681,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
         <div className="d-card-tags">{lotTags(lot, e)}</div>
         {e.est_resale != null && <CompsPeek lot={lot} e={e} onLotUpdated={onLotUpdated} />}
         <div className="d-card-actions">
-          {rowButton(lot, { flex: 1, padding: 8 })}
+          {actionableButton(lot, { flex: 1, padding: 8 }) || <span style={{ flex: 1 }} />}
           {starButton(lot)}
           {rowMenu(lot)}
         </div>
@@ -1682,6 +1697,18 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
       {addonTotal
         ? `${addonTotal} more ${addonTotal === 1 ? 'lot there is' : 'lots there are'} worth adding, since you'd be picking up anyway.`
         : 'Nothing else there clears the add-on bar.'}
+      <label className="addon-bar"
+             title="At an auction where you already have a gold mine, a lot with at least this ROI is worth adding - you're making the trip anyway">
+        Add-on bar{' '}
+        <input type="number" min="0" step="10" value={addonFloor}
+               data-track="Add-on ROI bar"
+               onChange={(ev) => {
+                 const n = Number(ev.target.value)
+                 if (ev.target.value !== '' && Number.isFinite(n) && n >= 0) setAddonFloor(n)
+               }}
+               style={{ width: 56 }} />
+        {' '}% ROI
+      </label>
     </div>
   )
   // Column filters are set in "All lots" and have no widgets here, so say
@@ -1692,6 +1719,26 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
       <button type="button" className="link-like" style={{ color: 'var(--link)' }}
               onClick={() => setColFilters({})}>Clear {activeFilterCount === 1 ? 'it' : 'them'}</button>
     </div>
+  )
+
+  const searchBox = (
+    <label className="inv-search">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+        <circle cx="11" cy="11" r="7" /><path d="M20 20l-4-4" />
+      </svg>
+      <input type="search" value={search} onChange={(ev) => handleSearch(ev.target.value)}
+             placeholder="Search title, auction or lot #" aria-label="Search inventory" />
+    </label>
+  )
+  const priceButton = (unpricedShown.length > 0 || queuing) && (
+    <button className="primary" onClick={handleCompsMatching}
+            disabled={queuing}
+            data-track="Price N with comps (no AI)"
+            title="The default: sold comps for every unpriced lot matching the filters, on each lot's own title. No AI cost.">
+      {queuing ? <><span className="spinner" />Queuing…</>
+               : `Price ${unpricedShown.length.toLocaleString()} unpriced ${unpricedShown.length === 1 ? 'lot' : 'lots'}`}
+    </button>
   )
 
   const DECISION_HEADS = [
@@ -1729,6 +1776,9 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     return (
       <>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+          {toolbar}
+          {toolbarEnd}
+          {panel && <div style={{ flexBasis: '100%' }}>{panel}</div>}
           <input
             type="search"
             value={search}
@@ -2028,37 +2078,23 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
 
   return (
     <>
-    {(unpricedShown.length > 0 || queuing || aiCheck || anyQueued) && (
-      <div style={{ marginBottom: '0.5rem', display: 'flex', flexWrap: 'wrap',
-                    alignItems: 'center', gap: 8 }}>
-        {(unpricedShown.length > 0 || queuing) && (
-          <button className="primary" onClick={handleCompsMatching}
-                  disabled={queuing}
-                  data-track="Price N with comps (no AI)"
-                  title="The default: sold comps for every unpriced lot matching the filters, on each lot's own title. No AI cost.">
-            {queuing ? <><span className="spinner" />Queuing…</>
-                     : `Price ${unpricedShown.length.toLocaleString()} unpriced ${unpricedShown.length === 1 ? 'lot' : 'lots'}`}
-          </button>
-        )}
-        {aiCheck}
-        {anyQueued && <span><span className="spinner" />{lots.filter((l) => l.enrichment?.status === 'queued').length} lots in the queue… updates when they finish</span>}
-      </div>
-    )}
+    {/* One toolbar, as the design lays it out: find, arrange, scope and
+        lenses on the left; the actions on the right. */}
+    <div className="inv-toolbar">
+      {searchBox}
+      {arrangeControl}
+      {toolbar}
+      {arrange !== 'auction' && lengthMenu}
+      <span className="inv-spacer" />
+      {anyQueued && <span className="inv-note"><span className="spinner" />{lots.filter((l) => l.enrichment?.status === 'queued').length} in the queue</span>}
+      {aiCheck}
+      {toolbarEnd}
+      {priceButton}
+    </div>
+    {panel}
     {likeBar}
     {bulkBar}
     {goldSummary}
-    {/* DataTables' top bar: page length left, the one search box right. */}
-    <div className="table-toolbar">
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 16 }}>
-        {arrangeControl}
-        {arrange !== 'auction' && lengthMenu}
-      </div>
-      <label className="table-search">
-        Search:{' '}
-        <input type="search" value={search} onChange={(ev) => handleSearch(ev.target.value)}
-               placeholder="title, auction, category, lot #" />
-      </label>
-    </div>
     {/* No overflow wrapper: an overflow-x container becomes the scrollport
         position:sticky binds to, and the thead's top offset then displaces
         it INSIDE the table by the status bar's height — a blank band with

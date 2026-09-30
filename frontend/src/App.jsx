@@ -1013,50 +1013,347 @@ export default function App() {
                            filters.flaggedOnly, cheapMediaOnly].filter(Boolean).length
 
 
-  return (
-    <div>
-      <StatusBar onQuiet={refreshAll} onStatus={onStatus} />
-      <div style={{ padding: isMobile ? '0.75rem' : '1.5rem 2rem',
-                    maxWidth: 1500, margin: '0 auto' }}>
-      <div style={isMobile ? undefined : { display: 'flex', alignItems: 'flex-end', gap: 28,
-                                           borderBottom: '1px solid var(--border)' }}>
-      <h1 className="wordmark"
-          style={{ fontSize: isMobile ? 22 : 28, margin: isMobile ? '0 0 2px' : '0 0 8px',
-                   display: 'flex', alignItems: 'baseline', gap: 10 }}>
-        AuctionScout
-        {!isMobile && (
-          <small style={{ fontSize: 13, color: 'var(--muted)' }}>
-            find it cheap, flip it well
-          </small>
-        )}
-      </h1>
-
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4,
-                    borderBottom: isMobile ? '1px solid var(--border)' : 'none' }}>
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            className={`tab${t.views.includes(view) ? ' active' : ''}`}
-            onClick={() => setView(lastViewIn.current[t.key])}
-            style={isMobile ? { fontSize: 15, padding: '10px 12px' } : undefined}
-          >
-            {t.label}
+  // The Inventory controls. The table renders them in its one toolbar row
+  // (search, view, scope, lenses, actions - as the design lays it out);
+  // with no lots to show there is no table, so the section above it
+  // renders them instead and a filter that empties the list stays reachable.
+  const invScope = (<>
+          <details className="picker" style={{ position: 'relative', maxWidth: isMobile ? '100%' : 440 }}>
+            <summary title="Tick one or more imported auctions to see just their items">
+              {selectedAuctions.length
+                ? `${selectedAuctions.length} auction${selectedAuctions.length === 1 ? '' : 's'} selected ▾`
+                : `All ${Object.keys(importedRows).length} auctions ▾`}
+            </summary>
+            <div className="panel">
+              {/* Ticking them one at a time was the longest unbroken run in
+                  the usage log - 19 checkboxes without another action
+                  between them. Selecting every auction is NOT the same as
+                  selecting none: the per-auction buttons beside this panel,
+                  "Import N missing" among them, only appear for auctions
+                  that are ticked. */}
+              <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
+                <button onClick={() => setSelectedAuctions(pickerRows.map((a) => a.id))}
+                        disabled={selectedAuctions.length === pickerRows.length
+                                  || !pickerRows.length}
+                        data-track="Select all auctions"
+                        title="Tick every imported auction — the per-auction buttons, including any unfinished imports, then show up for all of them"
+                        style={{ flex: 1, padding: 6, fontSize: 13 }}>
+                  Select all {pickerRows.length}
+                </button>
+                <button onClick={() => setSelectedAuctions([])}
+                        disabled={!selectedAuctions.length}
+                        data-track="Show all auctions (clear selection)"
+                        title="Untick everything and go back to items from every auction"
+                        style={{ flex: 1, padding: 6, fontSize: 13 }}>
+                  Show all auctions
+                </button>
+              </div>
+              {pickerRows
+                .map((a) => (
+                  <label key={a.id}
+                         style={{ display: 'flex', gap: 6, alignItems: 'flex-start',
+                                  padding: '6px 4px', fontSize: 13, cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedAuctions.includes(a.id)}
+                      onChange={() => toggleAuctionSelected(a.id)}
+                      style={{ marginTop: 2 }}
+                      data-track="Select this auction"
+                    />
+                    <span style={{ lineHeight: 1.3 }}>
+                      {a.name}
+                      <div style={{ color: 'var(--muted)', fontSize: 12 }}>
+                        {[a.city, a.state].filter(Boolean).join(', ') || '—'}
+                        {a.drive_minutes != null ? ` · ${formatDrive(a.drive_minutes)}` : ''}
+                        {a.lot_count != null ? ` · ${a.lots_imported} of ${a.lot_count} imported` : ''}
+                        {a.gold_count ? ` · ${a.gold_count} gold` : ''}
+                      </div>
+                    </span>
+                  </label>
+                ))}
+            </div>
+          </details>
+          {/* A selected auction with fewer lots in the DB than on HiBid gets
+              a one-click "finish the import" — the usual arrival here is the
+              View button or a lot's auction tag, where the gap is invisible. */}
+          {selectedAuctions
+            .map((id) => importedRows[id])
+            .filter((a) => a && a.lot_count != null && a.lots_imported < a.lot_count
+                           && !(a.closing_date && parseUtc(a.closing_date) < new Date()))
+            .map((a) => (
+              <button key={`partial-${a.id}`}
+                      onClick={() => handleImport(a.id, -1, '')}
+                      title={`"${a.name}" has ${a.lot_count} lots on HiBid but only ${a.lots_imported} in the database — import the rest (free, no AI calls)`}
+                      style={{ padding: 8, fontSize: 14 }}>
+                Import {a.lot_count - a.lots_imported} missing
+                {selectedAuctions.length > 1 ? ` · ${a.name.length > 22 ? `${a.name.slice(0, 22)}…` : a.name}` : ''}
+              </button>
+            ))}
+  </>)
+  const invActions = (<>
+          {/* The app-wide actions, behind one door: the one green button on
+              the page is the table's own "Price N unpriced lots", which prices
+              exactly what the filters show. These reach past the filters. */}
+          <details className="picker" style={{ position: 'relative', marginLeft: isMobile ? 0 : 'auto' }}>
+            <summary>More actions ▾</summary>
+            <div className="panel" style={{ display: 'flex', flexDirection: 'column', gap: 6,
+                                            left: isMobile ? 0 : 'auto', right: isMobile ? 'auto' : 0 }}>
+            <button style={{ textAlign: 'left' }}
+                    onClick={runBusy('bid-refresh', 'Starting the bid refresh…', handleRefreshBids)}
+                    disabled={!!busy['bid-refresh']}
+                    title="Re-pull current bids from HiBid for every imported open auction and recompute ROI. Free — progress shows in the top bar.">
+              Refresh bids
+            </button>
+            {!pricedOnly && (<>
+            <button style={{ textAlign: 'left' }}
+                    onClick={runBusy('comps-all', 'Counting unpriced items…', handleCompsOnly)}
+                    disabled={!!busy['comps-all']}
+                    title="The default way to price: for every unpriced item in view (the ticked auctions and the category dropdown), look up sold comps on its auction title as-is. No AI cost - about one SoldComps request per title (asks first, shows the count)">
+              {categoryFilter ? `Price all in ${categoryFilter} with comps (no AI)` : 'Price all with comps (no AI)'}
+            </button>
+            <button style={{ textAlign: 'left' }}
+                    onClick={runBusy('inspect-no-value', 'Counting items with no value…', handleInspectNoValue)}
+                    disabled={!!busy['inspect-no-value']}
+                    title="For the items comps couldn't price: AI reads each photo, identifies what is in it and prices it (asks first, shows cost)">
+              AI-price what comps missed
+            </button>
+            </>)}
+            </div>
+          </details>
+  </>)
+  const invLenses = (<>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
+            {/* data-track names this explicitly because the visible label
+                carries a count, and the tracker reads the label text. */}
+            <input
+              type="checkbox"
+              checked={goldOnly}
+              onChange={(ev) => setGoldOnly(ev.target.checked)}
+              data-track="Gold mines only"
+            /> Gold mines only
+            <span style={{ color: 'var(--muted)' }}>
+              ({goldCount.toLocaleString()} of {lotsBeforeGold.length.toLocaleString()})
+            </span>
+          </label>
+          <button onClick={() => setFiltersOpen((v) => !v)}
+                  aria-expanded={filtersOpen}
+                  data-track="Filters panel"
+                  title="Every hide rule, the gold-mine ROI target, the never list, and clean-up"
+                  style={{ fontSize: 13, padding: '4px 10px' }}>
+            Filters{activeRuleCount ? ` · ${activeRuleCount} on` : ''}{categoryFilter ? ` · ${categoryFilter}` : ''} {filtersOpen ? '▴' : '▾'}
           </button>
-        ))}
-      </div>
-      </div>
-      {/* Every in-flight action shows here — several can run at once, since
-          starting one no longer blocks another. */}
-      {Object.keys(busy).length > 0 && (
-        <div style={{ fontSize: 13, color: 'var(--muted)', margin: '8px 0 0',
-                      display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {Object.entries(busy).map(([key, label]) => (
-            <span key={key}><span className="spinner" /> {label}</span>
-          ))}
-        </div>
-      )}
-      {/* The view switch under the open tab */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '10px 0 1rem' }}>
+          {hiddenCount > 0 && (
+            <span style={{ color: 'var(--muted)', whiteSpace: 'nowrap' }}
+                  title="Items the rules under More filters are keeping out of view">
+              {hiddenCount.toLocaleString()} hidden
+            </span>
+          )}
+  </>)
+  const invPanel = (<>
+        {filtersOpen && (
+          <div style={{ marginTop: 8, padding: 12, borderRadius: 8,
+                        border: '1px solid var(--border, #555)',
+                        display: 'grid', gap: 14, fontSize: 13,
+                        gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(240px, 1fr))' }}>
+
+            <fieldset style={panelGroup}>
+              <legend style={panelLegend}>Hide from view</legend>
+              <label style={panelRow}
+                     title="Hide items priced under the cutoff when the value is trustworthy — 3+ comps agree, or the AI identified the item with strong confidence">
+                <input
+                  type="checkbox"
+                  checked={hideLowValue}
+                  onChange={(ev) => setHideLowValue(ev.target.checked)}
+                /> Hide low-value (&lt; $
+                <input
+                  type="number"
+                  value={lowValueCutoff}
+                  onChange={(ev) => setLowValueCutoff(Number(ev.target.value) || 0)}
+                  style={{ width: 44 }}
+                />)
+              </label>
+              <label style={panelRow}
+                     title="The bid has passed what this lot could be resold for, after fees and shipping - the red ROI. Only lots priced from sold comps, a retail price or an audit of those are hidden, never one priced by guess.">
+                <input
+                  type="checkbox"
+                  checked={hideOverMax}
+                  onChange={(ev) => setHideOverMax(ev.target.checked)}
+                  data-track="Hide over max bid"
+                /> Hide over max bid
+                <span style={{ color: 'var(--muted)' }}>({overMaxCount.toLocaleString()})</span>
+              </label>
+              <label style={panelRow}
+                     title="Saws, sanders, compressors, mowers and the like - anything whose worth depends on a motor running, which a photo cannot show and you cannot test before bidding. Hand tools are not affected.">
+                <input
+                  type="checkbox"
+                  checked={hidePowered}
+                  onChange={(ev) => setHidePowered(ev.target.checked)}
+                  data-track="Hide power tools"
+                /> Hide power tools
+                <span style={{ color: 'var(--muted)' }}>({poweredCount.toLocaleString()})</span>
+              </label>
+              <span style={panelRow}>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                       title="Kinds of thing you never want to see at all - the opposite of the BOLO list">
+                  <input
+                    type="checkbox"
+                    checked={hideNever}
+                    onChange={(ev) => setHideNever(ev.target.checked)}
+                    data-track="Hide never list"
+                  /> Hide never-buy
+                  <span style={{ color: 'var(--muted)' }}>({neverCount.toLocaleString()})</span>
+                </label>
+                <button onClick={() => setNeverOpen((v) => !v)}
+                        data-track="Edit never list"
+                        style={{ fontSize: 12, padding: '1px 6px' }}>
+                  {neverOpen ? 'Done' : 'Edit list'}
+                </button>
+              </span>
+              <label style={panelRow}>
+                <input
+                  type="checkbox"
+                  checked={hideHardShip}
+                  onChange={(ev) => setHideHardShip(ev.target.checked)}
+                /> Hide HARD ship
+              </label>
+              <label style={panelRow}
+                     title="Lots from a Canadian house that has said it won't ship into the US — winnable, never receivable">
+                <input
+                  type="checkbox"
+                  checked={hideNoUsShip}
+                  onChange={(ev) => setHideNoUsShip(ev.target.checked)}
+                /> Hide no US shipping
+              </label>
+              <label style={panelRow}>
+                <input
+                  type="checkbox"
+                  checked={hideClosed}
+                  onChange={(ev) => setHideClosed(ev.target.checked)}
+                /> Hide closed
+              </label>
+              <label style={{ ...panelRow, opacity: driveFrom ? 1 : 0.6 }}
+                     title={driveFrom
+                       ? `Pickup auctions more than this many minutes' drive from ${driveFrom.label || driveFrom.address}, one way. Auctions that ship are never hidden by this, and one with no drive time yet is kept.`
+                       : 'Set where you drive from first: Inventory, By auction view, "Set where you drive from".'}>
+                <input
+                  type="checkbox"
+                  checked={hideFar}
+                  disabled={!driveFrom}
+                  onChange={(ev) => setHideFar(ev.target.checked)}
+                  data-track="Hide far auctions"
+                /> Hide auctions more than
+                <input
+                  type="number"
+                  min="5"
+                  step="5"
+                  value={maxDriveMinutes}
+                  disabled={!driveFrom}
+                  aria-label="Longest drive to show, in minutes"
+                  onChange={(ev) => setMaxDriveMinutes(Number(ev.target.value) || 0)}
+                  style={{ width: 48 }}
+                /> min away
+                <span style={{ color: 'var(--muted)' }}>
+                  {driveFrom
+                    ? `(${tooFarIds.size} ${tooFarIds.size === 1 ? 'auction' : 'auctions'})`
+                    : '(set your address first)'}
+                </span>
+              </label>
+            </fieldset>
+
+            <fieldset style={panelGroup}>
+              <legend style={panelLegend}>Only show</legend>
+              <label style={{ ...panelRow, flexDirection: 'column', alignItems: 'stretch', gap: 4 }}>
+                Category
+                <select
+            value={categoryFilter}
+            onChange={(ev) => setCategoryFilter(ev.target.value)}
+            title="Show only items in one HiBid category — across every auction, or just the selected ones"
+            style={{ padding: 6, fontSize: 13, maxWidth: '100%' }}
+          >
+            <option value="">All categories</option>
+            {lotCategories.map((c) => (
+              <option key={c.category} value={c.category}>{c.category} ({c.lots})</option>
+            ))}
+          </select>
+              </label>
+              <label style={panelRow}>
+                <input
+                  type="checkbox"
+                  checked={filters.boloOnly}
+                  onChange={(ev) => setFilters((f) => ({ ...f, boloOnly: ev.target.checked }))}
+                /> BOLO only
+              </label>
+              <label style={panelRow}
+                     title="Lots you've flagged as having wrong comps — a worklist for fixing the algorithm">
+                <input
+                  type="checkbox"
+                  checked={filters.flaggedOnly}
+                  onChange={(ev) => setFilters((f) => ({ ...f, flaggedOnly: ev.target.checked }))}
+                /> Flagged only
+              </label>
+              <label style={panelRow}
+                     title="Bulk media lots - CDs, DVDs, VHS, records, books - priced by the piece. The count is read from the seller's own title, so a lot that never says how many is not shown here at all.">
+                <input
+                  type="checkbox"
+                  checked={cheapMediaOnly}
+                  onChange={(ev) => setCheapMediaOnly(ev.target.checked)}
+                  data-track="Cheap media lots only"
+                /> Media under $
+                <input type="number" min="0" step="0.05" value={maxPerItem}
+                       onChange={(ev) => setMaxPerItem(ev.target.value)}
+                       title="Highest average price per disc, tape or book"
+                       style={{ width: 58 }} />
+                <span style={{ color: 'var(--muted)' }}>/item ({cheapMediaCount.toLocaleString()})</span>
+              </label>
+              <label style={panelRow}
+                     title="Lots you hid with the hide button — check to see and unhide them">
+                <input
+                  type="checkbox"
+                  checked={showHiddenLots}
+                  onChange={(ev) => setShowHiddenLots(ev.target.checked)}
+                  data-track="Show hidden lots"
+                /> Show hidden ({lots.filter((l) => l.hidden).length})
+              </label>
+            </fieldset>
+
+            <fieldset style={panelGroup}>
+              <legend style={panelLegend}>Gold mine threshold</legend>
+              <span style={panelRow}
+                    title="An item is a GOLD MINE when its current bid still clears this return after all fees. Saving re-grades every item for free.">
+                at
+                <input
+                  type="number"
+                  value={targetRoi}
+                  onChange={(ev) => setTargetRoi(ev.target.value)}
+                  style={{ width: 58 }}
+                />% ROI
+                <button style={{ fontSize: 12, padding: '3px 9px' }} onClick={handleSaveRoi}>Apply</button>
+              </span>
+              <span style={{ ...panelLegend, marginTop: 14 }}>Clean up</span>
+              {/* In red beside the most-used button, a permanent delete was
+                  one slip away. It asks first either way, but it belongs
+                  down here. */}
+              <button className="danger"
+                      onClick={runBusy('flush', 'Counting closed items…', handleFlushClosed)}
+                      disabled={!!busy.flush}
+                      title="Permanently delete all items whose auction has closed (asks first)"
+                      style={{ alignSelf: 'flex-start', fontSize: 13 }}>
+                Flush closed items
+              </button>
+            </fieldset>
+          </div>
+        )}
+        {neverOpen && (
+          <NeverListEditor rules={neverRules} onChanged={onNeverChanged} />
+        )}
+  </>)
+
+  // The views of the open tab. On a phone, a row of pills under the tabs;
+  // on desktop they sit in the header row beside the tabs, as the design
+  // has them, which gives the page back a whole row.
+  const viewSwitch = (
+      <div className={isMobile ? undefined : 'views-inline'}
+           style={isMobile ? { display: 'flex', flexWrap: 'wrap', gap: 6, margin: '10px 0 1rem' } : undefined}>
         {(TABS.find((t) => t.views.includes(view)) ?? TABS[0]).views.map((v) => (
           <button
             key={v}
@@ -1075,6 +1372,47 @@ export default function App() {
           </button>
         ))}
       </div>
+  )
+
+  return (
+    <div>
+      <StatusBar onQuiet={refreshAll} onStatus={onStatus} />
+      <div style={{ padding: isMobile ? '0.75rem' : '1.5rem 2rem',
+                    maxWidth: 1500, margin: '0 auto' }}>
+      <div style={isMobile ? undefined : { display: 'flex', alignItems: 'flex-end', gap: 28,
+                                           borderBottom: '1px solid var(--border)' }}>
+      <h1 className="wordmark"
+          style={{ fontSize: isMobile ? 22 : 28, margin: isMobile ? '0 0 2px' : '0 0 8px',
+                   display: 'flex', alignItems: 'baseline', gap: 10 }}>
+        AuctionScout
+      </h1>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4,
+                    borderBottom: isMobile ? '1px solid var(--border)' : 'none' }}>
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            className={`tab${t.views.includes(view) ? ' active' : ''}`}
+            onClick={() => setView(lastViewIn.current[t.key])}
+            style={isMobile ? { fontSize: 15, padding: '10px 12px' } : undefined}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {!isMobile && viewSwitch}
+      </div>
+      {/* Every in-flight action shows here — several can run at once, since
+          starting one no longer blocks another. */}
+      {Object.keys(busy).length > 0 && (
+        <div style={{ fontSize: 13, color: 'var(--muted)', margin: '8px 0 0',
+                      display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {Object.entries(busy).map(([key, label]) => (
+            <span key={key}><span className="spinner" /> {label}</span>
+          ))}
+        </div>
+      )}
+      {isMobile && viewSwitch}
 
       {(view === 'auctions' || view === 'saved') && (
       <section style={{ marginBottom: '1.5rem' }}>
@@ -1491,119 +1829,6 @@ export default function App() {
         {/* Row 1: scope (auctions + category) on the left, bulk actions on
             the right — one wrapping row so the controls stop eating the
             viewport before any results show. */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-start' }}>
-          <details className="picker" style={{ position: 'relative', maxWidth: isMobile ? '100%' : 440 }}>
-            <summary title="Tick one or more imported auctions to see just their items">
-              {selectedAuctions.length
-                ? `${selectedAuctions.length} auction${selectedAuctions.length === 1 ? '' : 's'} selected ▾`
-                : `All auctions (${Object.keys(importedRows).length} imported) ▾`}
-            </summary>
-            <div className="panel">
-              {/* Ticking them one at a time was the longest unbroken run in
-                  the usage log - 19 checkboxes without another action
-                  between them. Selecting every auction is NOT the same as
-                  selecting none: the per-auction buttons beside this panel,
-                  "Import N missing" among them, only appear for auctions
-                  that are ticked. */}
-              <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
-                <button onClick={() => setSelectedAuctions(pickerRows.map((a) => a.id))}
-                        disabled={selectedAuctions.length === pickerRows.length
-                                  || !pickerRows.length}
-                        data-track="Select all auctions"
-                        title="Tick every imported auction — the per-auction buttons, including any unfinished imports, then show up for all of them"
-                        style={{ flex: 1, padding: 6, fontSize: 13 }}>
-                  Select all {pickerRows.length}
-                </button>
-                <button onClick={() => setSelectedAuctions([])}
-                        disabled={!selectedAuctions.length}
-                        data-track="Show all auctions (clear selection)"
-                        title="Untick everything and go back to items from every auction"
-                        style={{ flex: 1, padding: 6, fontSize: 13 }}>
-                  Show all auctions
-                </button>
-              </div>
-              {pickerRows
-                .map((a) => (
-                  <label key={a.id}
-                         style={{ display: 'flex', gap: 6, alignItems: 'flex-start',
-                                  padding: '6px 4px', fontSize: 13, cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      checked={selectedAuctions.includes(a.id)}
-                      onChange={() => toggleAuctionSelected(a.id)}
-                      style={{ marginTop: 2 }}
-                      data-track="Select this auction"
-                    />
-                    <span style={{ lineHeight: 1.3 }}>
-                      {a.name}
-                      <div style={{ color: 'var(--muted)', fontSize: 12 }}>
-                        {[a.city, a.state].filter(Boolean).join(', ') || '—'}
-                        {a.drive_minutes != null ? ` · ${formatDrive(a.drive_minutes)}` : ''}
-                        {a.lot_count != null ? ` · ${a.lots_imported} of ${a.lot_count} imported` : ''}
-                        {a.gold_count ? ` · ${a.gold_count} gold` : ''}
-                      </div>
-                    </span>
-                  </label>
-                ))}
-            </div>
-          </details>
-          {/* A selected auction with fewer lots in the DB than on HiBid gets
-              a one-click "finish the import" — the usual arrival here is the
-              View button or a lot's auction tag, where the gap is invisible. */}
-          {selectedAuctions
-            .map((id) => importedRows[id])
-            .filter((a) => a && a.lot_count != null && a.lots_imported < a.lot_count
-                           && !(a.closing_date && parseUtc(a.closing_date) < new Date()))
-            .map((a) => (
-              <button key={`partial-${a.id}`}
-                      onClick={() => handleImport(a.id, -1, '')}
-                      title={`"${a.name}" has ${a.lot_count} lots on HiBid but only ${a.lots_imported} in the database — import the rest (free, no AI calls)`}
-                      style={{ padding: 8, fontSize: 14 }}>
-                Import {a.lot_count - a.lots_imported} missing
-                {selectedAuctions.length > 1 ? ` · ${a.name.length > 22 ? `${a.name.slice(0, 22)}…` : a.name}` : ''}
-              </button>
-            ))}
-          <select
-            value={categoryFilter}
-            onChange={(ev) => setCategoryFilter(ev.target.value)}
-            title="Show only items in one HiBid category — across every auction, or just the selected ones"
-            style={{ padding: 8, fontSize: 14, maxWidth: isMobile ? '100%' : 320 }}
-          >
-            <option value="">All categories</option>
-            {lotCategories.map((c) => (
-              <option key={c.category} value={c.category}>{c.category} ({c.lots})</option>
-            ))}
-          </select>
-          {/* The app-wide actions, behind one door: the one green button on
-              the page is the table's own "Price N unpriced lots", which prices
-              exactly what the filters show. These reach past the filters. */}
-          <details className="picker" style={{ position: 'relative', marginLeft: isMobile ? 0 : 'auto' }}>
-            <summary>More actions ▾</summary>
-            <div className="panel" style={{ display: 'flex', flexDirection: 'column', gap: 6,
-                                            left: isMobile ? 0 : 'auto', right: isMobile ? 'auto' : 0 }}>
-            <button style={{ textAlign: 'left' }}
-                    onClick={runBusy('bid-refresh', 'Starting the bid refresh…', handleRefreshBids)}
-                    disabled={!!busy['bid-refresh']}
-                    title="Re-pull current bids from HiBid for every imported open auction and recompute ROI. Free — progress shows in the top bar.">
-              Refresh bids
-            </button>
-            {!pricedOnly && (<>
-            <button style={{ textAlign: 'left' }}
-                    onClick={runBusy('comps-all', 'Counting unpriced items…', handleCompsOnly)}
-                    disabled={!!busy['comps-all']}
-                    title="The default way to price: for every unpriced item in view (the ticked auctions and the category dropdown), look up sold comps on its auction title as-is. No AI cost - about one SoldComps request per title (asks first, shows the count)">
-              {categoryFilter ? `Price all in ${categoryFilter} with comps (no AI)` : 'Price all with comps (no AI)'}
-            </button>
-            <button style={{ textAlign: 'left' }}
-                    onClick={runBusy('inspect-no-value', 'Counting items with no value…', handleInspectNoValue)}
-                    disabled={!!busy['inspect-no-value']}
-                    title="For the items comps couldn't price: AI reads each photo, identifies what is in it and prices it (asks first, shows cost)">
-              AI-price what comps missed
-            </button>
-            </>)}
-            </div>
-          </details>
-        </div>
 
         {/* Row 2: the two lenses used every session, and one door to
             everything else. The usage log decided the split: "Gold mines
@@ -1612,223 +1837,19 @@ export default function App() {
             still work exactly as before; they just stop taking screen space.
             Visible label text is unchanged on every control, because the
             usage tracker names checkboxes by it. */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center',
-                      columnGap: 14, rowGap: 6, fontSize: 13 }}>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
-            {/* data-track names this explicitly because the visible label
-                carries a count, and the tracker reads the label text. */}
-            <input
-              type="checkbox"
-              checked={goldOnly}
-              onChange={(ev) => setGoldOnly(ev.target.checked)}
-              data-track="Gold mines only"
-            /> Gold mines only
-            <span style={{ color: 'var(--muted)' }}>
-              ({goldCount.toLocaleString()} of {lotsBeforeGold.length.toLocaleString()})
-            </span>
-          </label>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
-            <input
-              type="checkbox"
-              checked={filters.boloOnly}
-              onChange={(ev) => setFilters((f) => ({ ...f, boloOnly: ev.target.checked }))}
-            /> BOLO only
-          </label>
-          <button onClick={() => setFiltersOpen((v) => !v)}
-                  aria-expanded={filtersOpen}
-                  data-track="Filters panel"
-                  title="Every hide rule, the gold-mine ROI target, the never list, and clean-up"
-                  style={{ fontSize: 13, padding: '4px 10px' }}>
-            More filters{activeRuleCount ? ` · ${activeRuleCount} on` : ''} {filtersOpen ? '▴' : '▾'}
-          </button>
-          {hiddenCount > 0 && (
-            <span style={{ color: 'var(--muted)', whiteSpace: 'nowrap' }}
-                  title="Items the rules under More filters are keeping out of view">
-              {hiddenCount.toLocaleString()} hidden by filters
-            </span>
-          )}
+
+        {lots.length === 0 && (<>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+          {invScope}{invLenses}{invActions}
         </div>
-
-        {filtersOpen && (
-          <div style={{ marginTop: 8, padding: 12, borderRadius: 8,
-                        border: '1px solid var(--border, #555)',
-                        display: 'grid', gap: 14, fontSize: 13,
-                        gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(240px, 1fr))' }}>
-
-            <fieldset style={panelGroup}>
-              <legend style={panelLegend}>Hide from view</legend>
-              <label style={panelRow}
-                     title="Hide items priced under the cutoff when the value is trustworthy — 3+ comps agree, or the AI identified the item with strong confidence">
-                <input
-                  type="checkbox"
-                  checked={hideLowValue}
-                  onChange={(ev) => setHideLowValue(ev.target.checked)}
-                /> Hide low-value (&lt; $
-                <input
-                  type="number"
-                  value={lowValueCutoff}
-                  onChange={(ev) => setLowValueCutoff(Number(ev.target.value) || 0)}
-                  style={{ width: 44 }}
-                />)
-              </label>
-              <label style={panelRow}
-                     title="The bid has passed what this lot could be resold for, after fees and shipping - the red ROI. Only lots priced from sold comps, a retail price or an audit of those are hidden, never one priced by guess.">
-                <input
-                  type="checkbox"
-                  checked={hideOverMax}
-                  onChange={(ev) => setHideOverMax(ev.target.checked)}
-                  data-track="Hide over max bid"
-                /> Hide over max bid
-                <span style={{ color: 'var(--muted)' }}>({overMaxCount.toLocaleString()})</span>
-              </label>
-              <label style={panelRow}
-                     title="Saws, sanders, compressors, mowers and the like - anything whose worth depends on a motor running, which a photo cannot show and you cannot test before bidding. Hand tools are not affected.">
-                <input
-                  type="checkbox"
-                  checked={hidePowered}
-                  onChange={(ev) => setHidePowered(ev.target.checked)}
-                  data-track="Hide power tools"
-                /> Hide power tools
-                <span style={{ color: 'var(--muted)' }}>({poweredCount.toLocaleString()})</span>
-              </label>
-              <span style={panelRow}>
-                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                       title="Kinds of thing you never want to see at all - the opposite of the BOLO list">
-                  <input
-                    type="checkbox"
-                    checked={hideNever}
-                    onChange={(ev) => setHideNever(ev.target.checked)}
-                    data-track="Hide never list"
-                  /> Hide never-buy
-                  <span style={{ color: 'var(--muted)' }}>({neverCount.toLocaleString()})</span>
-                </label>
-                <button onClick={() => setNeverOpen((v) => !v)}
-                        data-track="Edit never list"
-                        style={{ fontSize: 12, padding: '1px 6px' }}>
-                  {neverOpen ? 'Done' : 'Edit list'}
-                </button>
-              </span>
-              <label style={panelRow}>
-                <input
-                  type="checkbox"
-                  checked={hideHardShip}
-                  onChange={(ev) => setHideHardShip(ev.target.checked)}
-                /> Hide HARD ship
-              </label>
-              <label style={panelRow}
-                     title="Lots from a Canadian house that has said it won't ship into the US — winnable, never receivable">
-                <input
-                  type="checkbox"
-                  checked={hideNoUsShip}
-                  onChange={(ev) => setHideNoUsShip(ev.target.checked)}
-                /> Hide no US shipping
-              </label>
-              <label style={panelRow}>
-                <input
-                  type="checkbox"
-                  checked={hideClosed}
-                  onChange={(ev) => setHideClosed(ev.target.checked)}
-                /> Hide closed
-              </label>
-              <label style={{ ...panelRow, opacity: driveFrom ? 1 : 0.6 }}
-                     title={driveFrom
-                       ? `Pickup auctions more than this many minutes' drive from ${driveFrom.label || driveFrom.address}, one way. Auctions that ship are never hidden by this, and one with no drive time yet is kept.`
-                       : 'Set where you drive from first: Inventory, By auction view, "Set where you drive from".'}>
-                <input
-                  type="checkbox"
-                  checked={hideFar}
-                  disabled={!driveFrom}
-                  onChange={(ev) => setHideFar(ev.target.checked)}
-                  data-track="Hide far auctions"
-                /> Hide auctions more than
-                <input
-                  type="number"
-                  min="5"
-                  step="5"
-                  value={maxDriveMinutes}
-                  disabled={!driveFrom}
-                  aria-label="Longest drive to show, in minutes"
-                  onChange={(ev) => setMaxDriveMinutes(Number(ev.target.value) || 0)}
-                  style={{ width: 48 }}
-                /> min away
-                <span style={{ color: 'var(--muted)' }}>
-                  {driveFrom
-                    ? `(${tooFarIds.size} ${tooFarIds.size === 1 ? 'auction' : 'auctions'})`
-                    : '(set your address first)'}
-                </span>
-              </label>
-            </fieldset>
-
-            <fieldset style={panelGroup}>
-              <legend style={panelLegend}>Only show</legend>
-              <label style={panelRow}
-                     title="Lots you've flagged as having wrong comps — a worklist for fixing the algorithm">
-                <input
-                  type="checkbox"
-                  checked={filters.flaggedOnly}
-                  onChange={(ev) => setFilters((f) => ({ ...f, flaggedOnly: ev.target.checked }))}
-                /> Flagged only
-              </label>
-              <label style={panelRow}
-                     title="Bulk media lots - CDs, DVDs, VHS, records, books - priced by the piece. The count is read from the seller's own title, so a lot that never says how many is not shown here at all.">
-                <input
-                  type="checkbox"
-                  checked={cheapMediaOnly}
-                  onChange={(ev) => setCheapMediaOnly(ev.target.checked)}
-                  data-track="Cheap media lots only"
-                /> Media under $
-                <input type="number" min="0" step="0.05" value={maxPerItem}
-                       onChange={(ev) => setMaxPerItem(ev.target.value)}
-                       title="Highest average price per disc, tape or book"
-                       style={{ width: 58 }} />
-                <span style={{ color: 'var(--muted)' }}>/item ({cheapMediaCount.toLocaleString()})</span>
-              </label>
-              <label style={panelRow}
-                     title="Lots you hid with the hide button — check to see and unhide them">
-                <input
-                  type="checkbox"
-                  checked={showHiddenLots}
-                  onChange={(ev) => setShowHiddenLots(ev.target.checked)}
-                  data-track="Show hidden lots"
-                /> Show hidden ({lots.filter((l) => l.hidden).length})
-              </label>
-            </fieldset>
-
-            <fieldset style={panelGroup}>
-              <legend style={panelLegend}>Gold mine threshold</legend>
-              <span style={panelRow}
-                    title="An item is a GOLD MINE when its current bid still clears this return after all fees. Saving re-grades every item for free.">
-                at
-                <input
-                  type="number"
-                  value={targetRoi}
-                  onChange={(ev) => setTargetRoi(ev.target.value)}
-                  style={{ width: 58 }}
-                />% ROI
-                <button style={{ fontSize: 12, padding: '3px 9px' }} onClick={handleSaveRoi}>Apply</button>
-              </span>
-              <span style={{ ...panelLegend, marginTop: 14 }}>Clean up</span>
-              {/* In red beside the most-used button, a permanent delete was
-                  one slip away. It asks first either way, but it belongs
-                  down here. */}
-              <button className="danger"
-                      onClick={runBusy('flush', 'Counting closed items…', handleFlushClosed)}
-                      disabled={!!busy.flush}
-                      title="Permanently delete all items whose auction has closed (asks first)"
-                      style={{ alignSelf: 'flex-start', fontSize: 13 }}>
-                Flush closed items
-              </button>
-            </fieldset>
-          </div>
-        )}
-        {neverOpen && (
-          <NeverListEditor rules={neverRules} onChanged={onNeverChanged} />
-        )}
+        {invPanel}
+        </>)}
 
       </section>
 
       {/* One quiet line, not a banner: what's in view and how to widen it.
           "Back to auctions" is gone — the Auctions tab is right there. */}
+      {(selectedAuctions.length > 0 || lotTotal > lots.length || lots.length === 0) && (
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
                     fontSize: 13, color: 'var(--muted)', margin: '2px 0 8px' }}>
         {selectedAuctions.length ? (
@@ -1859,6 +1880,7 @@ export default function App() {
           </span>
         )}
       </div>
+      )}
       {lots.length === 0 ? (
         lotsLoadState === 'loading' ? (
           <p style={{ color: 'var(--muted)' }}><span className="spinner" /> Loading your items…</p>
@@ -1897,6 +1919,9 @@ export default function App() {
         )
       ) : (
         <LotTable lots={visibleLots} onLotUpdated={handleLotUpdated} onRefresh={loadLots}
+                  toolbar={<>{invScope}{invLenses}</>}
+                  toolbarEnd={invActions}
+                  panel={invPanel}
                   auctions={importedRows}
                   driveFrom={driveFrom}
                   driveAvailable={driveAvailable}

@@ -665,3 +665,48 @@ tr.row-addon td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 .d-card-tags { display: flex; flex-wrap: wrap; gap: 6px; }
 .d-card-tags:empty { display: none; }
 .d-card-actions { display: flex; align-items: center; gap: 6px; }
+
+/* ===================== the one Inventory toolbar ===================== */
+
+.inv-toolbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  margin: 0 0 12px; font-size: 13.5px;
+}
+.inv-toolbar > * { flex-shrink: 0; }
+.inv-spacer { flex: 1 1 0; min-width: 0; }
+.inv-note { color: var(--muted); white-space: nowrap; }
+/* Controls in the row share one height, whatever component made them. */
+.inv-toolbar select,
+.inv-toolbar > button,
+.inv-toolbar .picker > summary,
+.inv-toolbar .segmented button { height: 34px; box-sizing: border-box; }
+.inv-toolbar select { padding: 0 8px !important; font-size: 13.5px !important; max-width: 220px; }
+.inv-toolbar .picker > summary { display: inline-flex; align-items: center; padding: 0 12px; }
+.inv-toolbar label { font-size: 13.5px; }
+.inv-search {
+  display: flex; align-items: center; gap: 8px; width: 200px; height: 34px;
+  padding: 0 10px; box-sizing: border-box; color: var(--muted);
+  background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius);
+}
+.inv-search:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+.inv-search input {
+  border: none; background: transparent; padding: 0; flex: 1; min-width: 0;
+  font-size: 13.5px; outline: none; color: var(--text);
+}
+
+/* The open tab's views, beside the tabs in the header row (desktop). */
+.views-inline { display: flex; align-self: flex-end; gap: 2px; margin-left: 4px;
+  padding-left: 14px; border-left: 1px solid var(--border); margin-bottom: 6px; }
+.views-inline .subtab {
+  border: none; border-radius: 0; background: none; padding: 6px 10px; font-size: 13.5px;
+  border-bottom: 2px solid transparent; color: var(--muted); font-weight: 400;
+}
+.views-inline .subtab.active { color: var(--text); font-weight: 600; border-bottom-color: var(--text); background: none; }
+.views-inline .subtab:hover:not(:disabled) { background: none; color: var(--text); }
+
+/* The evidence line that opens the comps: reads as text, not a widget. */
+details.peek > summary { list-style: none; text-decoration: underline dotted; text-underline-offset: 2px; }
+details.peek > summary::-webkit-details-marker { display: none; }
+
+.gold-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.gold-summary .addon-bar { margin-left: auto; font-size: 13px; color: var(--muted); white-space: nowrap; }
