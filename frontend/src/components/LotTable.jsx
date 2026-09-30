@@ -718,6 +718,13 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
   const unpricedShown = sorted
     .filter((l) => l.enrichment?.est_resale == null && l.enrichment?.status !== 'queued')
   const [aiMin, setAiMin] = useState(50)
+  // Priced, not yet AI-checked, not queued: what the threshold below could
+  // reach at ANY setting. Deciding whether to show the control at all off
+  // this, rather than off aiTargets, is what keeps the threshold input
+  // reachable when the current setting happens to match nothing.
+  const aiReachable = sorted
+    .filter((l) => !aiDone(l.enrichment) && l.enrichment?.status !== 'queued'
+                   && l.enrichment?.est_resale != null)
   const aiTargets = sorted
     .filter((l) => !aiDone(l.enrichment) && l.enrichment?.status !== 'queued'
                    && l.enrichment?.est_resale != null
@@ -886,12 +893,20 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     bulkEach(selectedInView.map((l) => l.lot_id), (id) => setWatch(id, watched))
 
   const smallBtn = { fontSize: 13, padding: '4px 9px' }
-  const aiCheck = (
+  // A button reading "AI check 0 worth" is a control that cannot do
+  // anything, sitting where the eye goes. Nothing left to check at all: no
+  // control. Something left, but not at this threshold: the input stays, so
+  // the threshold can be lowered to reach it, and the dead button goes.
+  const aiCheck = aiReachable.length > 0 && (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13 }}>
-      <button onClick={handleEnrichMatching} disabled={!aiTargets.length || queuing}
-              title="AI reads the photo and listing for condition and a closer identification, then prices again. Only lots already priced at or above the amount, most valuable first (asks first, shows cost)">
-        AI check {aiTargets.length.toLocaleString()} worth
-      </button>
+      {aiTargets.length > 0 ? (
+        <button onClick={handleEnrichMatching} disabled={queuing}
+                title="AI reads the photo and listing for condition and a closer identification, then prices again. Only lots already priced at or above the amount, most valuable first (asks first, shows cost)">
+          AI check {aiTargets.length.toLocaleString()} worth
+        </button>
+      ) : (
+        <span style={{ color: 'var(--muted)' }}>Nothing to AI check at</span>
+      )}
       $<input type="number" min="0" value={aiMin}
               onChange={(ev) => setAiMin(ev.target.value)}
               title="Only lots priced at or above this"
@@ -1049,13 +1064,15 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
               Clear {activeFilterCount} filter{activeFilterCount === 1 ? '' : 's'}
             </button>
           )}
-          <button className="primary" onClick={handleCompsMatching}
-                  disabled={!unpricedShown.length || queuing}
-                  title="The default: sold comps for every unpriced lot matching the filters, on each lot's own title. No AI cost."
-                  style={{ flex: '1 1 100%', padding: 10, fontSize: 15 }}>
-            {queuing ? <><span className="spinner" />Queuing…</>
-                     : `Price ${unpricedShown.length.toLocaleString()} with comps (no AI)`}
-          </button>
+          {(unpricedShown.length > 0 || queuing) && (
+            <button className="primary" onClick={handleCompsMatching}
+                    disabled={queuing}
+                    title="The default: sold comps for every unpriced lot matching the filters, on each lot's own title. No AI cost."
+                    style={{ flex: '1 1 100%', padding: 10, fontSize: 15 }}>
+              {queuing ? <><span className="spinner" />Queuing…</>
+                       : `Price ${unpricedShown.length.toLocaleString()} with comps (no AI)`}
+            </button>
+          )}
           {aiCheck}
           {!selectedInView.length && sorted.length > 0 && (
             <button style={{ flex: '1 1 100%', padding: 6, fontSize: 13 }}
@@ -1225,16 +1242,21 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
 
   return (
     <>
-    <div style={{ marginBottom: '0.5rem' }}>
-      <button className="primary" onClick={handleCompsMatching}
-              disabled={!unpricedShown.length || queuing}
-              title="The default: sold comps for every unpriced lot matching the filters, on each lot's own title. No AI cost.">
-        {queuing ? <><span className="spinner" />Queuing…</>
-                 : `Price ${unpricedShown.length.toLocaleString()} with comps (no AI)`}
-      </button>
-      <span style={{ marginLeft: 8 }}>{aiCheck}</span>
-      {anyQueued && <span style={{ marginLeft: '0.75rem' }}><span className="spinner" />{lots.filter((l) => l.enrichment?.status === 'queued').length} lots in the queue… updates when they finish</span>}
-    </div>
+    {(unpricedShown.length > 0 || queuing || aiCheck || anyQueued) && (
+      <div style={{ marginBottom: '0.5rem', display: 'flex', flexWrap: 'wrap',
+                    alignItems: 'center', gap: 8 }}>
+        {(unpricedShown.length > 0 || queuing) && (
+          <button className="primary" onClick={handleCompsMatching}
+                  disabled={queuing}
+                  title="The default: sold comps for every unpriced lot matching the filters, on each lot's own title. No AI cost.">
+            {queuing ? <><span className="spinner" />Queuing…</>
+                     : `Price ${unpricedShown.length.toLocaleString()} with comps (no AI)`}
+          </button>
+        )}
+        {aiCheck}
+        {anyQueued && <span><span className="spinner" />{lots.filter((l) => l.enrichment?.status === 'queued').length} lots in the queue… updates when they finish</span>}
+      </div>
+    )}
     {likeBar}
     {bulkBar}
     {/* DataTables' top bar: page length left, the one search box right. */}

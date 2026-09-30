@@ -15,6 +15,15 @@ import StatusBar from './components/StatusBar'
 import useMediaQuery from './useMediaQuery'
 import NeverListEditor from './components/NeverListEditor'
 
+// The Filters panel's three groups. Module-level so they are not rebuilt
+// on every render of a component that re-renders on every bid.
+const panelGroup = { border: 0, margin: 0, padding: 0, minWidth: 0,
+                     display: 'flex', flexDirection: 'column', gap: 6 }
+const panelLegend = { padding: 0, marginBottom: 2, fontSize: 11,
+                      textTransform: 'uppercase', letterSpacing: '0.06em',
+                      color: 'var(--muted)' }
+const panelRow = { display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }
+
 export default function App() {
   const isMobile = useMediaQuery('(max-width: 768px)')
   // Two jobs, two screens: finding auctions vs working through what you've
@@ -126,6 +135,9 @@ export default function App() {
   const [maxPerItem, setMaxPerItem] = useState('0.40')
   const [neverRules, setNeverRules] = useState([])
   const [neverOpen, setNeverOpen] = useState(false)
+  // The Filters panel. Closed by default: its contents are set once and
+  // then looked past, which is the reason they moved in there.
+  const [filtersOpen, setFiltersOpen] = useState(false)
   // Every in-flight action (a scan, a flush, a "how many?" count-before-
   // confirm) gets its OWN key here, so one running action never disables
   // an unrelated button — clicking "Import" while a scan is still going,
@@ -969,6 +981,12 @@ export default function App() {
     () => (goldOnly ? lotsBeforeGold.filter(isGoldMine) : lotsBeforeGold),
     [lotsBeforeGold, goldOnly])
   const hiddenCount = lots.length - lotsBeforeGold.length
+  // Rules narrowing the view right now, for the Filters button's label.
+  // Show-hidden is left out: switching it on shows MORE, not less.
+  const activeRuleCount = [hideLowValue, hideOverMax, hidePowered, hideNever,
+                           hideHardShip, hideNoUsShip, hideClosed,
+                           filters.flaggedOnly, cheapMediaOnly].filter(Boolean).length
+
 
   return (
     <div style={{ fontFamily: 'system-ui' }}>
@@ -1537,32 +1555,21 @@ export default function App() {
               AI-price what comps missed
             </button>
             </>)}
-            <button className="danger"
-                    style={isMobile ? { flex: '1 1 45%', padding: 8 } : undefined}
-                    onClick={runBusy('flush', 'Counting closed items…', handleFlushClosed)}
-                    disabled={!!busy.flush}
-                    title="Permanently delete all items whose auction has closed (asks first)">
-              Flush closed items
-            </button>
           </div>
         </div>
 
-        {/* Row 2: filters — inline-flex per label so a checkbox never wraps
-            away from its own text, consistent gaps instead of ad-hoc margins */}
+        {/* Row 2: the two lenses used every session, and one door to
+            everything else. The usage log decided the split: "Gold mines
+            only" was toggled 56 times in five days, the seven hide rules
+            between 0 and 16 times each - set once and looked past. They all
+            still work exactly as before; they just stop taking screen space.
+            Visible label text is unchanged on every control, because the
+            usage tracker names checkboxes by it. */}
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center',
-                      columnGap: 14, rowGap: 4, fontSize: 13 }}>
+                      columnGap: 14, rowGap: 6, fontSize: 13 }}>
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
-            <input
-              type="checkbox"
-              checked={filters.boloOnly}
-              onChange={(ev) => setFilters((f) => ({ ...f, boloOnly: ev.target.checked }))}
-            /> BOLO only
-          </label>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
-            {/* data-track names this explicitly because the visible label now
-                carries a count, and the tracker reads the label text: without
-                it the event name became "Gold mines only (N of N)" and split
-                the metric away from its own 13 events of history. */}
+            {/* data-track names this explicitly because the visible label
+                carries a count, and the tracker reads the label text. */}
             <input
               type="checkbox"
               checked={goldOnly}
@@ -1573,127 +1580,173 @@ export default function App() {
               ({goldCount.toLocaleString()} of {lotsBeforeGold.length.toLocaleString()})
             </span>
           </label>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
-                 title="Lots you've flagged as having wrong comps — a worklist for fixing the algorithm">
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
             <input
               type="checkbox"
-              checked={filters.flaggedOnly}
-              onChange={(ev) => setFilters((f) => ({ ...f, flaggedOnly: ev.target.checked }))}
-            /> Flagged only
+              checked={filters.boloOnly}
+              onChange={(ev) => setFilters((f) => ({ ...f, boloOnly: ev.target.checked }))}
+            /> BOLO only
           </label>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap',
-                         color: 'var(--muted)' }}
-                title="An item is a GOLD MINE when its current bid still clears this return after all fees. Saving re-grades every item for free.">
-            at
-            <input
-              type="number"
-              value={targetRoi}
-              onChange={(ev) => setTargetRoi(ev.target.value)}
-              style={{ width: 58 }}
-            />% ROI
-            <button style={{ fontSize: 12, padding: '3px 9px' }} onClick={handleSaveRoi}>Apply</button>
-          </span>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
-                 title="Hide items priced under the cutoff when the value is trustworthy — 3+ comps agree, or the AI identified the item with strong confidence">
-            <input
-              type="checkbox"
-              checked={hideLowValue}
-              onChange={(ev) => setHideLowValue(ev.target.checked)}
-            /> Hide low-value (&lt; $
-            <input
-              type="number"
-              value={lowValueCutoff}
-              onChange={(ev) => setLowValueCutoff(Number(ev.target.value) || 0)}
-              style={{ width: 44 }}
-            />)
-          </label>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
-                 title="The bid has passed what this lot could be resold for, after fees and shipping - the red ROI. Only lots priced from sold comps, a retail price or an audit of those are hidden, never one priced by guess.">
-            <input
-              type="checkbox"
-              checked={hideOverMax}
-              onChange={(ev) => setHideOverMax(ev.target.checked)}
-              data-track="Hide over max bid"
-            /> Hide over max bid
-            <span style={{ color: 'var(--muted)' }}>({overMaxCount.toLocaleString()})</span>
-          </label>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
-                 title="Saws, sanders, compressors, mowers and the like - anything whose worth depends on a motor running, which a photo cannot show and you cannot test before bidding. Hand tools are not affected.">
-            <input
-              type="checkbox"
-              checked={hidePowered}
-              onChange={(ev) => setHidePowered(ev.target.checked)}
-              data-track="Hide power tools"
-            /> Hide power tools
-            <span style={{ color: 'var(--muted)' }}>({poweredCount.toLocaleString()})</span>
-          </label>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
-                 title="Bulk media lots - CDs, DVDs, VHS, records, books - priced by the piece. The count is read from the seller's own title, so a lot that never says how many is not shown here at all.">
-            <input
-              type="checkbox"
-              checked={cheapMediaOnly}
-              onChange={(ev) => setCheapMediaOnly(ev.target.checked)}
-              data-track="Cheap media lots only"
-            /> Media under $
-            <input type="number" min="0" step="0.05" value={maxPerItem}
-                   onChange={(ev) => setMaxPerItem(ev.target.value)}
-                   title="Highest average price per disc, tape or book"
-                   style={{ width: 62 }} />
-            <span style={{ color: 'var(--muted)' }}>/item ({cheapMediaCount.toLocaleString()})</span>
-          </label>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
-                 title="Kinds of thing you never want to see at all - the opposite of the BOLO list. Edit the categories yourself with the button beside this.">
-            <input
-              type="checkbox"
-              checked={hideNever}
-              onChange={(ev) => setHideNever(ev.target.checked)}
-              data-track="Hide never list"
-            /> Hide never-buy
-            <span style={{ color: 'var(--muted)' }}>({neverCount.toLocaleString()})</span>
-          </label>
-          <button onClick={() => setNeverOpen((v) => !v)}
-                  data-track="Edit never list"
-                  style={{ fontSize: 12, padding: '1px 6px' }}>
-            {neverOpen ? 'Done editing' : 'Edit never list'}
+          <button onClick={() => setFiltersOpen((v) => !v)}
+                  aria-expanded={filtersOpen}
+                  data-track="Filters panel"
+                  title="Every hide rule, the gold-mine ROI target, the never list, and clean-up"
+                  style={{ fontSize: 13, padding: '4px 10px' }}>
+            More filters{activeRuleCount ? ` · ${activeRuleCount} on` : ''} {filtersOpen ? '▴' : '▾'}
           </button>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
-            <input
-              type="checkbox"
-              checked={hideHardShip}
-              onChange={(ev) => setHideHardShip(ev.target.checked)}
-            /> Hide HARD ship
-          </label>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
-                 title="Lots from a Canadian house that has said it won't ship into the US — winnable, never receivable">
-            <input
-              type="checkbox"
-              checked={hideNoUsShip}
-              onChange={(ev) => setHideNoUsShip(ev.target.checked)}
-            /> Hide no US shipping
-          </label>
-
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
-            <input
-              type="checkbox"
-              checked={hideClosed}
-              onChange={(ev) => setHideClosed(ev.target.checked)}
-            /> Hide closed
-          </label>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
-                 title="Lots you hid with the hide button — check to see and unhide them">
-            <input
-              type="checkbox"
-              checked={showHiddenLots}
-              onChange={(ev) => setShowHiddenLots(ev.target.checked)}
-              data-track="Show hidden lots"
-            /> Show hidden ({lots.filter((l) => l.hidden).length})
-          </label>
-          {(hideLowValue || hideHardShip || hideNoUsShip || hideClosed || !showHiddenLots || lots.some((l) => l.unreachable_pickup)) && hiddenCount > 0 && (
-            <span style={{ color: 'var(--muted)', whiteSpace: 'nowrap' }}>
-              {hiddenCount} hidden
+          {hiddenCount > 0 && (
+            <span style={{ color: 'var(--muted)', whiteSpace: 'nowrap' }}
+                  title="Items the rules under More filters are keeping out of view">
+              {hiddenCount.toLocaleString()} hidden by filters
             </span>
           )}
         </div>
+
+        {filtersOpen && (
+          <div style={{ marginTop: 8, padding: 12, borderRadius: 8,
+                        border: '1px solid var(--border, #555)',
+                        display: 'grid', gap: 14, fontSize: 13,
+                        gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(240px, 1fr))' }}>
+
+            <fieldset style={panelGroup}>
+              <legend style={panelLegend}>Hide from view</legend>
+              <label style={panelRow}
+                     title="Hide items priced under the cutoff when the value is trustworthy — 3+ comps agree, or the AI identified the item with strong confidence">
+                <input
+                  type="checkbox"
+                  checked={hideLowValue}
+                  onChange={(ev) => setHideLowValue(ev.target.checked)}
+                /> Hide low-value (&lt; $
+                <input
+                  type="number"
+                  value={lowValueCutoff}
+                  onChange={(ev) => setLowValueCutoff(Number(ev.target.value) || 0)}
+                  style={{ width: 44 }}
+                />)
+              </label>
+              <label style={panelRow}
+                     title="The bid has passed what this lot could be resold for, after fees and shipping - the red ROI. Only lots priced from sold comps, a retail price or an audit of those are hidden, never one priced by guess.">
+                <input
+                  type="checkbox"
+                  checked={hideOverMax}
+                  onChange={(ev) => setHideOverMax(ev.target.checked)}
+                  data-track="Hide over max bid"
+                /> Hide over max bid
+                <span style={{ color: 'var(--muted)' }}>({overMaxCount.toLocaleString()})</span>
+              </label>
+              <label style={panelRow}
+                     title="Saws, sanders, compressors, mowers and the like - anything whose worth depends on a motor running, which a photo cannot show and you cannot test before bidding. Hand tools are not affected.">
+                <input
+                  type="checkbox"
+                  checked={hidePowered}
+                  onChange={(ev) => setHidePowered(ev.target.checked)}
+                  data-track="Hide power tools"
+                /> Hide power tools
+                <span style={{ color: 'var(--muted)' }}>({poweredCount.toLocaleString()})</span>
+              </label>
+              <span style={panelRow}>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                       title="Kinds of thing you never want to see at all - the opposite of the BOLO list">
+                  <input
+                    type="checkbox"
+                    checked={hideNever}
+                    onChange={(ev) => setHideNever(ev.target.checked)}
+                    data-track="Hide never list"
+                  /> Hide never-buy
+                  <span style={{ color: 'var(--muted)' }}>({neverCount.toLocaleString()})</span>
+                </label>
+                <button onClick={() => setNeverOpen((v) => !v)}
+                        data-track="Edit never list"
+                        style={{ fontSize: 12, padding: '1px 6px' }}>
+                  {neverOpen ? 'Done' : 'Edit list'}
+                </button>
+              </span>
+              <label style={panelRow}>
+                <input
+                  type="checkbox"
+                  checked={hideHardShip}
+                  onChange={(ev) => setHideHardShip(ev.target.checked)}
+                /> Hide HARD ship
+              </label>
+              <label style={panelRow}
+                     title="Lots from a Canadian house that has said it won't ship into the US — winnable, never receivable">
+                <input
+                  type="checkbox"
+                  checked={hideNoUsShip}
+                  onChange={(ev) => setHideNoUsShip(ev.target.checked)}
+                /> Hide no US shipping
+              </label>
+              <label style={panelRow}>
+                <input
+                  type="checkbox"
+                  checked={hideClosed}
+                  onChange={(ev) => setHideClosed(ev.target.checked)}
+                /> Hide closed
+              </label>
+            </fieldset>
+
+            <fieldset style={panelGroup}>
+              <legend style={panelLegend}>Only show</legend>
+              <label style={panelRow}
+                     title="Lots you've flagged as having wrong comps — a worklist for fixing the algorithm">
+                <input
+                  type="checkbox"
+                  checked={filters.flaggedOnly}
+                  onChange={(ev) => setFilters((f) => ({ ...f, flaggedOnly: ev.target.checked }))}
+                /> Flagged only
+              </label>
+              <label style={panelRow}
+                     title="Bulk media lots - CDs, DVDs, VHS, records, books - priced by the piece. The count is read from the seller's own title, so a lot that never says how many is not shown here at all.">
+                <input
+                  type="checkbox"
+                  checked={cheapMediaOnly}
+                  onChange={(ev) => setCheapMediaOnly(ev.target.checked)}
+                  data-track="Cheap media lots only"
+                /> Media under $
+                <input type="number" min="0" step="0.05" value={maxPerItem}
+                       onChange={(ev) => setMaxPerItem(ev.target.value)}
+                       title="Highest average price per disc, tape or book"
+                       style={{ width: 58 }} />
+                <span style={{ color: 'var(--muted)' }}>/item ({cheapMediaCount.toLocaleString()})</span>
+              </label>
+              <label style={panelRow}
+                     title="Lots you hid with the hide button — check to see and unhide them">
+                <input
+                  type="checkbox"
+                  checked={showHiddenLots}
+                  onChange={(ev) => setShowHiddenLots(ev.target.checked)}
+                  data-track="Show hidden lots"
+                /> Show hidden ({lots.filter((l) => l.hidden).length})
+              </label>
+            </fieldset>
+
+            <fieldset style={panelGroup}>
+              <legend style={panelLegend}>Gold mine threshold</legend>
+              <span style={panelRow}
+                    title="An item is a GOLD MINE when its current bid still clears this return after all fees. Saving re-grades every item for free.">
+                at
+                <input
+                  type="number"
+                  value={targetRoi}
+                  onChange={(ev) => setTargetRoi(ev.target.value)}
+                  style={{ width: 58 }}
+                />% ROI
+                <button style={{ fontSize: 12, padding: '3px 9px' }} onClick={handleSaveRoi}>Apply</button>
+              </span>
+              <span style={{ ...panelLegend, marginTop: 14 }}>Clean up</span>
+              {/* In red beside the most-used button, a permanent delete was
+                  one slip away. It asks first either way, but it belongs
+                  down here. */}
+              <button className="danger"
+                      onClick={runBusy('flush', 'Counting closed items…', handleFlushClosed)}
+                      disabled={!!busy.flush}
+                      title="Permanently delete all items whose auction has closed (asks first)"
+                      style={{ alignSelf: 'flex-start', fontSize: 13 }}>
+                Flush closed items
+              </button>
+            </fieldset>
+          </div>
+        )}
         {neverOpen && (
           <NeverListEditor rules={neverRules} onChanged={onNeverChanged} />
         )}
