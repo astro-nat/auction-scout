@@ -51,13 +51,16 @@ export default function App() {
   useEffect(() => installTracking(document), [])
 
   const viewSynced = useRef(false)
-  // Two tabs, each holding a pair of views. Which pair is open is read off
-  // the view; the tab reopens on whichever of its views was used last.
+  // The tabs, each holding its views. Which tab is open is read off the
+  // view; a tab reopens on whichever of its views was used last. The queue
+  // is a tab of its own: it holds every job - scans and imports as much as
+  // pricing - so it belongs to neither Auctions nor Inventory.
   const TABS = [
     { key: 'auctions', label: 'Auctions', views: ['auctions', 'saved'] },
-    { key: 'inventory', label: 'Inventory', views: ['items', 'priced', 'watched', 'queue'] },
+    { key: 'inventory', label: 'Inventory', views: ['items', 'priced', 'watched'] },
+    { key: 'queue', label: 'Queue', views: ['queue'] },
   ]
-  const lastViewIn = useRef({ auctions: 'auctions', inventory: 'items' })
+  const lastViewIn = useRef({ auctions: 'auctions', inventory: 'items', queue: 'queue' })
   // How much is in the queue, for its pill. The status bar already polls
   // every second; setting the same number again doesn't re-render.
   const [queueN, setQueueN] = useState(0)
@@ -1376,7 +1379,7 @@ export default function App() {
   // The views of the open tab. On a phone, a row of pills under the tabs;
   // on desktop they sit in the header row beside the tabs, as the design
   // has them, which gives the page back a whole row.
-  const viewSwitch = (
+  const viewSwitch = (TABS.find((t) => t.views.includes(view)) ?? TABS[0]).views.length > 1 && (
       <div className={isMobile ? undefined : 'views-inline'}
            style={isMobile ? { display: 'flex', flexWrap: 'nowrap', overflowX: 'auto', gap: 6,
                                margin: '10px -12px 12px', padding: '0 12px 2px',
@@ -1423,7 +1426,7 @@ export default function App() {
             onClick={() => setView(lastViewIn.current[t.key])}
             style={isMobile ? { fontSize: 15, padding: '10px 12px' } : undefined}
           >
-            {t.label}
+            {t.key === 'queue' && queueN ? `Queue (${queueN.toLocaleString()})` : t.label}
           </button>
         ))}
       </div>
