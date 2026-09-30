@@ -17,28 +17,6 @@ HIBID_USER_AGENT = os.environ.get(
 )
 HIBID_TIMEOUT_SECONDS = float(os.environ.get("HIBID_TIMEOUT_SECONDS", "15.0"))
 
-# --- GovDeals (Liquidity Services maestro API) ---
-# These two keys are NOT secrets: they're the anonymous app keys served to
-# every visitor inside govdeals.com's public JS bundle (x-user-id -1, no
-# account). Env overrides exist so a site release that rotates them is a
-# config change, not a deploy.
-GOVDEALS_API_KEY = os.environ.get(
-    "GOVDEALS_API_KEY", "af93060f-337e-428c-87b8-c74b5837d6cd")
-GOVDEALS_SUB_KEY = os.environ.get(
-    "GOVDEALS_SUB_KEY", "cf620d1d8f904b5797507dc5fd1fdb80")
-# Buyer's premium varies by seller (12.5%-18%, shown per asset page, absent
-# from the search API). 15% is the conservative middle: overestimating cost
-# a little makes max bids safer, never riskier.
-GOVDEALS_PREMIUM_MULT = float(os.environ.get("GOVDEALS_PREMIUM_MULT", "1.15"))
-
-# --- PublicSurplus ---
-# Server-rendered site, no keys needed. Region is the state slug in its
-# URLs; the buyer's premium is ~10-12% depending on payment method, so 12%
-# errs on the safe side of every max bid.
-PUBLICSURPLUS_REGION = os.environ.get("PUBLICSURPLUS_REGION", "tx")
-PUBLICSURPLUS_PREMIUM_MULT = float(
-    os.environ.get("PUBLICSURPLUS_PREMIUM_MULT", "1.12"))
-
 # --- Vinted (fixed-price sourcing watches) ---
 # Buyer protection is ~5% + $0.70 plus sales tax; 1.08 swallows all three
 # on typical item prices, erring toward overestimating cost. Shipping is

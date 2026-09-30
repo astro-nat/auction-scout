@@ -80,8 +80,8 @@ def test_a_lot_imported_without_photos_gains_them_on_re_import(seeded):
 
 
 def test_an_import_without_photos_does_not_wipe_the_ones_on_file(seeded):
-    """PublicSurplus descriptions and photos are fetched by their own pass;
-    a later refresh that carries none must not undo it."""
+    """Photos can arrive from a pass of their own (the photo backfill); a
+    later refresh that carries none must not undo it."""
     db, a = seeded
     save_lots(db, a, [_lot(image_urls=SHOTS, image_count=3)])
     save_lots(db, a, [_lot()])                      # no image_urls key value

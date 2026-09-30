@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, scanGovDeals, importGovDeals, scanPublicSurplus, importPublicSurplus, scanVinted, importLots, importAllAuctions, importVintedSeller, flushClosed, refreshBids, reinspectNoComps, repriceUnpriced, fetchSettings, saveTargetRoi, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
+import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, scanVinted, importLots, importAllAuctions, importVintedSeller, flushClosed, refreshBids, reinspectNoComps, repriceUnpriced, fetchSettings, saveTargetRoi, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
 import { fetchNeverRules } from './api'
 import { auctionClosed } from './lib/pacing'
 import { houseRatioLabel, houseRatioTitle } from './lib/calibration'
@@ -331,33 +331,6 @@ export default function App() {
     } catch (e) { alertOnce(e.message) }
   })
 
-  const handleScanGovDeals = runBusy('scan-govdeals', 'Scanning GovDeals…', async () => {
-    try {
-      const found = await scanGovDeals({
-        zip: scan.zip || undefined,
-        // GovDeals has no "Anywhere" — pickup-only inventory outside
-        // driving range is inventory you can never collect.
-        radius_miles: scanIsAnywhere ? 100 : Number(scan.radius_miles),
-      })
-      rememberAuctions(found)
-      setAuctions(found)
-      setAuctionLimit(50)
-    } catch (e) { alertOnce(e.message) }
-  })
-
-  const handleScanPublicSurplus = runBusy('scan-publicsurplus', 'Scanning PublicSurplus…', async () => {
-    try {
-      const found = await scanPublicSurplus({
-        zip: scan.zip || undefined,
-        // Pickup-only, same as GovDeals: "Anywhere" is capped.
-        radius_miles: scanIsAnywhere ? 100 : Number(scan.radius_miles),
-      })
-      rememberAuctions(found)
-      setAuctions(found)
-      setAuctionLimit(50)
-    } catch (e) { alertOnce(e.message) }
-  })
-
   // Not built with runBusy: the label names the query, which isn't known
   // until the empty-input check below has already run.
   async function handleScanVinted() {
@@ -447,17 +420,13 @@ export default function App() {
   // and closing the tab cancelled the import mid-save.
   async function handleImport(auctionId, categoryId = scanCategoryId,
                               searchText = scanSearchText) {
-    // GovDeals / PublicSurplus import through their own endpoints:
-    // synchronous and small (one search response), lots there on the spot.
     const target = auctions.find((a) => a.id === auctionId)
     if (target?.ships_to_us === false
         && !window.confirm(`${target.name} has said it doesn't ship to the US — anything `
                            + 'won there can\'t be received. Import anyway?')) return
-    const platformImport = target?.external_id?.startsWith('gd-') ? importGovDeals
-      : target?.external_id?.startsWith('ps-') ? importPublicSurplus
-      // A Vinted card's "import" is just its scan run again: same query,
-      // fresh prices, sold items closed out.
-      : target?.external_id?.startsWith('vt-')
+    // A Vinted card's "import" is just its scan run again: same query,
+    // fresh prices, sold items closed out.
+    const platformImport = target?.external_id?.startsWith('vt-')
         ? () => scanVinted(target.name.replace(/^Vinted: /, '')).then((cards) => {
             const c = cards.find((x) => x.id === auctionId)
             return { created: 0, updated: c?.lot_count ?? 0 }
@@ -717,8 +686,8 @@ export default function App() {
     && !(hasCategoryCount(a) && a.category_lot_count === 0)
     // A house that won't ship into the US: nothing there can be received.
     && a.ships_to_us !== false
-    // GovDeals/PublicSurplus import one at a time through their own
-    // endpoints — the HiBid bulk job would silently skip them anyway.
+    // A Vinted watch refreshes through its own scan, not the HiBid bulk
+    // job, which would silently skip it anyway.
     && !a.external_id)
 
   async function handleImportAll(boloOnly = false) {
@@ -1109,18 +1078,6 @@ export default function App() {
                   style={isMobile ? { flex: '1 1 100%', padding: 10, fontSize: 15 }
                                   : { padding: '8px 18px' }}>
             Scan auctions
-          </button>
-          <button type="button" onClick={handleScanGovDeals} disabled={!!busy['scan-govdeals']}
-                  title="Search GovDeals (government surplus) near your zip — one card per selling agency"
-                  style={isMobile ? { flex: '1 1 100%', padding: 10, fontSize: 15 }
-                                  : { padding: '8px 18px' }}>
-            Scan GovDeals
-          </button>
-          <button type="button" onClick={handleScanPublicSurplus} disabled={!!busy['scan-publicsurplus']}
-                  title="Search PublicSurplus (school & city surplus) near your zip — one card for the whole area"
-                  style={isMobile ? { flex: '1 1 100%', padding: 10, fontSize: 15 }
-                                  : { padding: '8px 18px' }}>
-            Scan PublicSurplus
           </button>
           <button type="button" onClick={handleScanVinted} disabled={!!busy['scan-vinted']}
                   title="Watch a Vinted search (uses the keyword box) — newest listings graded at their asking price; rescan to refresh"

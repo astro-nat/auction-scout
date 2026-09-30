@@ -109,9 +109,9 @@ def save_lots(db: Session, auction: models.Auction, lots: list[dict], *,
             # Photos are added, never cleared. A lot already on file when the
             # photo list started being kept had no way to gain one: FRESH
             # cannot hold image_urls, because a source that does not report
-            # photos would then wipe what another pass fetched (a
-            # PublicSurplus detail is fetched by its own router). So copy
-            # them across only when this import actually carries them, which
+            # photos would then wipe what another pass fetched (the photo
+            # backfill runs separately). So copy them across only when this
+            # import actually carries them, which
             # is what lets a re-import backfill the lots imported earlier.
             for k in ("image_urls", "image_count"):
                 if data.get(k):

@@ -133,7 +133,7 @@ class AuctionOut(BaseModel):
 
     id: int
     hibid_id: Optional[int] = None
-    external_id: Optional[str] = None   # "gd-{accountId}" marks a GovDeals seller
+    external_id: Optional[str] = None   # "vt-{query}" marks a Vinted watch
     name: str
     auctioneer: Optional[str] = None
     auctioneer_id: Optional[int] = None

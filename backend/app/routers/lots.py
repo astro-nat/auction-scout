@@ -306,9 +306,9 @@ def _auctions_behind(db: Session, lot_ids: list[str]) -> dict:
     because the number the user ticked and the number that moves are not the
     same.
 
-    A lot whose sale is not a HiBid one (Vinted, GovDeals, PublicSurplus) has
-    neither a bid feed nor a terms page here, and is reported as skipped
-    rather than silently dropped.
+    A lot whose sale is not a HiBid one (a Vinted watch) has neither a bid
+    feed nor a terms page here, and is reported as skipped rather than
+    silently dropped.
     """
     rows = (db.query(models.Lot.lot_id, models.Lot.auction_id,
                      models.Auction.id, models.Auction.hibid_id,

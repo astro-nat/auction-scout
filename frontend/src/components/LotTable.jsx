@@ -837,7 +837,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
       const plan = await call(ids, { dryRun: true })
       if (!plan.auctions) {
         alert('None of the selected lots are in an open HiBid sale.\n\n'
-              + 'Vinted, GovDeals and PublicSurplus lots have no bid feed or '
+              + 'A Vinted watch has no bid feed or '
               + 'terms page here, and a sale that has already closed is left alone.')
         return
       }

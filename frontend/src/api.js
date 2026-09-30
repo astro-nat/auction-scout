@@ -262,32 +262,6 @@ export function scanAuctions(filters = {}) {
   })
 }
 
-// GovDeals: one card per government seller near the zip. Import pulls that
-// seller's open assets in as lots (and re-importing refreshes their bids).
-export function scanGovDeals(filters = {}) {
-  return request('/govdeals/scan', {
-    method: 'POST',
-    body: JSON.stringify(filters),
-  })
-}
-
-export function importGovDeals(auctionId) {
-  return request(`/govdeals/${auctionId}/import`, { method: 'POST' })
-}
-
-// PublicSurplus: one card per search area (the listing rows don't name the
-// selling agency, so the radius is the grouping). Import doubles as refresh.
-export function scanPublicSurplus(filters = {}) {
-  return request('/publicsurplus/scan', {
-    method: 'POST',
-    body: JSON.stringify(filters),
-  })
-}
-
-export function importPublicSurplus(auctionId) {
-  return request(`/publicsurplus/${auctionId}/import`, { method: 'POST' })
-}
-
 // Vinted: a fixed-price WATCH — scanning a query imports the newest
 // matching listings in the same call, and re-scanning refreshes prices
 // and closes out whatever sold.
