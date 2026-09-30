@@ -23,6 +23,16 @@ class Auction(Base):
     city = Column(String)
     state = Column(String)
     zip = Column(String)
+    address = Column(String)         # street address, as HiBid gives it
+    # Where the sale is, from the scan. HiBid sends 0,0 when it can't place
+    # an auction; drive.usable_coords screens that out.
+    geo_lat = Column(Float)
+    geo_lng = Column(Float)
+    # Minutes of driving from the saved drive-from address (services/drive),
+    # and which origin they were measured from - a changed origin or moved
+    # auction is measured again.
+    drive_minutes = Column(Float)
+    drive_from = Column(String)
     source = Column(String)          # Local Pickup | Ship
     source_url = Column(String)
     closing_date = Column(DateTime)

@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from .. import models, schemas
 from ..database import get_db
 from ..services import dismissed, favorites, hibid, jobs
-from ..services import shipping
+from ..services import drive, shipping
 from sqlalchemy import or_, and_, func
 from sqlalchemy.orm import Session
 
@@ -300,6 +300,10 @@ async def scan_auctions(payload: schemas.ScanRequest,
         row = db.query(models.Auction).filter(
             models.Auction.hibid_id == a["hibid_id"]).first()
         if row:
+            # A sale that moved is measured again from the drive-from address.
+            if (row.geo_lat, row.geo_lng) != (a.get("geo_lat"), a.get("geo_lng")):
+                row.drive_minutes = None
+                row.drive_from = None
             for k, v in a.items():
                 setattr(row, k, v)
         else:
@@ -307,6 +311,14 @@ async def scan_auctions(payload: schemas.ScanRequest,
             db.add(row)
         stored.append(row)
     db.commit()
+    # Drive times for anything not yet measured from the saved address.
+    # Off the event loop (it's a blocking HTTP call) and never fatal: a
+    # missing key or quota leaves times blank and the scan result stands.
+    try:
+        import asyncio
+        await asyncio.to_thread(drive.refresh, db)
+    except Exception as exc:  # noqa: BLE001
+        print(f"Drive times skipped: {exc}")
 
     # When scanning within a category and/or a keyword, annotate each
     # auction with how many of its lots actually match — so the UI can

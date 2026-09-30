@@ -222,10 +222,39 @@ def get_settings():
     """The tunables the UI can edit. target_roi_pct is served as a percent."""
     from ..services import financials
     from ..services import settings as settings_store
+    from ..services import drive
+    o = drive.origin()
     return {"target_roi_pct": round(financials.current_target_roi() * 100),
             "exclude_titled_vehicles": settings_store.flag(
                 "exclude_titled_vehicles",
-                settings_store.EXCLUDE_VEHICLES_DEFAULT)}
+                settings_store.EXCLUDE_VEHICLES_DEFAULT),
+            # Where drive times are measured from; None until one is saved.
+            # drive_times_available says whether the server can compute
+            # them at all (an OpenRouteService key is set).
+            "drive_from": ({"address": o["address"], "label": o["label"]} if o else None),
+            "drive_times_available": bool(drive.ORS_API_KEY)}
+
+
+@router.put("/settings/drive-from")
+def set_drive_from(payload: dict, db: Session = Depends(get_db)):
+    """Save the address drive times are measured from, and measure every
+    current auction from it. Body: {"address": "...", "label": "Home"}."""
+    from ..services import drive
+    address = str(payload.get("address") or "").strip()
+    if not address:
+        raise HTTPException(status_code=422, detail="Enter an address or a zip code.")
+    try:
+        return drive.set_origin(db, address[:200], payload.get("label"))
+    except drive.DriveError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@router.delete("/settings/drive-from")
+def clear_drive_from(db: Session = Depends(get_db)):
+    """Forget the drive-from address and every drive time measured from it."""
+    from ..services import drive
+    drive.clear_origin(db)
+    return {"cleared": True}
 
 
 @router.patch("/settings")

@@ -45,6 +45,7 @@ cp .env.example .env
 | `ANTHROPIC_API_KEY` | yes | Claude enrichment (text + vision) |
 | `EBAY_APP_ID` / `EBAY_CERT_ID` | for comps | eBay Browse API (price comps + image search) |
 | `SOLDCOMPS_API_KEY` | optional | real sold prices instead of active listings |
+| `ORS_API_KEY` | for drive times | OpenRouteService: drive minutes from your address to each auction |
 | `SOURCING_ZIP` / `SOURCING_RADIUS_MILES` | defaults exist | where to scan for auctions |
 | `TARGET_ROI_PCT` | default 500 | ROI bar a lot must clear to be a GOLD MINE |
 

@@ -562,3 +562,7 @@ tr.row-overbid td:first-child { box-shadow: inset 3px 0 0 var(--overbid-accent);
 tr.row-addon td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 .card.row-addon { border-left: 3px solid var(--accent); }
 .badge.addon { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+
+/* Drive time in an auction header: part of the trip decision, so it reads
+   at the same weight as the name, in ink rather than muted grey. */
+.group-drive { font-size: 13.5px; font-weight: 600; white-space: nowrap; }

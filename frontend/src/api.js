@@ -337,6 +337,18 @@ export function fetchSettings() {
   return request('/settings')
 }
 
+// Where drive times to each auction are measured from. Saving looks the
+// address up and measures every current auction, so it can take a moment.
+export function saveDriveFrom(address, label) {
+  return request('/settings/drive-from', {
+    method: 'PUT', body: JSON.stringify({ address, label }),
+  })
+}
+
+export function clearDriveFrom() {
+  return request('/settings/drive-from', { method: 'DELETE' })
+}
+
 export function saveTargetRoi(pct) {
   return request('/settings', { method: 'PATCH', body: JSON.stringify({ target_roi_pct: pct }) })
 }

@@ -9,6 +9,7 @@ import { allSelected, chunked, inView, selectAll, toggle } from '../lib/selectio
 import { track } from '../lib/track'
 import { offerFrom, offerLabel } from '../lib/hideLike'
 import { ADDON_FLOOR_KEY, ARRANGE_KEY, basketLabel, groupByAuction, savePref, savedAddonFloor, savedArrange } from '../lib/grouping'
+import DriveFrom, { CarIcon, formatDrive } from './DriveFrom'
 import useMediaQuery from '../useMediaQuery'
 
 // The homework behind a resale number: the comp records the pricer actually
@@ -339,7 +340,9 @@ const MOBILE_SORTS = [
 ]
 
 export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
-                                  onSelectAuction, onOpenCloset, auctions = {} }) {
+                                  onSelectAuction, onOpenCloset, auctions = {},
+                                  driveFrom = null, driveAvailable = false,
+                                  onSaveDriveFrom, onClearDriveFrom }) {
   const isMobile = useMediaQuery('(max-width: 768px)')
   const [pollingIds, setPollingIds] = useState(new Set())
   // Countdown clock — a 30s tick keeps every "closes in" cell live.
@@ -1225,6 +1228,10 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
           {' '}% ROI
         </label>
       )}
+      {arrange === 'auction' && onSaveDriveFrom && (
+        <DriveFrom driveFrom={driveFrom} available={driveAvailable}
+                   onSave={onSaveDriveFrom} onClear={onClearDriveFrom} />
+      )}
     </div>
   )
 
@@ -1252,12 +1259,20 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     return (
       <div className="group-head-inner">
         <div className="group-title">
-          <button type="button" className="link-like"
-                  onClick={() => g.auctionId != null && onSelectAuction?.(g.auctionId)}
-                  data-track="Auction group name (show its items)"
-                  title="Show only this auction's items">
-            <strong>{g.name}</strong>
-          </button>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '2px 12px' }}>
+            <button type="button" className="link-like"
+                    onClick={() => g.auctionId != null && onSelectAuction?.(g.auctionId)}
+                    data-track="Auction group name (show its items)"
+                    title="Show only this auction's items">
+              <strong>{g.name}</strong>
+            </button>
+            {g.auction?.drive_minutes != null && (
+              <span className="group-drive"
+                    title={`One way from ${driveFrom?.label || driveFrom?.address || 'your address'}, typical traffic`}>
+                <CarIcon /> {formatDrive(g.auction.drive_minutes)}
+              </span>
+            )}
+          </div>
           <span className="group-meta">{meta}</span>
         </div>
         {g.hasGold ? (

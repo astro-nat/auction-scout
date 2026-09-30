@@ -151,6 +151,8 @@ class AuctionOut(BaseModel):
     source_url: Optional[str] = None
     closing_date: Optional[datetime] = None
     buyer_premium_mult: Optional[float] = None
+    address: Optional[str] = None
+    drive_minutes: Optional[float] = None     # from the saved drive-from address
     imported_at: Optional[datetime] = None
     gold_count: int = 0                       # GOLD MINE lots found so far
     gold_profit: Optional[Decimal] = None     # summed potential profit of those lots

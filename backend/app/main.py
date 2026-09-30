@@ -155,6 +155,13 @@ _MIGRATIONS = [
     # How long each SoldComps request took on the wire, so a slower comps
     # step can be split into "the API got slower" vs "we asked it more".
     "ALTER TABLE api_replies ADD COLUMN IF NOT EXISTS duration_ms DOUBLE PRECISION",
+    # Drive time to each auction (services/drive): where it is, and minutes
+    # from the saved drive-from address.
+    "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS address VARCHAR",
+    "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS geo_lat DOUBLE PRECISION",
+    "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS geo_lng DOUBLE PRECISION",
+    "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS drive_minutes DOUBLE PRECISION",
+    "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS drive_from VARCHAR",
 ]
 
 def _run_migrations() -> list[str]:

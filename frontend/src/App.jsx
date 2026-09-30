@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, scanVinted, importLots, importAllAuctions, importVintedSeller, flushClosed, refreshBids, reinspectNoComps, repriceUnpriced, fetchSettings, saveTargetRoi, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
+import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, scanVinted, importLots, importAllAuctions, importVintedSeller, flushClosed, refreshBids, reinspectNoComps, repriceUnpriced, fetchSettings, saveTargetRoi, saveDriveFrom, clearDriveFrom, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
 import { fetchNeverRules } from './api'
 import { auctionClosed } from './lib/pacing'
 import { houseRatioLabel, houseRatioTitle } from './lib/calibration'
@@ -189,10 +189,18 @@ export default function App() {
   const [hideUnshippable, setHideUnshippable] = useState(true)
   const [showHiddenLots, setShowHiddenLots] = useState(false)
   const [importedRows, setImportedRows] = useState({})
+  // Where drive times are measured from (null until saved), and whether the
+  // server can measure them at all.
+  const [driveFrom, setDriveFrom] = useState(null)
+  const [driveAvailable, setDriveAvailable] = useState(false)
   // Target ROI % for the GOLD MINE verdict — DB-backed, editable inline.
   const [targetRoi, setTargetRoi] = useState('')
   useEffect(() => {
-    fetchSettings().then((s) => setTargetRoi(String(s.target_roi_pct))).catch(console.error)
+    fetchSettings().then((s) => {
+      setTargetRoi(String(s.target_roi_pct))
+      setDriveFrom(s.drive_from || null)
+      setDriveAvailable(Boolean(s.drive_times_available))
+    }).catch(console.error)
   }, [])
 
   const [lotTotal, setLotTotal] = useState(0)
@@ -1827,6 +1835,20 @@ export default function App() {
       ) : (
         <LotTable lots={visibleLots} onLotUpdated={handleLotUpdated} onRefresh={loadLots}
                   auctions={importedRows}
+                  driveFrom={driveFrom}
+                  driveAvailable={driveAvailable}
+                  onSaveDriveFrom={async (address, label) => {
+                    const r = await saveDriveFrom(address, label)
+                    setDriveFrom({ address: r.address, label: r.label })
+                    // New drive times ride on the auction rows.
+                    rememberAuctions(await fetchAuctions(), { full: true })
+                    return r
+                  }}
+                  onClearDriveFrom={async () => {
+                    await clearDriveFrom()
+                    setDriveFrom(null)
+                    rememberAuctions(await fetchAuctions(), { full: true })
+                  }}
                   onOpenCloset={handleOpenCloset}
                   onSelectAuction={(id) => {
                     // Jump back to the top: the change happens above the
