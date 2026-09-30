@@ -606,6 +606,16 @@ _BREAKER_COOLDOWN = float(os.environ.get("SOLDCOMPS_COOLDOWN_SECONDS", "120"))
 # can, so back off hard instead of burning worker minutes on doomed retries.
 _QUOTA_WALL_SECONDS = float(os.environ.get("SOLDCOMPS_QUOTA_WALL_SECONDS", "10"))
 _QUOTA_COOLDOWN = float(os.environ.get("SOLDCOMPS_QUOTA_COOLDOWN_SECONDS", "900"))
+# How long one request may take. A lot asks for up to four variants in a
+# row, so during the Sept 27 outage (202 read timeouts) a single lot sat for
+# 4 x 40s before falling through to active listings. Connecting gets its own
+# short limit: a host that won't answer the handshake isn't going to.
+SOLDCOMPS_TIMEOUT_SECONDS = float(os.environ.get("SOLDCOMPS_TIMEOUT_SECONDS", "25"))
+_CONNECT_TIMEOUT_SECONDS = 5.0
+# Timeouts in a row that mean the service is down rather than one query
+# being slow. Past this, pause like the 429 breaker does: every lot behind
+# us would otherwise wait out the same timeout, per variant.
+_TIMEOUT_BREAKER_THRESHOLD = int(os.environ.get("SOLDCOMPS_TIMEOUT_BREAKER", "3"))
 
 
 class _Throttle:
@@ -638,6 +648,7 @@ _cache: dict[str, tuple[float, list]] = {}
 _cache_lock = threading.Lock()
 _breaker_lock = threading.Lock()
 _consecutive_429 = 0
+_consecutive_timeouts = 0
 _blocked_until = 0.0
 
 
@@ -687,10 +698,21 @@ def _note_429() -> None:
                       seconds=_BREAKER_COOLDOWN)
 
 
+def _note_timeout() -> None:
+    global _consecutive_timeouts
+    with _breaker_lock:
+        _consecutive_timeouts += 1
+        over = _consecutive_timeouts >= _TIMEOUT_BREAKER_THRESHOLD
+    if over:
+        _open_breaker(reason=f"{_consecutive_timeouts} timeouts in a row",
+                      seconds=_BREAKER_COOLDOWN)
+
+
 def _note_ok() -> None:
-    global _consecutive_429
+    global _consecutive_429, _consecutive_timeouts
     with _breaker_lock:
         _consecutive_429 = 0
+        _consecutive_timeouts = 0
 
 
 def _retry_after_seconds(response, attempt: int) -> float:
@@ -952,7 +974,9 @@ def _soldcomps_lookup(query: str, count: int = 120) -> list[tuple[float, str]]:
     for attempt in range(SOLDCOMPS_MAX_RETRIES):
         _throttle.wait()
         try:
-            with httpx.Client(timeout=40.0) as client:
+            with httpx.Client(timeout=httpx.Timeout(
+                    SOLDCOMPS_TIMEOUT_SECONDS,
+                    connect=_CONNECT_TIMEOUT_SECONDS)) as client:
                 r = client.get(
                     "https://api.sold-comps.com/v1/scrape",
                     headers={"Authorization": f"Bearer {SOLDCOMPS_API_KEY}"},
@@ -977,6 +1001,8 @@ def _soldcomps_lookup(query: str, count: int = 120) -> list[tuple[float, str]]:
         except Exception as exc:  # noqa: BLE001
             logger.warning("SoldComps failed for %r: %s", query, exc)
             _note_response(query, None, note=f"{type(exc).__name__}: {exc}"[:120])
+            if isinstance(exc, httpx.TimeoutException):
+                _note_timeout()
             return []
 
         last_status = r.status_code

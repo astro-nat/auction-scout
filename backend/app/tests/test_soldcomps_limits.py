@@ -35,6 +35,7 @@ def _reset(monkeypatch):
     monkeypatch.setattr(pricing, "SOLDCOMPS_API_KEY", "test-key")
     monkeypatch.setattr(pricing, "_cache", {})
     monkeypatch.setattr(pricing, "_consecutive_429", 0)
+    monkeypatch.setattr(pricing, "_consecutive_timeouts", 0)
     monkeypatch.setattr(pricing, "_blocked_until", 0.0)
     monkeypatch.setattr(pricing, "_throttle", pricing._Throttle(0))
     # These tests are about pacing, retry and the breaker - not the durable
@@ -72,7 +73,10 @@ def _client(responses):
         def get(self, url, headers=None, params=None):
             calls.append(params["keyword"])
             FakeClient.sent.append(dict(params))
-            return responses[min(len(calls) - 1, len(responses) - 1)]
+            r = responses[min(len(calls) - 1, len(responses) - 1)]
+            if isinstance(r, Exception):
+                raise r
+            return r
 
     return FakeClient, calls
 
@@ -333,3 +337,60 @@ def test_an_empty_answer_served_from_cache_leaves_a_trace(monkeypatch):
                         lambda *a, **k: [{"price": 5.0, "title": "w", "kind": "sold"}])
     pricing._soldcomps_lookup("stale-full")
     assert RECORDED == [], "a full cached answer is the cache working, not news"
+
+
+def test_the_request_has_a_bounded_timeout(monkeypatch):
+    """Sept 27: a lot asks up to four variants in a row, and at 40s each a
+    SoldComps outage held one lot for 160s+. The limit is configurable, and
+    connecting gets a short one of its own."""
+    seen = {}
+
+    class Client:
+        def __init__(self, *a, timeout=None, **kw):
+            seen["timeout"] = timeout
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def get(self, *a, **kw):
+            return _Resp(200, [])
+
+    monkeypatch.setattr(pricing.httpx, "Client", Client)
+    monkeypatch.setattr(pricing, "SOLDCOMPS_TIMEOUT_SECONDS", 12.0)
+    pricing._soldcomps_lookup("widget")
+    t = seen["timeout"]
+    assert t.read == 12.0
+    assert t.connect == pricing._CONNECT_TIMEOUT_SECONDS
+
+
+def test_repeated_timeouts_open_the_breaker(monkeypatch):
+    """Once the service is plainly down, every lot behind us would wait out
+    the same timeout per variant. Stop asking instead."""
+    import httpx
+    FakeClient, calls = _client([httpx.ReadTimeout("The read operation timed out")])
+    monkeypatch.setattr(pricing.httpx, "Client", FakeClient)
+    for i in range(pricing._TIMEOUT_BREAKER_THRESHOLD):
+        assert pricing._soldcomps_lookup(f"query-{i}") == []
+    assert pricing._breaker_open(), "kept waiting on a service that was down"
+    before = len(calls)
+    pricing._soldcomps_lookup("another")
+    assert len(calls) == before, "called the API while the breaker was open"
+
+
+def test_one_slow_query_does_not_pause_everything(monkeypatch):
+    """A single timeout is one slow query, not an outage; a success in
+    between resets the count."""
+    import httpx
+    sold = [{"soldPrice": "$9.00", "title": "w"}]
+    timeout = httpx.ReadTimeout("slow")
+    seq = ([timeout] * (pricing._TIMEOUT_BREAKER_THRESHOLD - 1)
+           + [_Resp(200, sold), timeout])
+    FakeClient, calls = _client(seq)
+    monkeypatch.setattr(pricing.httpx, "Client", FakeClient)
+    for i in range(len(seq)):
+        pricing._soldcomps_lookup(f"q-{i}")
+    assert not pricing._breaker_open()
+    assert pricing._consecutive_timeouts == 1
