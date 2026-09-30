@@ -346,7 +346,9 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                                   onSaveDriveFrom, onClearDriveFrom,
                                   toolbar = null, toolbarEnd = null, panel = null,
                                   toolbarAllLots = null, onImportMissing,
-                                  loadedByAuction = {}, onShowFilters }) {
+                                  loadedByAuction = {}, onShowFilters,
+                                  phoneFilters = null, phoneBehindFilters = null,
+                                  filtersOpen = false }) {
   const isMobile = useMediaQuery('(max-width: 768px)')
   const [pollingIds, setPollingIds] = useState(new Set())
   // Row menus (the ⋯ at the end of a row) are <details>: close any open one
@@ -1234,6 +1236,13 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     </span>
   )
 
+  // Where drive times start. On a phone it lives behind Filters: it is set
+  // once, and beside the view switch it pushed the lots a row further down.
+  const driveControl = arrange === 'auction' && onSaveDriveFrom && (
+    <DriveFrom driveFrom={driveFrom} available={driveAvailable}
+               onSave={onSaveDriveFrom} onClear={onClearDriveFrom} />
+  )
+
   const arrangeControl = (
     <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
       <div className="segmented" role="group" aria-label="Arrange lots">
@@ -1244,10 +1253,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                 className={arrange === 'all' ? 'on' : undefined}
                 onClick={() => setArrange('all')}>All lots</button>
       </div>
-      {arrange === 'auction' && onSaveDriveFrom && (
-        <DriveFrom driveFrom={driveFrom} available={driveAvailable}
-                   onSave={onSaveDriveFrom} onClear={onClearDriveFrom} />
-      )}
+      {!isMobile && driveControl}
     </div>
   )
 
@@ -1863,18 +1869,32 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
   if (isMobile) {
     return (
       <>
+        {/* The phone's controls, as the design has them: search and Filters
+            on one row; the view, drive-from and More actions on the next;
+            the price button; everything else behind Filters. */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
-          {toolbar}
-          {arrange !== 'auction' && toolbarAllLots}
-          {toolbarEnd}
-          {panel && <div style={{ flexBasis: '100%' }}>{panel}</div>}
           <input
             type="search"
             value={search}
             onChange={(ev) => handleSearch(ev.target.value)}
-            placeholder="Search title, auction, category…"
-            style={{ flex: '1 1 100%', padding: 8, fontSize: 16 }}
+            placeholder="Search lots"
+            aria-label="Search inventory"
+            style={{ flex: '1 1 0', minWidth: 0, padding: 8, fontSize: 16 }}
           />
+          {phoneFilters ?? toolbar}
+          <div style={{ flexBasis: '100%', display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+            {arrangeControl}
+            {toolbarEnd}
+          </div>
+          {filtersOpen && phoneBehindFilters && (
+            <div style={{ flexBasis: '100%', display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+              {driveControl}
+              {phoneBehindFilters}
+              {arrange !== 'auction' && toolbarAllLots}
+            </div>
+          )}
+          {panel && <div style={{ flexBasis: '100%' }}>{panel}</div>}
+          {(arrange !== 'auction' || filtersOpen) && (
           <select
             value={MOBILE_SORTS.findIndex((s) => s.key === sort.key && s.dir === sort.dir)}
             onChange={(ev) => {
@@ -1885,16 +1905,19 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
           >
             {MOBILE_SORTS.map((s, i) => <option key={s.label} value={i}>{s.label}</option>)}
           </select>
+          )}
           {/* Every filterable column, generated from the same list the
               desktop header uses - the phone used to hand-maintain a subset
               with no bid, cost, resale, max-bid, ROI or auction filter. The
               title search above already binds the one text column. */}
+          {arrange !== 'auction' && (
           <button style={{ flex: '1 1 100%', padding: 8, fontSize: 14 }}
                   onClick={() => setShowFilters((v) => !v)}
                   aria-expanded={showFilters}>
-            {showFilters ? 'Hide filters' : `Filters${activeFilterCount ? ` (${activeFilterCount} on)` : ''}`}
+            {showFilters ? 'Hide column filters' : `Column filters${activeFilterCount ? ` (${activeFilterCount} on)` : ''}`}
           </button>
-          {showFilters && COLUMNS.filter((c) => c.filter && c.filter !== 'text').map((c) => (
+          )}
+          {arrange !== 'auction' && showFilters && COLUMNS.filter((c) => c.filter && c.filter !== 'text').map((c) => (
             <select
               key={c.key}
               value={colFilters[c.key] ?? ''}
@@ -1907,7 +1930,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
               ))}
             </select>
           ))}
-          {activeFilterCount > 0 && (
+          {arrange !== 'auction' && activeFilterCount > 0 && (
             <button style={{ flex: '1 1 100%', padding: 6, fontSize: 13 }}
                     onClick={() => setColFilters({})}>
               Clear {activeFilterCount} filter{activeFilterCount === 1 ? '' : 's'}
@@ -1923,8 +1946,8 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                        : `Price ${unpricedShown.length.toLocaleString()} unpriced ${unpricedShown.length === 1 ? 'lot' : 'lots'}`}
             </button>
           )}
-          {aiCheck}
-          {!selectedInView.length && sorted.length > 0 && (
+          {arrange !== 'auction' && aiCheck}
+          {arrange !== 'auction' && !selectedInView.length && sorted.length > 0 && (
             <button style={{ flex: '1 1 100%', padding: 6, fontSize: 13 }}
                     onClick={() => setSelected(selectAll(sorted))}
                     title="Select every lot matching the current filters, then act on them together">
@@ -1936,7 +1959,6 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
           {anyQueued && <span style={{ flexBasis: '100%' }}><span className="spinner" />{lots.filter((l) => l.enrichment?.status === 'queued').length} lots in the queue… updates when they finish</span>}
           {/* Length menu up here; the count and pager sit under the cards,
               the way DataTables lays a table out. */}
-          <div style={{ flexBasis: '100%' }}>{arrangeControl}</div>
           {arrange !== 'auction' && <div style={{ flexBasis: '100%' }}>{lengthMenu}</div>}
         </div>
         {goldSummary}

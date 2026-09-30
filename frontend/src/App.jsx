@@ -1130,7 +1130,9 @@ export default function App() {
             </div>
           </details>
   </>)
-  const invLenses = (<>
+  // Split so the phone can place them apart: the Filters button beside
+  // the search, the rest behind it.
+  const invGold = (<>
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
             {/* data-track names this explicitly because the visible label
                 carries a count, and the tracker reads the label text. */}
@@ -1144,6 +1146,8 @@ export default function App() {
               ({goldCount.toLocaleString()} of {lotsBeforeGold.length.toLocaleString()})
             </span>
           </label>
+  </>)
+  const invFiltersButton = (<>
           <button onClick={() => setFiltersOpen((v) => !v)}
                   aria-expanded={filtersOpen}
                   data-track="Filters panel"
@@ -1151,6 +1155,8 @@ export default function App() {
                   style={{ fontSize: 13, padding: '4px 10px' }}>
             Filters{activeRuleCount ? ` · ${activeRuleCount} on` : ''}{categoryFilter ? ` · ${categoryFilter}` : ''} {filtersOpen ? '▴' : '▾'}
           </button>
+  </>)
+  const invHidden = (<>
           {hiddenCount > 0 && (
             <span style={{ color: 'var(--muted)', whiteSpace: 'nowrap' }}
                   title="Items the rules under More filters are keeping out of view">
@@ -1158,6 +1164,7 @@ export default function App() {
             </span>
           )}
   </>)
+  const invLenses = (<>{invGold}{invFiltersButton}{invHidden}</>)
   const invPanel = (<>
         {filtersOpen && (
           <div style={{ marginTop: 8, padding: 12, borderRadius: 8,
@@ -1362,13 +1369,15 @@ export default function App() {
   // has them, which gives the page back a whole row.
   const viewSwitch = (
       <div className={isMobile ? undefined : 'views-inline'}
-           style={isMobile ? { display: 'flex', flexWrap: 'wrap', gap: 6, margin: '10px 0 1rem' } : undefined}>
+           style={isMobile ? { display: 'flex', flexWrap: 'nowrap', overflowX: 'auto', gap: 6,
+                               margin: '10px -12px 12px', padding: '0 12px 2px',
+                               scrollbarWidth: 'none' } : undefined}>
         {(TABS.find((t) => t.views.includes(view)) ?? TABS[0]).views.map((v) => (
           <button
             key={v}
             className={`subtab${view === v ? ' active' : ''}`}
             onClick={() => setView(v)}
-            style={isMobile ? { fontSize: 14, padding: '7px 14px' } : undefined}
+            style={isMobile ? { fontSize: 14, padding: '7px 14px', flexShrink: 0, whiteSpace: 'nowrap' } : undefined}
           >
             {{
               auctions: 'Search Auctions',
@@ -1931,6 +1940,9 @@ export default function App() {
                   toolbar={<>{invScope}{invLenses}</>}
                   toolbarEnd={invActions}
                   toolbarAllLots={invImportMissing}
+                  phoneFilters={invFiltersButton}
+                  phoneBehindFilters={<>{invScope}{invGold}{invHidden}</>}
+                  filtersOpen={filtersOpen}
                   loadedByAuction={loadedByAuction}
                   onShowFilters={() => {
                     setFiltersOpen(true)
