@@ -9,8 +9,15 @@ scan time and never stored again.
 
 Sale-scoped on purpose: the same house's next sale is a new judgement. To
 mute a whole auctioneer, unfavourite it (services/favorites.py).
+
+The list keeps itself short: an entry forgotten more than a week ago goes
+(see prune), since by then the sale is almost always over and the entry
+only clutters the restore list. One whose auction is known to still be
+running stays until it closes - dropping it early would let the next scan
+bring the sale straight back.
 """
 
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -18,8 +25,28 @@ from sqlalchemy.orm import Session
 from .. import models
 
 
+PRUNE_AFTER_DAYS = 7
+
+
+def prune(db: Session, now: Optional[datetime] = None) -> int:
+    """Drop entries forgotten more than PRUNE_AFTER_DAYS ago, except those
+    whose auction we know is still open. Returns how many went."""
+    now = now or datetime.now(timezone.utc).replace(tzinfo=None)
+    still_open = (db.query(models.Auction.hibid_id)
+                    .filter(models.Auction.hibid_id.isnot(None),
+                            models.Auction.closing_date > now))
+    gone = (db.query(models.DismissedAuction)
+              .filter(models.DismissedAuction.created_at < now - timedelta(days=PRUNE_AFTER_DAYS),
+                      ~models.DismissedAuction.hibid_id.in_(still_open))
+              .delete(synchronize_session=False))
+    if gone:
+        db.commit()
+    return gone
+
+
 def ids(db: Session) -> set[int]:
     """Every forgotten HiBid event id, for filtering scans and listings."""
+    prune(db)
     return {row[0] for row in db.query(models.DismissedAuction.hibid_id).all()}
 
 
@@ -52,6 +79,7 @@ def remove(db: Session, hibid_id: int) -> bool:
 
 
 def listed(db: Session) -> list[models.DismissedAuction]:
+    prune(db)
     return (db.query(models.DismissedAuction)
               .order_by(models.DismissedAuction.created_at.desc())
               .all())
