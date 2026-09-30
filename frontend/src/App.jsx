@@ -14,7 +14,7 @@ import LotTable from './components/LotTable'
 import StatusBar from './components/StatusBar'
 import useMediaQuery from './useMediaQuery'
 import NeverListEditor from './components/NeverListEditor'
-import { farAuctionIds } from './lib/drive'
+import { farAuctionIds, keptForGold } from './lib/drive'
 import { CarIcon, formatDrive } from './components/DriveFrom'
 
 // The Filters panel's three groups. Module-level so they are not rebuilt
@@ -913,11 +913,19 @@ export default function App() {
   // Auctions past the drive limit. Ship-only sales are left out: a far
   // auction that ships is not a drive at all, and hiding it would hide
   // lots that can still be had by mail.
+  // Auctions holding an open gold mine: never too far to drive to.
+  const goldAuctionIds = useMemo(() => new Set(lots
+    .filter((l) => l.enrichment?.roi_status === 'GOLD MINE' && !isClosedItem(l))
+    .map((l) => l.auction_id)), [lots])  // eslint-disable-line react-hooks/exhaustive-deps
+  const allAuctionRows = useMemo(
+    () => Object.values({ ...Object.fromEntries(auctions.map((a) => [a.id, a])), ...importedRows }),
+    [auctions, importedRows])
   const tooFarIds = useMemo(() => {
     if (!hideFar || !driveFrom) return new Set()
-    const byId = { ...Object.fromEntries(auctions.map((a) => [a.id, a])), ...importedRows }
-    return farAuctionIds(Object.values(byId), maxDriveMinutes)
-  }, [hideFar, driveFrom, auctions, importedRows, maxDriveMinutes])
+    return farAuctionIds(allAuctionRows, maxDriveMinutes, goldAuctionIds)
+  }, [hideFar, driveFrom, allAuctionRows, maxDriveMinutes, goldAuctionIds])
+  const farKeptForGold = hideFar && driveFrom
+    ? keptForGold(allAuctionRows, maxDriveMinutes, goldAuctionIds) : 0
 
   // Staged, so each box can say how many IT removes. Counting against the
   // whole inventory instead was misleading: the over-max box read 4,574
@@ -1091,6 +1099,7 @@ export default function App() {
                            && !(a.closing_date && parseUtc(a.closing_date) < new Date()))
             .map((a) => (
               <button key={`partial-${a.id}`}
+                      data-track="Import N missing"
                       onClick={() => handleImport(a.id, -1, '')}
                       title={`"${a.name}" has ${a.lot_count} lots on HiBid but only ${a.lots_imported} in the database — import the rest (free, no AI calls)`}
                       style={{ padding: 8, fontSize: 14 }}>
@@ -1249,7 +1258,7 @@ export default function App() {
               </label>
               <label style={{ ...panelRow, opacity: driveFrom ? 1 : 0.6 }}
                      title={driveFrom
-                       ? `Pickup auctions more than this many minutes' drive from ${driveFrom.label || driveFrom.address}, one way. Auctions that ship are never hidden by this, and one with no drive time yet is kept.`
+                       ? `Pickup auctions more than this many minutes' drive from ${driveFrom.label || driveFrom.address}, one way. Never hidden: an auction with an open gold mine (worth the drive), one that ships, or one with no drive time yet.`
                        : 'Set where you drive from first: Inventory, By auction view, "Set where you drive from".'}>
                 <input
                   type="checkbox"
@@ -1270,7 +1279,7 @@ export default function App() {
                 /> min away
                 <span style={{ color: 'var(--muted)' }}>
                   {driveFrom
-                    ? `(${tooFarIds.size} ${tooFarIds.size === 1 ? 'auction' : 'auctions'})`
+                    ? `(${tooFarIds.size} ${tooFarIds.size === 1 ? 'auction' : 'auctions'}${farKeptForGold ? `; ${farKeptForGold} kept for ${farKeptForGold === 1 ? 'its gold mine' : 'their gold mines'}` : ''})`
                     : '(set your address first)'}
                 </span>
               </label>
@@ -1504,6 +1513,7 @@ export default function App() {
           </button>
           {importAllCandidates.length > 1 && (
             <button type="button" onClick={handleImportAll}
+                    data-track="Import all"
                     title={scanCategoryId !== -1 && scanCategoryName
                       ? `Import the matching "${scanCategoryName}" lots from every open auction listed below — one background job`
                       : 'Import all open lots from every auction listed below — one background job'}
@@ -1515,6 +1525,7 @@ export default function App() {
           )}
           {scanSearchText && matchingImportTotal > 0 && (
             <button type="button" onClick={handleImportMatching}
+                    data-track="Import matching lots"
                     title={`Import only the lots matching "${scanSearchText}" from every open auction listed below — one background job. Everything else in each auction stays out.`}
                     style={isMobile ? { flex: '1 1 100%', padding: 10, fontSize: 15 }
                                     : { padding: '8px 18px' }}>
@@ -1523,6 +1534,7 @@ export default function App() {
           )}
           {importAllCandidates.length > 1 && (
             <button type="button" onClick={() => handleImportAll(true)}
+                    data-track="Import BOLO matches"
                     title="Import only lots whose title matches your BOLO brand list. The match is free regex over the title the fetch already returned, so this costs the same as a full import and simply keeps fewer rows."
                     style={isMobile ? { flex: '1 1 100%', padding: 10, fontSize: 15 }
                                     : { padding: '8px 18px' }}>

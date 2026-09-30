@@ -39,3 +39,22 @@ describe('farAuctionIds', () => {
     expect(farAuctionIds(auctions, 60).size).toBe(0)
   })
 })
+
+describe('a gold mine is worth the drive', () => {
+  const auctions = [
+    { id: 1, source: 'Local Pickup', drive_minutes: 36 },   // the estate sale
+    { id: 2, source: 'Local Pickup', drive_minutes: 42 },
+    { id: 3, source: 'Local Pickup', drive_minutes: 12 },
+  ]
+
+  it('never hides an auction with an open gold mine, however far', () => {
+    const gold = new Set([1])
+    expect([...farAuctionIds(auctions, 30, gold)]).toEqual([2])
+  })
+
+  it('says how many it kept for their gold', async () => {
+    const { keptForGold } = await import('./drive')
+    expect(keptForGold(auctions, 30, new Set([1]))).toBe(1)
+    expect(keptForGold(auctions, 30, new Set([3]))).toBe(0)
+  })
+})
