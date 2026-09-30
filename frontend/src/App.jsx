@@ -119,6 +119,11 @@ export default function App() {
   // inverse of BOLO). The rules live in the database so they can be added
   // without a deploy; the server stamps never_label on each lot it covers.
   const [hideNever, setHideNever] = useState(true)
+  // Bulk media priced by the piece. A pile of discs is only worth buying by
+  // the item, and the ask alone cannot say - the count comes off the
+  // seller's own title (backend services/media_lots.py).
+  const [cheapMediaOnly, setCheapMediaOnly] = useState(false)
+  const [maxPerItem, setMaxPerItem] = useState('0.40')
   const [neverRules, setNeverRules] = useState([])
   const [neverOpen, setNeverOpen] = useState(false)
   // Every in-flight action (a scan, a flush, a "how many?" count-before-
@@ -898,6 +903,10 @@ export default function App() {
         if (hideHardShip && l.logistics_ease === 'HARD') return false
         if (hideNoUsShip && l.auction_no_us_ship) return false
         if (hideClosed && isClosedItem(l)) return false
+        // A lot whose title never says how many pieces it holds has no
+        // per-item price, so it can never satisfy this box.
+        if (cheapMediaOnly && !(l.media_per_item != null
+                                && l.media_per_item < Number(maxPerItem))) return false
         // Out of the priced inventory once it is watched, so what is left
         // there is what has not been decided about yet.
         if (pricedOnly && l.watched) return false
@@ -907,11 +916,17 @@ export default function App() {
                      auction_name: l.auction_name ?? auctionNames[l.auction_id] ?? '—',
                      item_closed: isClosedItem(l) }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lots, auctions, auctionIndex, showHiddenLots, hideLowValue, lowValueCutoff, hideHardShip, hideNoUsShip, hideClosed, pricedOnly])
+  }, [lots, auctions, auctionIndex, showHiddenLots, hideLowValue, lowValueCutoff, hideHardShip, hideNoUsShip, hideClosed, cheapMediaOnly, maxPerItem, pricedOnly])
   // What each of these two boxes removes from what the other boxes leave -
   // counted before either of them runs, so the number holds whether the box
   // is ticked or not. Counted independently of each other: a lot that is
   // both a power tool and on the never list counts in both.
+  // How many bulk media lots clear the bar, counted before the box runs so
+  // the number is there to decide by rather than only after ticking.
+  const cheapMediaCount = useMemo(
+    () => lots.reduce((n, l) => n + (l.media_per_item != null
+      && l.media_per_item < Number(maxPerItem) ? 1 : 0), 0),
+    [lots, maxPerItem])
   const poweredCount = useMemo(
     () => lotsBeforeKinds.reduce(
       (n, l) => n + (!isJustTouched(l) && l.powered_tool ? 1 : 0), 0),
@@ -1611,6 +1626,20 @@ export default function App() {
               data-track="Hide power tools"
             /> Hide power tools
             <span style={{ color: 'var(--muted)' }}>({poweredCount.toLocaleString()})</span>
+          </label>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
+                 title="Bulk media lots - CDs, DVDs, VHS, records, books - priced by the piece. The count is read from the seller's own title, so a lot that never says how many is not shown here at all.">
+            <input
+              type="checkbox"
+              checked={cheapMediaOnly}
+              onChange={(ev) => setCheapMediaOnly(ev.target.checked)}
+              data-track="Cheap media lots only"
+            /> Media under $
+            <input type="number" min="0" step="0.05" value={maxPerItem}
+                   onChange={(ev) => setMaxPerItem(ev.target.value)}
+                   title="Highest average price per disc, tape or book"
+                   style={{ width: 62 }} />
+            <span style={{ color: 'var(--muted)' }}>/item ({cheapMediaCount.toLocaleString()})</span>
           </label>
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
                  title="Kinds of thing you never want to see at all - the opposite of the BOLO list. Edit the categories yourself with the button beside this.">

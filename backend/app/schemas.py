@@ -91,6 +91,11 @@ class LotOut(BaseModel):
     # Its worth turns on a motor running, which a photo cannot show and the
     # buyer cannot test. Derived from the title (services/powered.py).
     powered_tool: bool = False
+    # Ask price divided by the piece count the seller states in the title,
+    # for a bulk media lot - "$16" is a steal for 40 CDs and a waste for 2.
+    # Null whenever the title does not clearly say how many (services/
+    # media_lots.py), which is most lots.
+    media_per_item: Optional[float] = None
     # Which never-list rule covers this lot, or null. The label is the
     # reason shown when the never-list toggle hides it, and the rules are
     # the user's own (see routers/never.py) - editable without a deploy.

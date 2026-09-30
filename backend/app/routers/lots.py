@@ -8,7 +8,7 @@ from .. import models, schemas
 from ..database import get_db
 from ..services import hidden as hidden_lots
 from ..services import jobs, twins
-from ..services import never
+from ..services import media_lots, never
 from . import never as never_routes
 from ..services.boilerplate import is_boilerplate
 
@@ -184,6 +184,9 @@ def list_lots(
         lot.house_ratio = cal["ratio"] if cal else None
         lot.house_ratio_n = cal["n"] if cal else 0
         lot.never_label = never.label_for(lot.title, never_rules)
+        # Priced off the CURRENT ask, so it moves with the price the way the
+        # lot itself does.
+        lot.media_per_item = media_lots.per_item(lot.current_bid, lot.title)
     if not include_comps:
         # The comp records are 60% of this response - 2.8 MB a page - and
         # they are only read when one row's evidence panel is opened, which
