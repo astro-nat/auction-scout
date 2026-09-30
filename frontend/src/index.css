@@ -719,3 +719,14 @@ details.peek > summary::-webkit-details-marker { display: none; }
    opens Filters to show why. */
 .group-filtered { font-size: inherit; color: var(--muted); text-decoration: underline dotted; }
 .group-filtered:hover:not(:disabled) { color: var(--link); }
+
+/* An auction header opens and closes its lots: the title is the toggle,
+   and the whole header is a click target. */
+.group-head-inner { cursor: pointer; }
+.group-head-inner button, .group-head-inner a, .group-head-inner input { cursor: pointer; }
+.group-toggle {
+  background: none; border: none; padding: 0; font: inherit; color: var(--text);
+  display: inline-flex; align-items: baseline; gap: 6px; text-align: left;
+}
+.group-toggle:hover:not(:disabled) { background: none; transform: none; color: var(--link); }
+.group-caret { display: inline-block; width: 12px; color: var(--muted); font-size: 12px; }

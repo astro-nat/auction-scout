@@ -411,6 +411,10 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
   const setAddonFloor = (n) => { setAddonFloorState(n); savePref(storage, ADDON_FLOOR_KEY, n) }
   // Auctions whose other lots are unfolded, and how many of them to show.
   const [openGroups, setOpenGroups] = useState(() => new Map())
+  // Auctions the user has opened or closed by clicking the header, flipped
+  // from their default: one with a gold mine starts open, one without starts
+  // closed.
+  const [flippedGroups, setFlippedGroups] = useState(() => new Set())
   // True while the enrich-batch request is in flight.
   const [queuing, setQueuing] = useState(false)
   // Multi-select: lot_ids the user has ticked. Kept as a Set of ids rather
@@ -1258,6 +1262,21 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     next.delete(key)
     return next
   })
+  const groupKey = (g) => g.auctionId ?? 'none'
+  const isGroupOpen = (g) => g.hasGold !== flippedGroups.has(groupKey(g))
+  function toggleGroup(g) {
+    const key = groupKey(g)
+    const opening = !isGroupOpen(g)
+    setFlippedGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+    // An auction with no gold mine has nothing featured: opening it shows
+    // its first lots, or it would open onto an empty space.
+    if (opening && !g.hasGold && !openGroups.get(key)) openMore(key, g.lots.length)
+  }
 
   function groupHeader(g) {
     const a = g.auction
@@ -1269,11 +1288,13 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     // Where every lot of this auction is: on screen, folded below, or kept
     // out by the filters. Only showing the first was confusing - five lots
     // on screen and no word about the other two hundred.
-    const key = g.auctionId ?? 'none'
+    const key = groupKey(g)
+    const open = isGroupOpen(g)
     const rest = g.hasGold ? g.others : g.lots
-    const unfolded = Math.min(openGroups.get(key) || 0, rest.length)
-    const onScreen = g.featured.length + unfolded
-    const folded = rest.length - unfolded
+    const unfolded = open ? Math.min(openGroups.get(key) || 0, rest.length) : 0
+    const onScreen = open ? g.featured.length + unfolded : 0
+    const folded = open ? rest.length - unfolded : 0
+    const closedCount = open ? 0 : g.lots.length
     const filteredOut = Math.max(0, (loadedByAuction[g.auctionId] ?? g.lots.length) - g.lots.length)
     const unwatched = g.featured.filter((l) => !l.watched)
     const missing = a && a.lot_count != null && a.lots_imported != null
@@ -1281,13 +1302,22 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
       && !(a.closing_date && parseUtc(a.closing_date) < new Date())
       ? a.lot_count - a.lots_imported : 0
     return (
-      <div className="group-head-inner">
+      // Clicking anywhere on the header that isn't one of its own controls
+      // opens or closes the auction; the title button is the keyboard way.
+      <div className={`group-head-inner${open ? '' : ' closed'}`}
+           onClick={(ev) => {
+             if (ev.target.closest('button, a, input, select, summary, details, label')) return
+             // Not a button, so the page-wide tracker doesn't see it.
+             track('button', { name: open ? 'Close auction group' : 'Open auction group' })
+             toggleGroup(g)
+           }}>
         <div className="group-title">
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '2px 12px' }}>
-            <button type="button" className="link-like"
-                    onClick={() => g.auctionId != null && onSelectAuction?.(g.auctionId)}
-                    data-track="Auction group name (show its items)"
-                    title="Show only this auction's items">
+            <button type="button" className="group-toggle" aria-expanded={open}
+                    data-track={open ? 'Close auction group' : 'Open auction group'}
+                    onClick={() => toggleGroup(g)}
+                    title={open ? 'Close this auction' : 'Open this auction'}>
+              <span className="group-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
               <strong>{g.name}</strong>
             </button>
             {missing > 0 && onImportMissing && (
@@ -1306,11 +1336,12 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
           </div>
           <span className="group-meta">
             {[meta,
+              closedCount > 0 ? `${closedCount.toLocaleString()} ${closedCount === 1 ? 'lot' : 'lots'}` : '',
               onScreen > 0 ? `${onScreen.toLocaleString()} shown` : '',
               folded > 0 ? `${folded.toLocaleString()} folded below` : '',
             ].filter(Boolean).join(' · ')}
             {filteredOut > 0 && (
-              <>{meta || onScreen > 0 || folded > 0 ? ' · ' : ''}
+              <>{meta || closedCount > 0 || onScreen > 0 || folded > 0 ? ' · ' : ''}
                 {onShowFilters ? (
                   <button type="button" className="link-like group-filtered"
                           data-track="Filtered-out count (open filters)"
@@ -1319,6 +1350,16 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                     {filteredOut.toLocaleString()} filtered out
                   </button>
                 ) : `${filteredOut.toLocaleString()} filtered out`}
+              </>
+            )}
+            {g.auctionId != null && onSelectAuction && (
+              <>{' · '}
+                <button type="button" className="link-like group-filtered"
+                        data-track="Auction group name (show its items)"
+                        title="Narrow the inventory to this auction alone"
+                        onClick={() => onSelectAuction(g.auctionId)}>
+                  show only this auction
+                </button>
               </>
             )}
           </span>
@@ -1351,12 +1392,14 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
   // Each auction: its header, its gold mines and add-ons, then the rest
   // folded away - at an auction with no gold mine, all of it.
   const renderGroups = (renderOne, asTable, span = COLUMNS.length + 2) => groups.map((g) => {
-    const key = g.auctionId ?? 'none'
+    const key = groupKey(g)
+    const open = isGroupOpen(g)
     const rest = g.hasGold ? g.others : g.lots
     const shown = Math.min(openGroups.get(key) || 0, rest.length)
-    const rows = [...g.featured, ...rest.slice(0, shown)]
-      .map((l) => renderOne(l, g.kinds.get(l.lot_id)))
-    const more = rest.length > 0 && (
+    const rows = open
+      ? [...g.featured, ...rest.slice(0, shown)].map((l) => renderOne(l, g.kinds.get(l.lot_id)))
+      : []
+    const more = open && rest.length > 0 && (
       <div className="group-more">
         {shown < rest.length && (
           <button type="button" className="link-like" data-track="Show more lots in this auction"
