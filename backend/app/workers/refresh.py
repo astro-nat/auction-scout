@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from ..database import SessionLocal
 from .. import config, models
 from ..services import hibid, jobs
+from ..services import open_state
 from .enrich import _apply_roi
 
 logger = logging.getLogger(__name__)
@@ -201,8 +202,7 @@ def auctions_due_for_bid_refresh(db: Session,
     q = (db.query(models.Auction.id)
            .filter(models.Auction.id.in_(imported),
                    models.Auction.hibid_id.isnot(None))
-           .filter(or_(models.Auction.closing_date.is_(None),
-                       models.Auction.closing_date >= _utcnow())))
+           .filter(open_state.still_open(_utcnow())))
     if window and window > 0:
         cutoff = _utcnow() + timedelta(hours=window)
         closing_soon = (

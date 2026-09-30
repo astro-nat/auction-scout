@@ -11,6 +11,7 @@ from ..services import jobs, twins
 from ..services import media_lots, never
 from . import never as never_routes
 from ..services.boilerplate import is_boilerplate
+from ..services import open_state
 
 router = APIRouter(prefix="/lots", tags=["lots"])
 
@@ -97,8 +98,7 @@ def lot_categories(db: Session = Depends(get_db)):
               # Same scope as the bulk paths (enrichment._worth_pricing):
               # a pickup-only lot out of range is never priced.
               models.Lot.unreachable_pickup.isnot(True),
-              or_(models.Auction.closing_date.is_(None),
-                  models.Auction.closing_date >= datetime.now())), 1),
+              open_state.still_open(datetime.now())), 1),
         else_=0)
     rows = (db.query(models.Lot.category,
                      func.count(models.Lot.id),
@@ -172,9 +172,10 @@ def list_lots(
         # Serve the auction's name and closed-state with the lot, so the UI
         # never has to guess from a separately-fetched auction list.
         lot.auction_name = lot.auction.name if lot.auction else None
-        lot.auction_closed = bool(
-            lot.auction and lot.auction.closing_date
-            and lot.auction.closing_date < now)
+        # Named for the auction, decided by the lot: HiBid closes a sale's
+        # lots one after another, so the auction's date only says when
+        # closing starts (services/open_state).
+        lot.auction_closed = open_state.lot_closed(lot, now)
         # A Canadian house that won't cross the border: the lot can be won
         # but never received. Served per lot so the items view can hide it.
         lot.auction_no_us_ship = bool(lot.auction and lot.auction.ships_to_us is False)
@@ -227,8 +228,9 @@ def flush_closed_now(db: Session, dry_run: bool = False) -> dict:
 
     _CLOSED_STATUSES = ("CLOSED", "SOLD", "ENDED", "PASSED", "ARCHIVED")
     now = datetime.now()
-    auction_over = and_(models.Auction.closing_date.isnot(None),
-                        models.Auction.closing_date < now)
+    # Over only when every lot of it is: a sale whose lots close one after
+    # another is not over at its first lot, and this deletes rows.
+    auction_over = open_state.is_over(now)
     status_closed = func.upper(func.coalesce(models.Lot.status, "")).in_(_CLOSED_STATUSES)
     time_up = and_(models.Lot.closes_at.isnot(None),
                    models.Lot.closes_at < now - LOT_CLOSE_GRACE)

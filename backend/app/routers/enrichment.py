@@ -7,6 +7,7 @@ from .. import models, schemas
 from ..database import get_db
 from ..services import jobs
 from ..workers.enrich import _apply_roi, ai_done, ai_done_sql
+from ..services import open_state
 
 router = APIRouter(prefix="/lots", tags=["enrichment"])
 
@@ -160,8 +161,7 @@ def reprice(auction_id: int | None = None, weak_only: bool = False,
         # knows these lots are owed a condition judgement.
         q = (q.join(models.Auction, models.Lot.auction_id == models.Auction.id)
                .filter(models.Enrichment.est_resale.is_(None),
-                       (models.Auction.closing_date.is_(None))
-                       | (models.Auction.closing_date >= datetime.now())))
+                       open_state.still_open(datetime.now())))
     elif payload and payload.lot_ids:
         # An explicit selection: the user ticked these. No scope filter -
         # a lot with no AI title is searched on its raw one, a lot with a
@@ -214,8 +214,7 @@ def audit_golds(db: Session = Depends(get_db)):
            .join(models.Auction, models.Lot.auction_id == models.Auction.id)
            .filter(models.Enrichment.gold_check.is_(None),
                    _worth_pricing(),
-                   (models.Auction.closing_date.is_(None))
-                   | (models.Auction.closing_date >= datetime.now()),
+                   open_state.still_open(datetime.now()),
                    (models.Enrichment.roi_status == "GOLD MINE")
                    | ((models.Enrichment.roi_status == "PASS")
                       & models.Enrichment.roi_reason.like("only %")
@@ -251,8 +250,7 @@ def enrich_category(category: str, skip_hard: bool = False, dry_run: bool = Fals
            .filter(models.Lot.category == category,
                    _worth_pricing(),
                    models.Enrichment.status.in_(["pending", "failed"]),
-                   (models.Auction.closing_date.is_(None))
-                   | (models.Auction.closing_date >= datetime.now())))
+                   open_state.still_open(datetime.now())))
     if skip_hard:
         q = q.filter(models.Lot.logistics_ease != "HARD")
     lot_ids = [row[0] for row in q.all()]
@@ -322,8 +320,7 @@ def reinspect_no_comps(dry_run: bool = False,
                 ~ai_done_sql(),         # AI-priced lots are locked
                 _worth_pricing(),
                 models.Enrichment.est_resale.is_(None),
-                (models.Auction.closing_date.is_(None))
-                | (models.Auction.closing_date >= datetime.now()),
+                open_state.still_open(datetime.now()),
                 (models.Lot.fullsize_url.isnot(None))
                 | (models.Lot.thumbnail_url.isnot(None)))
         .all()

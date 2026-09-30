@@ -45,6 +45,7 @@ from ..services import settings as settings_store
 from ..services.bolo import BoloMatcher
 from ..services.hibid import classify_logistics
 from ..services.timing import timed
+from ..services import open_state
 
 logger = logging.getLogger(__name__)
 
@@ -1821,8 +1822,7 @@ def run_audit_sweep(resume_job_id: str | None = None) -> None:
                   .filter(models.Enrichment.gold_check.is_(None),
                           or_(models.Lot.hidden.is_(False),
                               models.Lot.hidden.is_(None)),
-                          (models.Auction.closing_date.is_(None))
-                          | (models.Auction.closing_date >= datetime.now())))
+                          open_state.still_open(datetime.now())))
         golds = base.filter(
             models.Enrichment.roi_status == "GOLD MINE").all()
         # Promotion candidates: blocked ONLY by thin evidence, with enough

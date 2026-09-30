@@ -32,9 +32,10 @@ def prune(db: Session, now: Optional[datetime] = None) -> int:
     """Drop entries forgotten more than PRUNE_AFTER_DAYS ago, except those
     whose auction we know is still open. Returns how many went."""
     now = now or datetime.now(timezone.utc).replace(tzinfo=None)
+    from . import open_state
     still_open = (db.query(models.Auction.hibid_id)
                     .filter(models.Auction.hibid_id.isnot(None),
-                            models.Auction.closing_date > now))
+                            open_state.still_open(now)))
     gone = (db.query(models.DismissedAuction)
               .filter(models.DismissedAuction.created_at < now - timedelta(days=PRUNE_AFTER_DAYS),
                       ~models.DismissedAuction.hibid_id.in_(still_open))

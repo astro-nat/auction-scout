@@ -14,7 +14,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from .. import models, schemas
 from ..database import get_db
 from ..services import dismissed, favorites, hibid, jobs
-from ..services import drive, shipping
+from ..services import drive, open_state, shipping
 from sqlalchemy import or_, and_, func
 from sqlalchemy.orm import Session
 
@@ -47,8 +47,7 @@ def list_auctions(background: BackgroundTasks, include_closed: bool = False,
         imported = (db.query(models.Lot.auction_id)
                       .filter(models.Lot.auction_id.isnot(None))
                       .distinct())
-        q = q.filter(or_(models.Auction.closing_date.is_(None),
-                         models.Auction.closing_date >= datetime.now(),
+        q = q.filter(or_(open_state.still_open(datetime.now()),
                          models.Auction.id.in_(imported)))
     if not include_hidden:
         # Dismissed auctions stay out unless you ask for them — except ones
@@ -225,8 +224,7 @@ async def analyze_shipping(dry_run: bool = False,
     """
     q = (db.query(models.Auction)
            .filter(models.Auction.hibid_id.isnot(None))
-           .filter((models.Auction.closing_date.is_(None))
-                   | (models.Auction.closing_date >= datetime.now())))
+           .filter(open_state.still_open(datetime.now())))
     if not force:
         # Never read: read it. A Canadian house read before the border
         # question existed, or whose terms left it open: ask again.
