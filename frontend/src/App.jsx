@@ -1006,6 +1006,13 @@ export default function App() {
     () => (goldOnly ? lotsBeforeGold.filter(isGoldMine) : lotsBeforeGold),
     [lotsBeforeGold, goldOnly])
   const hiddenCount = lots.length - lotsBeforeGold.length
+  // Loaded lots per auction, before any filter - so each auction's header
+  // can say how many of its lots the filters are keeping out of view.
+  const loadedByAuction = useMemo(() => {
+    const n = {}
+    for (const l of lots) n[l.auction_id] = (n[l.auction_id] || 0) + 1
+    return n
+  }, [lots])
   // Rules narrowing the view right now, for the Filters button's label.
   // Show-hidden is left out: switching it on shows MORE, not less.
   const activeRuleCount = [hideLowValue, hideOverMax, hidePowered, hideNever,
@@ -1924,6 +1931,11 @@ export default function App() {
                   toolbar={<>{invScope}{invLenses}</>}
                   toolbarEnd={invActions}
                   toolbarAllLots={invImportMissing}
+                  loadedByAuction={loadedByAuction}
+                  onShowFilters={() => {
+                    setFiltersOpen(true)
+                    window.scrollTo?.({ top: 0, behavior: 'smooth' })
+                  }}
                   onImportMissing={(id) => handleImport(id, -1, '')}
                   panel={invPanel}
                   auctions={importedRows}

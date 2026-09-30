@@ -714,3 +714,8 @@ details.peek > summary::-webkit-details-marker { display: none; }
 /* "Import N missing" beside an auction's name: small, but a real button. */
 .group-import { font-size: 12.5px; padding: 2px 9px; font-weight: 600;
   color: var(--accent); border-color: var(--accent); background: var(--surface); }
+
+/* "N filtered out" in an auction header: says where the rest went, and
+   opens Filters to show why. */
+.group-filtered { font-size: inherit; color: var(--muted); text-decoration: underline dotted; }
+.group-filtered:hover:not(:disabled) { color: var(--link); }

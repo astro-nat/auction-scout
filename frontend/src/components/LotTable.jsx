@@ -345,7 +345,8 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                                   driveFrom = null, driveAvailable = false,
                                   onSaveDriveFrom, onClearDriveFrom,
                                   toolbar = null, toolbarEnd = null, panel = null,
-                                  toolbarAllLots = null, onImportMissing }) {
+                                  toolbarAllLots = null, onImportMissing,
+                                  loadedByAuction = {}, onShowFilters }) {
   const isMobile = useMediaQuery('(max-width: 768px)')
   const [pollingIds, setPollingIds] = useState(new Set())
   // Row menus (the ⋯ at the end of a row) are <details>: close any open one
@@ -1264,8 +1265,16 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
       a ? [a.city, a.state].filter(Boolean).join(', ') : '',
       a?.source === 'Local Pickup' ? 'local pickup' : a?.source === 'Ship' ? 'ships' : '',
       a?.buyer_premium_mult ? `${Math.round((a.buyer_premium_mult - 1) * 100)}% buyer's premium` : '',
-      `${g.lots.length.toLocaleString()} ${g.lots.length === 1 ? 'lot' : 'lots'} shown`,
     ].filter(Boolean).join(' · ')
+    // Where every lot of this auction is: on screen, folded below, or kept
+    // out by the filters. Only showing the first was confusing - five lots
+    // on screen and no word about the other two hundred.
+    const key = g.auctionId ?? 'none'
+    const rest = g.hasGold ? g.others : g.lots
+    const unfolded = Math.min(openGroups.get(key) || 0, rest.length)
+    const onScreen = g.featured.length + unfolded
+    const folded = rest.length - unfolded
+    const filteredOut = Math.max(0, (loadedByAuction[g.auctionId] ?? g.lots.length) - g.lots.length)
     const unwatched = g.featured.filter((l) => !l.watched)
     const missing = a && a.lot_count != null && a.lots_imported != null
       && a.lots_imported < a.lot_count
@@ -1295,7 +1304,24 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
               </span>
             )}
           </div>
-          <span className="group-meta">{meta}</span>
+          <span className="group-meta">
+            {[meta,
+              onScreen > 0 ? `${onScreen.toLocaleString()} shown` : '',
+              folded > 0 ? `${folded.toLocaleString()} folded below` : '',
+            ].filter(Boolean).join(' · ')}
+            {filteredOut > 0 && (
+              <>{meta || onScreen > 0 || folded > 0 ? ' · ' : ''}
+                {onShowFilters ? (
+                  <button type="button" className="link-like group-filtered"
+                          data-track="Filtered-out count (open filters)"
+                          title="Hidden by your filters: the hide rules, Gold mines only, the search or a column filter. Click to open Filters."
+                          onClick={onShowFilters}>
+                    {filteredOut.toLocaleString()} filtered out
+                  </button>
+                ) : `${filteredOut.toLocaleString()} filtered out`}
+              </>
+            )}
+          </span>
         </div>
         {g.hasGold ? (
           <div className="group-basket">
