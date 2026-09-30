@@ -1,71 +1,75 @@
-/* ======================================================================
-   Design tokens — light by default, dark via the system preference.
-   Components reference these vars in their inline styles; everything
-   generic (buttons, inputs, tables, badges) is styled here once so the
-   whole app stays consistent without per-element styling.
-   ====================================================================== */
+@import url("https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=swap");
+
+/* Palette: galvanized shelf steel and ledger ink. Green is the working
+   accent (actions, links, focus); price-sticker yellow is reserved for the
+   one thing worth money, a GOLD MINE max bid, and appears nowhere else. */
 :root {
   color-scheme: light dark;
-  --bg: #f5f6f8;              /* page ground — slightly off-white so cards read */
-  --text: #1b1e24;
-  --muted: #6b7280;
-  --card-bg: #ffffff;
+  --bg: #e7eae8;              /* shelf steel */
+  --text: #1c2320;            /* ledger ink */
+  --muted: #56615b;
+  --card-bg: #f6f7f6;
   --surface: #ffffff;         /* inputs and controls */
-  --border: #dcdfe5;
-  --border-strong: #b9bec8;
-  --badge-bg: #eceef2;
-  --gold-bg: #e9f7ec;         /* subtle wash; the accent edge carries the signal */
-  --gold-accent: #2e9e4f;
-  --overbid-bg: rgba(255, 145, 20, 0.12);
-  --overbid-accent: #d9822b;
-  --bolo-bg: #fff1cc;
-  --bolo-text: #6a4b00;
-  --highlight: #eef1fb;
-  --stripe: rgba(20, 30, 60, 0.028);     /* every other row */
-  --sorted-tint: rgba(47, 95, 208, 0.05);  /* the column the table is sorted by */
-  --success: #1e8e46;
-  --error: #c43a3a;
-  --danger: #c43a3a;
-  --warn: #b97f14;
-  --link: #2f5fd0;
-  --accent: #2f5fd0;
-  --accent-hover: #2551b8;
+  --border: #cdd3cf;
+  --border-strong: #a5aea8;
+  --badge-bg: #dbe0dc;
+  --gold-bg: rgba(246, 210, 74, 0.10);
+  --gold-accent: #d4ac17;
+  --overbid-bg: rgba(168, 67, 44, 0.08);
+  --overbid-accent: #a8432c;
+  --bolo-bg: #d6e2e9;
+  --bolo-text: #1f4257;
+  --highlight: #dde6e0;
+  --stripe: rgba(28, 35, 32, 0.03);      /* every other row */
+  --sorted-tint: rgba(29, 106, 76, 0.06);  /* the column the table is sorted by */
+  --success: #1d6a4c;
+  --error: #a8432c;
+  --danger: #a8432c;
+  --warn: #8a6414;
+  --link: #1d6a4c;
+  --accent: #1d6a4c;          /* ledger green */
+  --accent-hover: #16553c;
   --on-accent: #ffffff;
-  --accent-soft: rgba(47, 95, 208, 0.12);
-  --shadow: 0 1px 3px rgba(15, 20, 30, 0.08);
-  --shadow-pop: 0 6px 24px rgba(15, 20, 30, 0.16);
-  --radius: 6px;
+  --accent-soft: rgba(29, 106, 76, 0.11);
+  --sticker: #f6d24a;         /* price-gun label; the same in both themes */
+  --sticker-ink: #1c2320;
+  --shadow: 0 1px 2px rgba(20, 30, 25, 0.08);
+  --shadow-pop: 0 6px 24px rgba(20, 30, 25, 0.18);
+  --radius: 4px;
+  --font: "Archivo", system-ui, "Segoe UI", sans-serif;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #121419;
-    --text: #e7e9ee;
-    --muted: #9aa1ad;
-    --card-bg: #1c1f26;
-    --surface: #242830;
-    --border: #333845;
-    --border-strong: #4a5163;
-    --badge-bg: #2c313b;
-    --gold-bg: rgba(63, 191, 104, 0.13);
-    --gold-accent: #3fbf68;
-    --overbid-bg: rgba(255, 155, 40, 0.13);
-    --overbid-accent: #e09040;
-    --bolo-bg: #453611;
-    --bolo-text: #ffd97a;
-    --highlight: #262e45;
-    --stripe: rgba(255, 255, 255, 0.025);
-    --sorted-tint: rgba(95, 134, 232, 0.07);
-    --success: #4ec97b;
-    --error: #ff7a7a;
-    --danger: #ff7a7a;
-    --warn: #e0a030;
-    --link: #8fb0ff;
-    --accent: #5f86e8;
-    --accent-hover: #7398f0;
-    --on-accent: #ffffff;
-    --accent-soft: rgba(125, 162, 255, 0.16);
-    --shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+    --bg: #15191a;
+    --text: #e4e8e5;
+    --muted: #97a39c;
+    --card-bg: #1c2122;
+    --surface: #242a2b;
+    --border: #313939;
+    --border-strong: #4a5453;
+    --badge-bg: #2a3131;
+    --gold-bg: rgba(232, 195, 58, 0.08);
+    --gold-accent: #e8c33a;
+    --overbid-bg: rgba(224, 120, 92, 0.11);
+    --overbid-accent: #e0785c;
+    --bolo-bg: #20343f;
+    --bolo-text: #a9d2e8;
+    --highlight: #243029;
+    --stripe: rgba(255, 255, 255, 0.022);
+    --sorted-tint: rgba(79, 179, 135, 0.07);
+    --success: #4fb387;
+    --error: #e0785c;
+    --danger: #e0785c;
+    --warn: #d9a640;
+    --link: #6cc49c;
+    --accent: #4fb387;
+    --accent-hover: #65c498;
+    --on-accent: #0f1a15;
+    --accent-soft: rgba(79, 179, 135, 0.15);
+    --sticker: #e8c33a;
+    --sticker-ink: #15191a;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
     --shadow-pop: 0 8px 28px rgba(0, 0, 0, 0.5);
   }
 }
@@ -76,7 +80,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, "Segoe UI", system-ui, Roboto, "Helvetica Neue", sans-serif;
+  font-family: var(--font);
   font-size: 14px;
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
@@ -89,6 +93,20 @@ a {
 a:hover { text-decoration: underline; }
 
 h1 { letter-spacing: -0.02em; }
+
+/* The wordmark: Archivo at full width and weight, like a stencil on a
+   crate. The only other place the expanded cut shows is the sticker. */
+.wordmark {
+  font-family: var(--font);
+  font-stretch: 125%;
+  font-weight: 900;
+  letter-spacing: -0.035em;
+}
+.wordmark small {
+  font-stretch: 100%;
+  font-weight: 400;
+  letter-spacing: 0;
+}
 
 :focus-visible {
   outline: 2px solid var(--accent);
@@ -212,17 +230,16 @@ label { user-select: none; }
   border-collapse: collapse;
   width: 100%;
   font-size: 13.5px;
+  font-stretch: 88%;          /* semi-condensed: more columns, same size */
   background: var(--card-bg);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
   box-shadow: var(--shadow);
 }
 .data-table th {
   text-align: left;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: var(--muted);
   white-space: nowrap;
 }
@@ -290,6 +307,24 @@ label { user-select: none; }
   white-space: nowrap;
 }
 
+/* A GOLD MINE max bid, printed like a price-gun label: yellow stock,
+   heavy expanded figures, one corner clipped where the gun cut it. This
+   is the page's one loud element; keep yellow out of everything else. */
+.price-sticker {
+  display: inline-block;
+  padding: 1px 7px 1px 9px;
+  background: var(--sticker);
+  color: var(--sticker-ink);
+  font-stretch: 125%;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  clip-path: polygon(6px 0, 100% 0, 100% 100%, 0 100%, 0 6px);
+}
+@media (forced-colors: active) {
+  .price-sticker { border: 1px solid; clip-path: none; }
+}
+
 /* Row states: a light wash plus a colored edge, so the signal survives
    both themes without drowning the text. */
 tr.row-gold td { background: var(--gold-bg); }
@@ -310,7 +345,7 @@ tr.row-overbid td:first-child { box-shadow: inset 3px 0 0 var(--overbid-accent);
 .card {
   background: var(--card-bg);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 6px;
   padding: 12px;
   box-shadow: var(--shadow);
 }

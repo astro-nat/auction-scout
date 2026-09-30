@@ -1180,7 +1180,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                   Resale {money(e.est_resale)}{e.comp_count > 0 ? ` (${e.comp_count})` : ''}
                 </span>
                 {e.gold_check === 'demoted' && (
-                  <span style={{ color: '#e05555', fontSize: 12 }}> rejected by audit</span>
+                  <span style={{ color: 'var(--danger)', fontSize: 12 }}> rejected by audit</span>
                 )}
                 {houseEstimate(lot) && (
                   <span style={{ color: 'var(--muted)' }}
@@ -1190,7 +1190,9 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                       ? ` · ${houseRatioLabel(lot.house_ratio, lot.house_ratio_n)}` : ''}
                   </span>
                 )}
-                <span>Max bid {money(e.max_bid)}</span>
+                <span>Max bid {gold
+                  ? <span className="price-sticker">{money(e.max_bid)}</span>
+                  : money(e.max_bid)}</span>
                 {e.est_roi != null && (
                   <span style={{ fontWeight: 600,
                                  color: Number(e.est_roi) < 0 ? 'var(--danger)'
@@ -1499,7 +1501,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                 {ev && (
                   <div title={(EVIDENCE_NOTE[ev] || '')
                     + (e.comp_count ? ` (${e.comp_count} comps)` : '')}
-                       style={{ color: isPaleEvidence(ev) ? '#e0a030' : 'var(--muted)',
+                       style={{ color: isPaleEvidence(ev) ? 'var(--warn)' : 'var(--muted)',
                                 fontSize: 11, cursor: 'help' }}>
                     {EVIDENCE_LABEL[ev] || ev}
                   </div>
@@ -1511,7 +1513,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                 {e.gold_check === 'demoted' && (
                   <div title={e.gold_check_note
                     || 'The second-opinion audit judged this value implausible'}
-                       style={{ color: '#e05555', fontSize: 11, fontWeight: 600,
+                       style={{ color: 'var(--danger)', fontSize: 11, fontWeight: 600,
                                 cursor: 'help' }}>
                     rejected by audit
                   </div>
@@ -1527,7 +1529,9 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                 )}
                 {e.est_resale != null && <CompsPeek lot={lot} e={e} onLotUpdated={onLotUpdated} />}
               </td>
-              <td className="num" style={cell}>{money(e.max_bid)}</td>
+              <td className="num" style={cell}>
+                {gold ? <span className="price-sticker">{money(e.max_bid)}</span> : money(e.max_bid)}
+              </td>
               <td className="num" title={roiTooltip(lot, e)}
                   style={{ ...cell,
                            cursor: e.est_roi != null ? 'help' : undefined,

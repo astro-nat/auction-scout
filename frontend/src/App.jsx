@@ -989,18 +989,18 @@ export default function App() {
 
 
   return (
-    <div style={{ fontFamily: 'system-ui' }}>
+    <div>
       <StatusBar onQuiet={refreshAll} onStatus={onStatus} />
       <div style={{ padding: isMobile ? '0.75rem' : '1.5rem 2rem',
                     maxWidth: 1500, margin: '0 auto' }}>
-      <h1 style={{ fontSize: isMobile ? 22 : 26, margin: '0 0 2px',
+      <h1 className="wordmark"
+          style={{ fontSize: isMobile ? 22 : 28, margin: '0 0 2px',
                    display: 'flex', alignItems: 'baseline', gap: 10 }}>
         AuctionScout
         {!isMobile && (
-          <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--muted)',
-                         letterSpacing: 0 }}>
+          <small style={{ fontSize: 13, color: 'var(--muted)' }}>
             find it cheap, flip it well
-          </span>
+          </small>
         )}
       </h1>
 
