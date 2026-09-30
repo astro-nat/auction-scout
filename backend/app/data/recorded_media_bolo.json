@@ -1,0 +1,400 @@
+{
+  "schema_version": "1.0",
+  "domain": "recorded_media",
+  "last_updated": "2026-09-29",
+  "summary": "Recorded media that resells on eBay: out-of-print anime on disc, boutique restoration labels (Criterion, Scream Factory, Arrow, Vinegar Syndrome), discontinued Disney video, out-of-print TV box sets, collectible vinyl, CDs with real scarcity, laserdisc. Books are NOT here - they are covered by 'Specialty books and manuals' in lightweight_collectibles. Bulk lots are deliberately NOT here: the app's per-item price filter handles them, and a BOLO badge on one lot in eleven carries no information.",
+  "field_workflow": [
+    "Discs: the case is worth nothing, the disc face and the paper insert are everything. Ask for a photo of the disc if the listing shows only the spine.",
+    "Box sets: confirm the count. 'Complete series' missing one disc drops to parts value.",
+    "Anime: the value is in the LABEL and whether it is still printed. Funimation/Geneon/ADV sets that went out of print are the money; a current Crunchyroll reprint is not.",
+    "Vinyl: matrix / runout etchings in the dead wax identify a first pressing. Ring wear on the sleeve caps the grade regardless of the disc.",
+    "CDs: a Japanese pressing keeps its OBI strip - without it a $60 CD is a $6 CD.",
+    "Bulk lots: count the pieces and divide. Under ~40 cents an item a mixed lot is worth taking on volume alone; above that it has to be the titles.",
+    "Region codes: a PAL or Region 2 disc will not play on an ordinary US player. It still sells, but to a smaller audience - discount it."
+  ],
+  "skip_list": [
+    "Common studio catalogue DVD (Sony/Universal/Warner reprints, pennies each)",
+    "Ex-rental / library disc with case stickers and security tape",
+    "Burned, copied or bootleg disc",
+    "Scratched or cracked disc sold 'untested'",
+    "Digital copy code only (expired, worthless)",
+    "Reader's Digest condensed books and box sets",
+    "Damaged or missing OBI on a Japanese CD sold at OBI prices",
+    "Warped or heavily scuffed vinyl",
+    "Empty cases, sleeves and disc storage",
+    "Full-season network TV on VHS (near-zero demand)"
+  ],
+  "brands": [
+    {
+      "brand": "Out-of-print anime on disc",
+      "category": "recorded_media",
+      "tier": 1,
+      "models": [
+        "Funimation",
+        "Geneon",
+        "ADV Films",
+        "Bandai Entertainment",
+        "Aniplex",
+        "Discotek",
+        "Right Stuf",
+        "Media Blasters",
+        "Viz Video",
+        "Central Park Media",
+        "AnimEigo",
+        "anime box set",
+        "anime complete series",
+        "anime limited edition",
+        "anime artbox",
+        "anime LE box"
+      ],
+      "era_markers": [
+        "Geneon and ADV Films both shut down (2007-2009) - anything they pressed is finite",
+        "Funimation 'S.A.V.E.' reissues are the cheap version; the original thinpak sets are the money",
+        "Aniplex US limited editions are printed once, in small numbers"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "Out-of-print limited edition box set",
+          "low": 90,
+          "high": 400
+        },
+        {
+          "item": "Discontinued label complete series",
+          "low": 45,
+          "high": 180
+        },
+        {
+          "item": "Single out-of-print volume",
+          "low": 12,
+          "high": 45
+        }
+      ],
+      "target_buy_usd": {
+        "low": 3,
+        "high": 40
+      },
+      "platform_primary": "eBay",
+      "platform_secondary": "Mercari",
+      "comp_query_template": "{title} anime {label} box set",
+      "ship_class": "small_box",
+      "notes": "The highest-value disc category by a distance, and the one most often mispriced in a mixed lot because the label means nothing to a general seller.",
+      "condition_critical": true
+    },
+    {
+      "brand": "Criterion Collection",
+      "category": "recorded_media",
+      "tier": 2,
+      "models": [
+        "Criterion Collection",
+        "Criterion spine",
+        "Criterion Blu-ray",
+        "Criterion DVD",
+        "Criterion box set",
+        "Eclipse Series"
+      ],
+      "era_markers": [
+        "Spine number on the case edge - collectors buy by spine",
+        "Out-of-print spines (licence expired) are the ones that move"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "Out-of-print spine",
+          "low": 40,
+          "high": 200
+        },
+        {
+          "item": "In-print single disc",
+          "low": 12,
+          "high": 30
+        },
+        {
+          "item": "Box set (in print)",
+          "low": 40,
+          "high": 90
+        }
+      ],
+      "target_buy_usd": {
+        "low": 2,
+        "high": 20
+      },
+      "platform_primary": "eBay",
+      "platform_secondary": "Mercari",
+      "comp_query_template": "Criterion {title} spine",
+      "ship_class": "small_box",
+      "notes": "Steady rather than spectacular. Reliable enough that a Criterion spine in a mixed lot usually covers the whole lot.",
+      "condition_critical": true
+    },
+    {
+      "brand": "Boutique restoration labels",
+      "category": "recorded_media",
+      "tier": 2,
+      "models": [
+        "Scream Factory",
+        "Shout Factory",
+        "Arrow Video",
+        "Vinegar Syndrome",
+        "Blue Underground",
+        "Severin Films",
+        "Synapse Films",
+        "Kino Lorber",
+        "Mondo Macabro",
+        "Grindhouse Releasing",
+        "Code Red",
+        "88 Films",
+        "Second Sight",
+        "Vestron Video Collector",
+        "slipcover limited"
+      ],
+      "era_markers": [
+        "Limited pressing counts printed on the slipcover (e.g. '/3000')",
+        "The slipcover IS the value - a naked case is worth a fraction"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "Sold-out limited pressing with slipcover",
+          "low": 45,
+          "high": 160
+        },
+        {
+          "item": "Standard boutique release",
+          "low": 18,
+          "high": 50
+        }
+      ],
+      "target_buy_usd": {
+        "low": 2,
+        "high": 20
+      },
+      "platform_primary": "eBay",
+      "platform_secondary": "Facebook Marketplace",
+      "comp_query_template": "{label} {title} blu-ray slipcover",
+      "ship_class": "small_box",
+      "notes": "Horror and cult restorations. Small print runs, dedicated buyers, and general sellers never recognise the label.",
+      "condition_critical": true
+    },
+    {
+      "brand": "Discontinued Disney video",
+      "category": "recorded_media",
+      "tier": 2,
+      "models": [
+        "Song of the South",
+        "Walt Disney Treasures",
+        "Disney Treasures tin",
+        "Black Diamond",
+        "Disney Vault",
+        "Disney exclusive DVD"
+      ],
+      "era_markers": [
+        "Walt Disney Treasures tins are numbered and were made once",
+        "Song of the South was never released in the US - imports and bootlegs both circulate, so verify"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "Walt Disney Treasures sealed tin",
+          "low": 40,
+          "high": 150
+        },
+        {
+          "item": "Song of the South (genuine import)",
+          "low": 30,
+          "high": 90
+        },
+        {
+          "item": "Black Diamond VHS",
+          "low": 8,
+          "high": 30
+        }
+      ],
+      "target_buy_usd": {
+        "low": 1,
+        "high": 15
+      },
+      "platform_primary": "eBay",
+      "platform_secondary": "Mercari",
+      "comp_query_template": "Disney {title} {format}",
+      "ship_class": "small_box",
+      "notes": "Black Diamond VHS is the most over-hyped item in resale - real prices are modest. The numbered Treasures tins are the genuine money here.",
+      "condition_critical": true
+    },
+    {
+      "brand": "Out-of-print TV box sets",
+      "category": "recorded_media",
+      "tier": 3,
+      "models": [
+        "complete series DVD",
+        "complete series Blu-ray",
+        "complete series box set",
+        "seasons 1-",
+        "the complete collection DVD"
+      ],
+      "era_markers": [
+        "Music-licence expiry is what kills a reprint, so shows built on licensed music stay scarce"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "Out-of-print complete series",
+          "low": 35,
+          "high": 140
+        },
+        {
+          "item": "Single season, in print",
+          "low": 6,
+          "high": 18
+        }
+      ],
+      "target_buy_usd": {
+        "low": 2,
+        "high": 25
+      },
+      "platform_primary": "eBay",
+      "platform_secondary": "Mercari",
+      "comp_query_template": "{title} complete series dvd",
+      "ship_class": "medium_box",
+      "notes": "Heavy for the money - check the postage before bidding. A complete series missing a disc is worth parts value only.",
+      "condition_critical": true
+    },
+    {
+      "brand": "Collectible vinyl records",
+      "category": "recorded_media",
+      "tier": 2,
+      "models": [
+        "first pressing",
+        "original pressing",
+        "Blue Note",
+        "Mobile Fidelity",
+        "MFSL",
+        "Impulse records",
+        "Verve records",
+        "Sun Records",
+        "sealed LP",
+        "promo LP",
+        "white label promo",
+        "test pressing",
+        "audiophile pressing",
+        "half-speed master"
+      ],
+      "era_markers": [
+        "Runout / dead-wax etchings identify the pressing - the sleeve alone never does",
+        "Deep-groove labels and mono pressings date a jazz record to the first run"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "Jazz first pressing (Blue Note / Impulse)",
+          "low": 80,
+          "high": 600
+        },
+        {
+          "item": "Audiophile reissue (MFSL and similar)",
+          "low": 40,
+          "high": 150
+        },
+        {
+          "item": "Sealed or promo rock LP",
+          "low": 25,
+          "high": 120
+        }
+      ],
+      "target_buy_usd": {
+        "low": 2,
+        "high": 35
+      },
+      "platform_primary": "eBay",
+      "platform_secondary": "Discogs",
+      "comp_query_template": "{artist} {title} LP first pressing",
+      "ship_class": "medium_box",
+      "notes": "Grade honestly: buyers of records at this level return anything graded optimistically. Ring wear caps the price whatever the disc looks like.",
+      "condition_critical": true
+    },
+    {
+      "brand": "CDs with real scarcity",
+      "category": "recorded_media",
+      "tier": 3,
+      "models": [
+        "Japanese import CD",
+        "OBI strip",
+        "obi CD",
+        "longbox CD",
+        "promo CD",
+        "advance promo CD",
+        "CD box set",
+        "sealed CD",
+        "limited edition CD",
+        "digipak limited"
+      ],
+      "era_markers": [
+        "Longbox packaging dates a CD to 1986-1992",
+        "A Japanese pressing without its OBI strip loses most of its premium"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "Japanese pressing with OBI",
+          "low": 25,
+          "high": 90
+        },
+        {
+          "item": "Out-of-print box set",
+          "low": 30,
+          "high": 120
+        },
+        {
+          "item": "Sealed or promo single-disc",
+          "low": 8,
+          "high": 30
+        }
+      ],
+      "target_buy_usd": {
+        "low": 1,
+        "high": 12
+      },
+      "platform_primary": "eBay",
+      "platform_secondary": "Discogs",
+      "comp_query_template": "{artist} {title} CD {edition}",
+      "ship_class": "mailer",
+      "notes": "Ordinary used CDs are close to worthless individually - this entry is only about the pressings that are not ordinary. Bulk CDs belong under the media-lot entry instead.",
+      "condition_critical": true
+    },
+    {
+      "brand": "Laserdisc (collector titles)",
+      "category": "recorded_media",
+      "tier": 3,
+      "models": [
+        "laserdisc",
+        "laser disc",
+        "LD box set",
+        "AC-3 laserdisc",
+        "THX laserdisc",
+        "Criterion laserdisc"
+      ],
+      "era_markers": [
+        "Criterion's laserdiscs carried commentary tracks that never moved to DVD - that is the whole demand"
+      ],
+      "comp_ranges_usd": [
+        {
+          "item": "Criterion or sought-after box set",
+          "low": 40,
+          "high": 200
+        },
+        {
+          "item": "Ordinary title",
+          "low": 4,
+          "high": 15
+        }
+      ],
+      "target_buy_usd": {
+        "low": 1,
+        "high": 15
+      },
+      "platform_primary": "eBay",
+      "platform_secondary": "Facebook Marketplace",
+      "comp_query_template": "{title} laserdisc",
+      "ship_class": "medium_box",
+      "notes": "Heavy, fragile and mostly worthless except for the handful of titles with exclusive extras. Check the title before the format.",
+      "condition_critical": true
+    }
+  ],
+  "platform_notes": {
+    "eBay": "Sold-listings filter is essential here - asking prices on discs are fantasy. Media Mail makes the postage workable on anything heavy.",
+    "Discogs": "Better than eBay for vinyl and for CDs with pressing-level detail. Buyers expect accurate grading and will return anything optimistic.",
+    "Mercari": "Works for anime and boutique discs; smaller audience, faster sales, lower ceiling."
+  }
+}

@@ -108,6 +108,9 @@ DEFAULT_BOLO_PATHS: List[Path] = [
     _DATA_DIR / "estate_collectibles_bolo.json",
     _DATA_DIR / "nostalgia_collectibles_bolo.json",
     _DATA_DIR / "vintage_video_games_bolo.json",
+    # Recorded media loads AFTER the games list, so a PS1 disc stays a game
+    # rather than becoming a generic "movie lot".
+    _DATA_DIR / "recorded_media_bolo.json",
     _DATA_DIR / "western_wear_bolo.json",
     # Precious-metals loads LAST so brand-specific entries (Tiffany,
     # Cartier, Native American jewelry) take precedence — those have
@@ -3542,6 +3545,54 @@ _BRAND_ALIASES: Dict[str, List[str]] = {
         "topps garbage pail", "topps gpk",
         "topps wacky packages",
         "topps mickey mantle", "topps rookie",
+    ],
+    # --- Recorded media -------------------------------------------------
+    # Every phrase here is a label, a format or a pressing marker, because
+    # the bare words are unusable: "cd" and "dvd" appear in a third of the
+    # inventory, and flagging all of them would make the BOLO badge mean
+    # nothing. Bulk lots have no entry at all: measured, one would have
+    # badged 394 lots (9% of inventory), and the per-item price filter does
+    # that job with an actual number.
+    "Out-of-print anime on disc": [
+        "funimation", "geneon", "adv films", "bandai entertainment",
+        "aniplex", "discotek", "right stuf", "media blasters",
+        "central park media", "animeigo",
+        "anime box set", "anime complete series", "anime dvd lot",
+        "anime blu-ray", "anime bluray",
+    ],
+    "Criterion Collection": [
+        "criterion collection", "criterion spine", "criterion blu-ray",
+        "criterion bluray", "criterion dvd", "eclipse series",
+    ],
+    "Boutique restoration labels": [
+        "scream factory", "shout factory", "arrow video", "vinegar syndrome",
+        "blue underground", "severin films", "synapse films", "kino lorber",
+        "mondo macabro", "grindhouse releasing", "code red blu",
+        "88 films", "second sight", "vestron video collector",
+    ],
+    "Discontinued Disney video": [
+        "song of the south", "walt disney treasures", "disney treasures tin",
+        "black diamond vhs", "disney black diamond",
+    ],
+    "Out-of-print TV box sets": [
+        "complete series dvd", "complete series blu-ray",
+        "complete series bluray", "complete series box set",
+        "the complete collection dvd",
+    ],
+    "Collectible vinyl records": [
+        "first pressing lp", "first pressing vinyl", "original pressing lp",
+        "original pressing vinyl", "blue note records",
+        "mobile fidelity", "mfsl", "impulse records", "sun records",
+        "sealed lp", "promo lp", "white label promo", "test pressing",
+        "half-speed master", "audiophile pressing",
+    ],
+    "CDs with real scarcity": [
+        "obi strip", "japanese import cd", "japan import cd", "longbox cd",
+        "cd longbox", "promo cd", "advance promo cd", "cd box set",
+        "sealed cd", "limited edition cd",
+    ],
+    "Laserdisc (collector titles)": [
+        "laserdisc", "laser disc", "ld box set",
     ],
     "Vintage Transformers + GI Joe + Masters": [
         "g1 transformers", "generation 1 transformers",
