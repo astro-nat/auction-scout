@@ -501,3 +501,60 @@ def enrich_all(auction_id: int, skip_hard: bool = False, db: Session = Depends(g
              synchronize_session=False)
     db.commit()
     return {"auction_id": auction_id, "queued": len(lot_ids)}
+
+
+@router.delete("/{auction_id}")
+def delete_auction(auction_id: int, dry_run: bool = False, force: bool = False,
+                   db: Session = Depends(get_db)):
+    """Delete one auction and everything imported from it. Permanent.
+
+    Hiding an auction takes it out of the views and is what you want almost
+    always. This is for a sale that should not be on the machine at all -
+    the case that prompted it was dropping the two government sources, whose
+    scrapers were removed, leaving rows nothing could ever refresh again.
+
+    Deletion order matches the closed-lot flush: there is no delete-cascade
+    on the models, so the price trail and the enrichments go before the lots
+    that own them, or the foreign key rolls the whole thing back.
+
+    A watched lot blocks the delete unless force=true. Watching is the one
+    signal the user has given about a specific lot, and taking it out from
+    under them silently is worse than making them ask twice.
+    """
+    auction = db.query(models.Auction).filter(models.Auction.id == auction_id).first()
+    if not auction:
+        raise HTTPException(status_code=404, detail="No such auction")
+    lots = db.query(models.Lot).filter(models.Lot.auction_id == auction_id).all()
+    watched = [l for l in lots if l.watched]
+    info = {"auction_id": auction_id, "name": auction.name,
+            "lots": len(lots), "watched": len(watched)}
+    if dry_run:
+        return {**info, "dry_run": True, "deleted": False}
+    if watched and not force:
+        raise HTTPException(
+            status_code=409,
+            detail=(f"{len(watched)} lot(s) here are on your watch list. "
+                    f"Pass force=true to delete them anyway."))
+    ids = [l.id for l in lots]
+    lot_keys = [l.lot_id for l in lots]
+    if ids:
+        (db.query(models.PriceObservation)
+           .filter(models.PriceObservation.lot_id.in_(ids))
+           .delete(synchronize_session=False))
+        (db.query(models.Enrichment)
+           .filter(models.Enrichment.lot_id.in_(ids))
+           .delete(synchronize_session=False))
+        (db.query(models.Lot)
+           .filter(models.Lot.id.in_(ids))
+           .delete(synchronize_session=False))
+    if lot_keys:
+        # The hide memory is keyed by the lot's external id and outlives the
+        # row on purpose, so that a re-import cannot resurrect a hidden lot.
+        # Nothing can re-import these, so the entries are just litter.
+        (db.query(models.HiddenLot)
+           .filter(models.HiddenLot.lot_id.in_(lot_keys))
+           .delete(synchronize_session=False))
+    db.query(models.Auction).filter(models.Auction.id == auction_id).delete(
+        synchronize_session=False)
+    db.commit()
+    return {**info, "dry_run": False, "deleted": True}
