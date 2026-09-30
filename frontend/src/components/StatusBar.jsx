@@ -16,11 +16,29 @@ function useStatusBarHeightVar() {
   return ref
 }
 
+// Folded or open, remembered per browser. Storage can be missing or throw
+// (private windows); a narrow window then starts folded, a wide one open.
+const FOLD_KEY = 'auctionscout.statusbarFolded'
+function initiallyFolded() {
+  try {
+    const saved = window.localStorage.getItem(FOLD_KEY)
+    if (saved === 'true' || saved === 'false') return saved === 'true'
+  } catch { /* fall through to the width */ }
+  return typeof window !== 'undefined' && window.innerWidth < 768
+}
+
 // Fixed bar across the very top: what the server is doing right now, with
 // real counts ("Importing 29 of 212"). Hidden entirely when nothing is
-// running, so it never steals space from the app.
+// running, so it never steals space from the app - and foldable to one
+// line when something is, because two or three jobs with their progress
+// bars took a real bite out of a small window.
 export default function StatusBar({ onQuiet, onStatus }) {
   const [status, setStatus] = useState(null)
+  const [folded, setFoldedState] = useState(initiallyFolded)
+  const setFolded = (v) => {
+    setFoldedState(v)
+    try { window.localStorage.setItem(FOLD_KEY, String(v)) } catch { /* a preference */ }
+  }
   const barRef = useStatusBarHeightVar()
   // Per-job progress samples (jobId → [{t, current}...]) so each row can
   // show a measured pace and time-remaining, same as the enrichment queue.
@@ -118,12 +136,53 @@ export default function StatusBar({ onQuiet, onStatus }) {
 
   if (!lines.length) return null
 
+  const barStyle = {
+    position: 'sticky', top: 0, zIndex: 1000,
+    background: 'var(--card-bg)', borderBottom: '1px solid var(--border)',
+    padding: '6px 10px', fontSize: 13, boxShadow: 'var(--shadow)',
+  }
+  const work = lines.filter((l) => !l.warn)
+  const warning = lines.find((l) => l.warn)
+
+  if (folded) {
+    // One line: how much is running, the first job's progress, and the
+    // no-worker warning if there is one - that is a problem, not progress.
+    const first = work.find((l) => l.total > 0)
+    const pct = first ? Math.min(100, Math.round((first.current / first.total) * 100)) : null
+    return (
+      <div ref={barRef} style={{ ...barStyle, padding: '4px 10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {work.length > 0 && <span className="spinner" />}
+          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                         color: warning ? 'var(--warn)' : undefined,
+                         fontWeight: warning ? 600 : undefined }}>
+            {warning ? warning.text
+              : `${work.length} ${work.length === 1 ? 'job' : 'jobs'} running`}
+          </span>
+          {pct !== null && !warning && (
+            <strong style={{ flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{pct}%</strong>
+          )}
+          <button type="button" onClick={() => setFolded(false)}
+                  data-track="Show status bar" aria-expanded="false"
+                  title="Show every running job, with its progress and a Cancel button"
+                  style={{ flexShrink: 0, fontSize: 12, padding: '2px 8px' }}>
+            Show ▾
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div ref={barRef} style={{
-      position: 'sticky', top: 0, zIndex: 1000,
-      background: 'var(--card-bg)', borderBottom: '1px solid var(--border)',
-      padding: '6px 10px', fontSize: 13, boxShadow: 'var(--shadow)',
-    }}>
+    <div ref={barRef} style={barStyle}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 2 }}>
+        <button type="button" onClick={() => setFolded(true)}
+                data-track="Hide status bar" aria-expanded="true"
+                title="Fold this to one line - the jobs keep running"
+                style={{ fontSize: 12, padding: '1px 8px' }}>
+          Hide ▴
+        </button>
+      </div>
       {lines.map((l) => {
         const pct = l.total > 0
           ? Math.min(100, Math.round((l.current / l.total) * 100))
