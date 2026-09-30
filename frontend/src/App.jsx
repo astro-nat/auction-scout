@@ -955,9 +955,11 @@ export default function App() {
         // per-item price, so it can never satisfy this box.
         if (cheapMediaOnly && !(l.media_per_item != null
                                 && l.media_per_item < Number(maxPerItem))) return false
-        // Out of the priced inventory once it is watched, so what is left
-        // there is what has not been decided about yet.
-        if (pricedOnly && l.watched) return false
+        // Watched lots stay in the priced inventory. They used to leave it
+        // ("decided, so out of the list"), but watching is now how a basket
+        // is planned - "Watch these 21" on an auction's gold mines - and it
+        // made the best lots of that auction vanish from Priced while All
+        // still showed them. The star marks them; Watched lists them alone.
         return true
       })
       .map((l) => ({ ...l,
