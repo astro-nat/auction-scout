@@ -853,6 +853,11 @@ export default function App() {
   const importedAuctions = Object.values(importedRows)
     .sort((a, b) => (parseUtc(a.closing_date) ?? new Date('9999-01-01')) - (parseUtc(b.closing_date) ?? new Date('9999-01-01')))
   const importedIds = new Set(Object.keys(importedRows).map(Number))
+  // The auction picker's own order: most gold first, then by name. Named
+  // here rather than sorted inline in the JSX, so "Select all N" ticks
+  // exactly the rows the panel is showing and the count cannot drift.
+  const pickerRows = Object.values(importedRows)
+    .sort((a, b) => ((b.gold_count ?? 0) - (a.gold_count ?? 0)) || a.name.localeCompare(b.name))
   const notImported = visibleAuctions.filter((a) => !importedIds.has(a.id))
   // Watched auction houses sit above the rest of the discovered list: a house
   // you've starred is one you already trust, so its sales are worth seeing
@@ -1463,13 +1468,30 @@ export default function App() {
                 : `All auctions (${Object.keys(importedRows).length} imported) ▾`}
             </summary>
             <div className="panel">
-              <button onClick={() => setSelectedAuctions([])}
-                      disabled={!selectedAuctions.length}
-                      style={{ width: '100%', padding: 6, fontSize: 13, marginBottom: 4 }}>
-                Show all auctions
-              </button>
-              {Object.values(importedRows)
-                .sort((a, b) => ((b.gold_count ?? 0) - (a.gold_count ?? 0)) || a.name.localeCompare(b.name))
+              {/* Ticking them one at a time was the longest unbroken run in
+                  the usage log - 19 checkboxes without another action
+                  between them. Selecting every auction is NOT the same as
+                  selecting none: the per-auction buttons beside this panel,
+                  "Import N missing" among them, only appear for auctions
+                  that are ticked. */}
+              <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
+                <button onClick={() => setSelectedAuctions(pickerRows.map((a) => a.id))}
+                        disabled={selectedAuctions.length === pickerRows.length
+                                  || !pickerRows.length}
+                        data-track="Select all auctions"
+                        title="Tick every imported auction — the per-auction buttons, including any unfinished imports, then show up for all of them"
+                        style={{ flex: 1, padding: 6, fontSize: 13 }}>
+                  Select all {pickerRows.length}
+                </button>
+                <button onClick={() => setSelectedAuctions([])}
+                        disabled={!selectedAuctions.length}
+                        data-track="Show all auctions (clear selection)"
+                        title="Untick everything and go back to items from every auction"
+                        style={{ flex: 1, padding: 6, fontSize: 13 }}>
+                  Show all auctions
+                </button>
+              </div>
+              {pickerRows
                 .map((a) => (
                   <label key={a.id}
                          style={{ display: 'flex', gap: 6, alignItems: 'flex-start',
