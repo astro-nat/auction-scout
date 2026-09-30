@@ -57,7 +57,7 @@ export default function App() {
   // pricing - so it belongs to neither Auctions nor Inventory.
   const TABS = [
     { key: 'auctions', label: 'Auctions', views: ['auctions', 'saved'] },
-    { key: 'inventory', label: 'Inventory', views: ['items', 'priced', 'watched'] },
+    { key: 'inventory', label: 'Inventory', views: ['items', 'watched'] },
     { key: 'queue', label: 'Queue', views: ['queue'] },
   ]
   const lastViewIn = useRef({ auctions: 'auctions', inventory: 'items', queue: 'queue' })
@@ -72,7 +72,9 @@ export default function App() {
     // Only a real tab switch is worth a row. This effect also runs on mount
     // (twice, in dev) and that is not the user doing anything.
     if (viewSynced.current) track('view', { view })
-    if (viewFromHash(window.location.hash) !== view) {
+    // Compared as written, not as read: an old #priced link reads as the
+    // inventory, and the address bar should say where you actually are.
+    if (window.location.hash.replace(/^#/, '') !== view) {
       const url = viewUrl(view, window.location)
       if (viewSynced.current) window.history.pushState(null, '', url)
       else window.history.replaceState(null, '', url)
@@ -217,7 +219,6 @@ export default function App() {
   const [lotsLoadState, setLotsLoadState] = useState('loading')
   // The two inventory tabs are one panel with one difference: Priced
   // inventory asks the server for only the lots that carry a value.
-  const pricedOnly = view === 'priced'
   // Watching is a decision already made, so those lots get their own view
   // and leave the priced inventory - what stays there is what still needs
   // one. Fetched by the server rather than filtered here, because a watched
@@ -225,12 +226,10 @@ export default function App() {
   const watchedOnly = view === 'watched'
   // Unscoped totals for the tab labels - lotTotal follows the filters in
   // view, and a tab label that changed with the filters read as a bug.
-  const [tabCounts, setTabCounts] = useState({ items: null, priced: null, watched: null })
+  const [tabCounts, setTabCounts] = useState({ items: null, watched: null })
   const loadTabCounts = useCallback(() => {
-    Promise.all([fetchLotCount({}), fetchLotCount({ pricedOnly: true }),
-                 fetchLotCount({ watchedOnly: true })])
-      .then(([all, priced, watched]) => setTabCounts({
-        items: all.total, priced: priced.total, watched: watched.total }))
+    Promise.all([fetchLotCount({}), fetchLotCount({ watchedOnly: true })])
+      .then(([all, watched]) => setTabCounts({ items: all.total, watched: watched.total }))
       .catch(console.error)
   }, [])
   useEffect(() => { loadTabCounts() }, [loadTabCounts])
@@ -251,7 +250,6 @@ export default function App() {
       // (lib/filters.isGoldMine), so toggling it costs no round trip.
       // Every lot is fetched either way; this only chooses what is shown.
       flaggedOnly: filters.flaggedOnly,
-      pricedOnly,
       watchedOnly,
     }
     // Pages of 2000, fetched AT ONCE rather than one after another. One
@@ -300,7 +298,7 @@ export default function App() {
       console.error(e)
       setLotsLoadState('error')
     })
-  }, [selectedAuctions, categoryFilter, filters, pricedOnly, watchedOnly])
+  }, [selectedAuctions, categoryFilter, filters, watchedOnly])
 
   // Accumulate imported auctions as FULL rows, separately from the visible
   // list: scans replace `auctions` with whatever HiBid returned, and your
@@ -966,7 +964,7 @@ export default function App() {
                      auction_name: l.auction_name ?? auctionNames[l.auction_id] ?? '—',
                      item_closed: isClosedItem(l) }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lots, auctions, auctionIndex, showHiddenLots, hideLowValue, lowValueCutoff, hideHardShip, hideNoUsShip, hideClosed, cheapMediaOnly, maxPerItem, pricedOnly, tooFarIds])
+  }, [lots, auctions, auctionIndex, showHiddenLots, hideLowValue, lowValueCutoff, hideHardShip, hideNoUsShip, hideClosed, cheapMediaOnly, maxPerItem, tooFarIds])
   // What each of these two boxes removes from what the other boxes leave -
   // counted before either of them runs, so the number holds whether the box
   // is ticked or not. Counted independently of each other: a lot that is
@@ -1127,7 +1125,7 @@ export default function App() {
                     title="Re-pull current bids from HiBid for every imported open auction and recompute ROI. Free — progress shows in the top bar.">
               Refresh bids
             </button>
-            {!pricedOnly && (<>
+            {(<>
             <button style={{ textAlign: 'left' }}
                     onClick={runBusy('comps-all', 'Counting unpriced items…', handleCompsOnly)}
                     disabled={!!busy['comps-all']}
@@ -1396,9 +1394,8 @@ export default function App() {
             {{
               auctions: 'Search Auctions',
               saved: `Imported Auctions (${importedAuctions.length})`,
-              items: `All Inventory (${(tabCounts.items ?? lotTotal).toLocaleString()})`,
-              priced: `Priced Inventory (${(tabCounts.priced ?? 0).toLocaleString()})`,
-              watched: `Watched (${(tabCounts.watched ?? 0).toLocaleString()})`,
+              items: `My Inventory (${(tabCounts.items ?? lotTotal).toLocaleString()})`,
+              watched: `My Watched Items (${(tabCounts.watched ?? 0).toLocaleString()})`,
               queue: queueN ? `Queue (${queueN.toLocaleString()})` : 'Queue',
             }[v]}
           </button>
@@ -1858,7 +1855,7 @@ export default function App() {
       {/* The watched list is the same table over a different set, so it
           renders through the same panel - leaving it out was why the
           view came up blank rather than empty. */}
-      {(view === 'items' || view === 'priced' || view === 'watched') && (<>
+      {(view === 'items' || view === 'watched') && (<>
       <section style={{ marginBottom: 6, display: 'flex',
                         flexDirection: 'column', gap: 6 }}>
         {/* Row 1: scope (auctions + category) on the left, bulk actions on
@@ -1894,7 +1891,7 @@ export default function App() {
                 ? <>Catalogue of <strong style={{ color: 'var(--text)' }}>{auctionIndex[selectedAuctions[0]] ?? 'this auction'}</strong></>
                 : <>Items from <strong style={{ color: 'var(--text)' }}>{selectedAuctions.length} selected auctions</strong></>}
               {categoryFilter && <> in <strong style={{ color: 'var(--text)' }}>{categoryFilter}</strong></>}
-              {' '}— {(lotTotal || lots.length).toLocaleString()} lot{(lotTotal || lots.length) === 1 ? '' : 's'} {pricedOnly ? 'priced' : 'imported'}
+              {' '}— {(lotTotal || lots.length).toLocaleString()} lot{(lotTotal || lots.length) === 1 ? '' : 's'} imported
             </span>
             <button style={{ fontSize: 12, padding: '2px 8px' }}
                     onClick={() => setSelectedAuctions([])}>
@@ -1903,8 +1900,8 @@ export default function App() {
           </>
         ) : (
           <span>
-            <strong style={{ color: 'var(--text)' }}>{lotTotal.toLocaleString()} {pricedOnly ? 'priced ' : ''}items</strong>
-            {pricedOnly ? ' across' : ' imported across'}
+            <strong style={{ color: 'var(--text)' }}>{lotTotal.toLocaleString()} items</strong>
+            {' imported across'}
             {' '}{new Set(lots.map((l) => l.auction_id)).size} auctions
             {lotTotal > lots.length && (
               <em>
@@ -1926,18 +1923,6 @@ export default function App() {
               the server is probably busy with a big job right now.
             </div>
             <button onClick={loadLots} style={{ marginTop: 10 }}>Try again</button>
-          </div>
-        ) : pricedOnly ? (
-          <div className="empty-state">
-            <div><strong>Nothing priced yet.</strong></div>
-            <div style={{ marginTop: 4 }}>
-              Price items from <strong>All Inventory</strong> — every lot that gets a
-              value shows up here.
-            </div>
-            <button className="primary" style={{ marginTop: 12 }}
-                    onClick={() => setView('items')}>
-              All Inventory
-            </button>
           </div>
         ) : (
           <div className="empty-state">

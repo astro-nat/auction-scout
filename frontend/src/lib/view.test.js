@@ -23,7 +23,7 @@ describe('viewFromHash', () => {
     expect(viewFromHash('#items')).toBe('items')
     expect(viewFromHash('#auctions')).toBe('auctions')
     expect(viewFromHash('#saved')).toBe('saved')
-    expect(viewFromHash('#priced')).toBe('priced')
+    expect(viewFromHash('#priced')).toBe('items')   // retired: folded into the inventory
     expect(viewFromHash('#queue')).toBe('queue')
   })
 
@@ -127,11 +127,15 @@ describe('the watched view', () => {
     expect(VIEWS).toContain('watched')
   })
 
-  it('sits between the inventory it leaves and the queue', () => {
-    // Watching is a decision already made, so the lot moves out of the
-    // priced inventory into its own list; the order reads that way.
-    expect(VIEWS.indexOf('watched')).toBeGreaterThan(VIEWS.indexOf('priced'))
+  it('sits between the inventory and the queue', () => {
+    expect(VIEWS.indexOf('watched')).toBeGreaterThan(VIEWS.indexOf('items'))
     expect(VIEWS.indexOf('watched')).toBeLessThan(VIEWS.indexOf('queue'))
+  })
+
+  it('sends the retired priced view to the inventory, from a link or from storage', () => {
+    expect(VIEWS).not.toContain('priced')
+    expect(initialView('#priced', null)).toBe('items')
+    expect(initialView('', { getItem: () => 'priced' })).toBe('items')
   })
 
   it('survives a round trip through storage', () => {

@@ -9,19 +9,22 @@
 // reaching for window themselves, so they can be tested without a DOM.
 
 export const VIEW_KEY = 'auctionscout.view'
-// Find auctions, the auctions you have imported from, every imported lot,
-// just the lots the app has put a value on, the ones you are watching, and
-// the work still to do. Watching is a decision already made, so a watched
-// lot leaves the priced inventory for its own view - what stays in the list
-// is what still needs deciding.
-export const VIEWS = ['auctions', 'saved', 'items', 'priced', 'watched', 'queue']
+// Find auctions, the auctions you have imported from, your inventory, the
+// lots you are watching, and the work still to do.
+export const VIEWS = ['auctions', 'saved', 'items', 'watched', 'queue']
 export const DEFAULT_VIEW = 'auctions'
+
+// Views that no longer exist, and where their links and saved preferences
+// land instead. "Priced inventory" folded into the inventory once lots were
+// grouped by auction: the grouped view already puts what's priced first.
+export const RETIRED_VIEWS = { priced: 'items' }
 
 // Anyone can type anything after the #, and an unrecognised value would
 // match neither panel and render a blank page. Returns null for "no usable
 // view here", which is distinct from a valid one.
 export function viewFromHash(hash) {
   const raw = (hash || '').replace(/^#/, '')
+  if (RETIRED_VIEWS[raw]) return RETIRED_VIEWS[raw]
   return VIEWS.includes(raw) ? raw : null
 }
 
@@ -32,7 +35,7 @@ export function initialView(hash, storage) {
   const fromHash = viewFromHash(hash)
   if (fromHash) return fromHash
   try {
-    const saved = storage?.getItem(VIEW_KEY)
+    const saved = RETIRED_VIEWS[storage?.getItem(VIEW_KEY)] ?? storage?.getItem(VIEW_KEY)
     return VIEWS.includes(saved) ? saved : DEFAULT_VIEW
   } catch {
     return DEFAULT_VIEW
