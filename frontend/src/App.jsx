@@ -1249,6 +1249,7 @@ export default function App() {
                               ? 'var(--highlight)' : undefined }}>
                 <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <button
+                    data-track={a.favorite ? 'Unwatch auction house' : 'Watch auction house'}
                     className="bare"
                     onClick={() => toggleFavorite(a)}
                     disabled={!a.auctioneer_id}
@@ -1269,6 +1270,7 @@ export default function App() {
                   <button
                     className="bare"
                     onClick={() => confirmForget(a)}
+                    data-track="Forget auction"
                     title="Forget this auction — it won't come back in future scans"
                     style={{
                       marginLeft: 'auto', padding: '0 2px', fontSize: 14,
@@ -1411,6 +1413,7 @@ export default function App() {
                     <button onClick={() => handleImport(a.id)}>{importLabel(a)}</button>{' '}
                     <button className="bare"
                             onClick={() => confirmForget(a)}
+                            data-track="Forget auction"
                             title="Forget this auction — it won't come back in future scans"
                             style={{ color: 'var(--muted)', padding: '0 2px' }}>
                       ✕
@@ -1823,6 +1826,7 @@ export default function App() {
         )
       ) : (
         <LotTable lots={visibleLots} onLotUpdated={handleLotUpdated} onRefresh={loadLots}
+                  auctions={importedRows}
                   onOpenCloset={handleOpenCloset}
                   onSelectAuction={(id) => {
                     // Jump back to the top: the change happens above the

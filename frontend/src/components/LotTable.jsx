@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { enrichLot, compsLot, recheckLot, fetchLot, patchEnrichment, flagComp, enrichBatch, repriceSelected, setWatch, setHidden, hideLike, refreshBidsForLots, analyzeShippingForLots, alertOnce, parseUtc } from '../api'
 import { aiDone, rowAction } from '../lib/pricing'
 import { PAGE_SIZES, pageButtons, pageWindow, savePageSize, savedPageSize, searchMatches, showingText } from '../lib/paging'
@@ -8,6 +8,7 @@ import { CLOSING_RANGES, ROI_RANGES, hoursUntil, matchesFilter, presetsFor, roiP
 import { allSelected, chunked, inView, selectAll, toggle } from '../lib/selection'
 import { track } from '../lib/track'
 import { offerFrom, offerLabel } from '../lib/hideLike'
+import { ADDON_FLOOR_KEY, ARRANGE_KEY, basketLabel, groupByAuction, savePref, savedAddonFloor, savedArrange } from '../lib/grouping'
 import useMediaQuery from '../useMediaQuery'
 
 // The homework behind a resale number: the comp records the pricer actually
@@ -338,7 +339,7 @@ const MOBILE_SORTS = [
 ]
 
 export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
-                                  onSelectAuction, onOpenCloset }) {
+                                  onSelectAuction, onOpenCloset, auctions = {} }) {
   const isMobile = useMediaQuery('(max-width: 768px)')
   const [pollingIds, setPollingIds] = useState(new Set())
   // Countdown clock — a 30s tick keeps every "closes in" cell live.
@@ -378,6 +379,17 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
   }
   // One search box across title, AI title, auction, category and lot number.
   const [search, setSearch] = useState('')
+  // "By auction" groups lots under their sale, because a pickup trip is a
+  // fixed cost: once you're going for a gold mine, a weaker lot at the same
+  // auction is worth adding. Both the view and the add-on bar are
+  // per-browser preferences, like the page size.
+  const storage = typeof window === 'undefined' ? null : window.localStorage
+  const [arrange, setArrangeState] = useState(() => savedArrange(storage))
+  const setArrange = (v) => { setArrangeState(v); savePref(storage, ARRANGE_KEY, v) }
+  const [addonFloor, setAddonFloorState] = useState(() => savedAddonFloor(storage))
+  const setAddonFloor = (n) => { setAddonFloorState(n); savePref(storage, ADDON_FLOOR_KEY, n) }
+  // Auctions whose other lots are unfolded, and how many of them to show.
+  const [openGroups, setOpenGroups] = useState(() => new Map())
   // True while the enrich-batch request is in flight.
   const [queuing, setQueuing] = useState(false)
   // Multi-select: lot_ids the user has ticked. Kept as a Set of ids rather
@@ -451,6 +463,12 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     for (const l of pinned) rest.splice(Math.min(pins.get(l.lot_id), rest.length), 0, l)
     return rest
   }, [sortedBase])
+
+  const groups = useMemo(
+    () => (arrange === 'auction'
+      ? groupByAuction(sorted, { auctions, addonFloorPct: addonFloor, isOverbid })
+      : []),
+    [arrange, sorted, auctions, addonFloor])
 
   // A new result - filters, search, sort or page size changed - starts on
   // page one, not wherever the old one was.
@@ -986,22 +1004,28 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
   const pageRows = sorted.slice(pg.start, pg.end)
   const countLine = (
     <span style={{ fontSize: 13, color: 'var(--muted)' }}>
-      {showingText(sorted.length, pg.start, pg.end)}
+      {arrange === 'auction'
+        ? `${groups.length.toLocaleString()} ${groups.length === 1 ? 'auction' : 'auctions'}, ${sorted.length.toLocaleString()} lots`
+        : showingText(sorted.length, pg.start, pg.end)}
       {sorted.length !== lots.length && ` (filtered from ${lots.length.toLocaleString()})`}
     </span>
   )
   const go = (n) => { setPage(n); window.scrollTo?.({ top: 0 }) }
   const pager = pg.pages > 1 && (
     <nav className="pager" aria-label="Pages">
-      <button onClick={() => go(1)} disabled={pg.page === 1} title="First page">«</button>
-      <button onClick={() => go(pg.page - 1)} disabled={pg.page === 1} title="Previous page">‹</button>
+      <button onClick={() => go(1)} disabled={pg.page === 1} title="First page"
+              data-track="First page">«</button>
+      <button onClick={() => go(pg.page - 1)} disabled={pg.page === 1} title="Previous page"
+              data-track="Previous page">‹</button>
       {pageButtons(pg.page, pg.pages).map((b, i) => (b === '…'
         ? <span key={`gap-${i}`} className="gap">…</span>
         : <button key={b} onClick={() => go(b)} className={b === pg.page ? 'current' : undefined}
                   aria-current={b === pg.page ? 'page' : undefined}
                   data-track="Page number">{b}</button>))}
-      <button onClick={() => go(pg.page + 1)} disabled={pg.page === pg.pages} title="Next page">›</button>
-      <button onClick={() => go(pg.pages)} disabled={pg.page === pg.pages} title="Last page">»</button>
+      <button onClick={() => go(pg.page + 1)} disabled={pg.page === pg.pages} title="Next page"
+              data-track="Next page">›</button>
+      <button onClick={() => go(pg.pages)} disabled={pg.page === pg.pages} title="Last page"
+              data-track="Last page">»</button>
     </nav>
   )
   const lengthMenu = (
@@ -1015,86 +1039,14 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     </label>
   )
 
-  if (isMobile) {
-    return (
-      <>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
-          <input
-            type="search"
-            value={search}
-            onChange={(ev) => handleSearch(ev.target.value)}
-            placeholder="Search title, auction, category…"
-            style={{ flex: '1 1 100%', padding: 8, fontSize: 16 }}
-          />
-          <select
-            value={MOBILE_SORTS.findIndex((s) => s.key === sort.key && s.dir === sort.dir)}
-            onChange={(ev) => {
-              const s = MOBILE_SORTS[Number(ev.target.value)] ?? MOBILE_SORTS[0]
-              setSort({ key: s.key, dir: s.dir })
-            }}
-            style={{ flex: 1, padding: 6, fontSize: 14, maxWidth: '48%' }}
-          >
-            {MOBILE_SORTS.map((s, i) => <option key={s.label} value={i}>{s.label}</option>)}
-          </select>
-          {/* Every filterable column, generated from the same list the
-              desktop header uses - the phone used to hand-maintain a subset
-              with no bid, cost, resale, max-bid, ROI or auction filter. The
-              title search above already binds the one text column. */}
-          <button style={{ flex: '1 1 100%', padding: 8, fontSize: 14 }}
-                  onClick={() => setShowFilters((v) => !v)}
-                  aria-expanded={showFilters}>
-            {showFilters ? 'Hide filters' : `Filters${activeFilterCount ? ` (${activeFilterCount} on)` : ''}`}
-          </button>
-          {showFilters && COLUMNS.filter((c) => c.filter && c.filter !== 'text').map((c) => (
-            <select
-              key={c.key}
-              value={colFilters[c.key] ?? ''}
-              onChange={(ev) => setFilter(c.key, ev.target.value)}
-              style={{ flex: '1 1 47%', padding: 6, fontSize: 14, maxWidth: '48%' }}
-            >
-              <option value="">{c.label}: all</option>
-              {presetsFor(c, distinctValues).map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          ))}
-          {activeFilterCount > 0 && (
-            <button style={{ flex: '1 1 100%', padding: 6, fontSize: 13 }}
-                    onClick={() => setColFilters({})}>
-              Clear {activeFilterCount} filter{activeFilterCount === 1 ? '' : 's'}
-            </button>
-          )}
-          {(unpricedShown.length > 0 || queuing) && (
-            <button className="primary" onClick={handleCompsMatching}
-                    disabled={queuing}
-                    title="The default: sold comps for every unpriced lot matching the filters, on each lot's own title. No AI cost."
-                    style={{ flex: '1 1 100%', padding: 10, fontSize: 15 }}>
-              {queuing ? <><span className="spinner" />Queuing…</>
-                       : `Price ${unpricedShown.length.toLocaleString()} with comps (no AI)`}
-            </button>
-          )}
-          {aiCheck}
-          {!selectedInView.length && sorted.length > 0 && (
-            <button style={{ flex: '1 1 100%', padding: 6, fontSize: 13 }}
-                    onClick={() => setSelected(selectAll(sorted))}
-                    title="Select every lot matching the current filters, then act on them together">
-              Select all {sorted.length.toLocaleString()}
-            </button>
-          )}
-          {likeBar && <div style={{ flexBasis: '100%' }}>{likeBar}</div>}
-          {bulkBar && <div style={{ flexBasis: '100%' }}>{bulkBar}</div>}
-          {anyQueued && <span style={{ flexBasis: '100%' }}><span className="spinner" />{lots.filter((l) => l.enrichment?.status === 'queued').length} lots in the queue… updates when they finish</span>}
-          {/* Length menu up here; the count and pager sit under the cards,
-              the way DataTables lays a table out. */}
-          <div style={{ flexBasis: '100%' }}>{lengthMenu}</div>
-        </div>
-        {pageRows.map((lot) => {
+  // One lot's phone card; `kind` as for renderRow.
+  const renderCard = (lot, kind) => {
           const e = lot.enrichment || {}
           const gold = e.roi_status === 'GOLD MINE'
-          const overbid = isOverbid(lot, e)
+          const overbid = kind !== 'addon' && isOverbid(lot, e)
           return (
             <div key={lot.lot_id}
-                 className={`card${gold ? ' row-gold' : overbid ? ' row-overbid' : ''}`}
+                 className={`card${gold ? ' row-gold' : kind === 'addon' ? ' row-addon' : overbid ? ' row-overbid' : ''}`}
                  style={{ marginBottom: 10 }}
                  title={overbid ? 'Bid has passed your max-bid ceiling' : undefined}>
               <div style={{ fontWeight: 600 }}>
@@ -1106,6 +1058,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                 <button
                   className="bare"
                   onClick={() => handleWatch(lot.lot_id, !lot.watched)}
+                  data-track={lot.watched ? 'Stop watching lot' : 'Watch lot'}
                   title={lot.watched ? 'Watching — phone alert when closing (tap to stop)'
                                      : 'Watch: phone alert when this closes within 2 hours'}
                   style={{ fontSize: 16, padding: '0 4px 0 0',
@@ -1213,6 +1166,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                     authenticate first
                   </span>
                 )}
+                {kind === 'addon' && addonBadge}
                 {e.verdict && (
                   <span className="badge"
                         title={e.gold_check_note || e.roi_reason || undefined}
@@ -1236,146 +1190,239 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
               </div>
             </div>
           )
-        })}
-        <div className="table-footer">{countLine}{pager}</div>
+  }
+
+  // --- the "By auction" view --------------------------------------------
+
+  const addonBadge = (
+    <span className="badge addon"
+          title={`Worth adding: you're already going to this auction for a gold mine, and this lot clears your ${addonFloor}% add-on bar`}>
+      Add-on
+    </span>
+  )
+
+  const arrangeControl = (
+    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
+      <div className="segmented" role="group" aria-label="Arrange lots">
+        <button type="button" aria-pressed={arrange === 'auction'}
+                className={arrange === 'auction' ? 'on' : undefined}
+                onClick={() => setArrange('auction')}>By auction</button>
+        <button type="button" aria-pressed={arrange === 'all'}
+                className={arrange === 'all' ? 'on' : undefined}
+                onClick={() => setArrange('all')}>All lots</button>
+      </div>
+      {arrange === 'auction' && (
+        <label style={{ fontSize: 13, color: 'var(--muted)', whiteSpace: 'nowrap' }}
+               title="At an auction where you already have a gold mine, a lot with at least this ROI is worth adding - you're making the trip anyway">
+          Add-on at{' '}
+          <input type="number" min="0" step="10" value={addonFloor}
+                 data-track="Add-on ROI bar"
+                 onChange={(ev) => {
+                   const n = Number(ev.target.value)
+                   if (ev.target.value !== '' && Number.isFinite(n) && n >= 0) setAddonFloor(n)
+                 }}
+                 style={{ width: 64 }} />
+          {' '}% ROI
+        </label>
+      )}
+    </div>
+  )
+
+  const OTHERS_STEP = 50
+  const openMore = (key, total) => setOpenGroups((prev) => {
+    const next = new Map(prev)
+    next.set(key, Math.min(total, (prev.get(key) || 0) + OTHERS_STEP))
+    return next
+  })
+  const foldGroup = (key) => setOpenGroups((prev) => {
+    const next = new Map(prev)
+    next.delete(key)
+    return next
+  })
+
+  function groupHeader(g) {
+    const a = g.auction
+    const meta = [
+      a ? [a.city, a.state].filter(Boolean).join(', ') : '',
+      a?.source === 'Local Pickup' ? 'local pickup' : a?.source === 'Ship' ? 'ships' : '',
+      a?.buyer_premium_mult ? `${Math.round((a.buyer_premium_mult - 1) * 100)}% buyer's premium` : '',
+      `${g.lots.length.toLocaleString()} ${g.lots.length === 1 ? 'lot' : 'lots'} shown`,
+    ].filter(Boolean).join(' · ')
+    const unwatched = g.featured.filter((l) => !l.watched)
+    return (
+      <div className="group-head-inner">
+        <div className="group-title">
+          <button type="button" className="link-like"
+                  onClick={() => g.auctionId != null && onSelectAuction?.(g.auctionId)}
+                  data-track="Auction group name (show its items)"
+                  title="Show only this auction's items">
+            <strong>{g.name}</strong>
+          </button>
+          <span className="group-meta">{meta}</span>
+        </div>
+        {g.hasGold ? (
+          <div className="group-basket">
+            <div>
+              <strong>{basketLabel(g.goldCount, g.addonCount)}</strong>
+              <div className="group-meta">
+                {money(g.basketBids)} in current bids · about {money(g.basketResale)} resale
+              </div>
+            </div>
+            {unwatched.length > 0 && (
+              <button type="button" data-track="Watch the gold mines and add-ons"
+                      title="Get a phone alert before each of these closes"
+                      onClick={() => bulkEach(unwatched.map((l) => l.lot_id), (id) => setWatch(id, true))}>
+                {unwatched.length === 1 ? 'Watch it' : `Watch these ${unwatched.length}`}
+              </button>
+            )}
+          </div>
+        ) : (
+          <span className="group-meta">
+            No gold mines{g.bestRoi != null ? ` · best ROI ${Math.round(g.bestRoi * 100)}%` : ''}
+          </span>
+        )}
+      </div>
+    )
+  }
+
+  // Each auction: its header, its gold mines and add-ons, then the rest
+  // folded away - at an auction with no gold mine, all of it.
+  const renderGroups = (renderOne, asTable) => groups.map((g) => {
+    const key = g.auctionId ?? 'none'
+    const rest = g.hasGold ? g.others : g.lots
+    const shown = Math.min(openGroups.get(key) || 0, rest.length)
+    const rows = [...g.featured, ...rest.slice(0, shown)]
+      .map((l) => renderOne(l, g.kinds.get(l.lot_id)))
+    const more = rest.length > 0 && (
+      <div className="group-more">
+        {shown < rest.length && (
+          <button type="button" className="link-like" data-track="Show more lots in this auction"
+                  onClick={() => openMore(key, rest.length)}>
+            {shown === 0
+              ? (g.hasGold ? `Show ${rest.length.toLocaleString()} other lots here`
+                           : `Show ${rest.length.toLocaleString()} lots`)
+              : `Show ${Math.min(OTHERS_STEP, rest.length - shown)} more`}
+          </button>
+        )}
+        {shown > 0 && (
+          <button type="button" className="link-like" data-track="Fold this auction's other lots"
+                  onClick={() => foldGroup(key)}>
+            Fold them away
+          </button>
+        )}
+      </div>
+    )
+    if (asTable) {
+      const span = COLUMNS.length + 2
+      return (
+        <Fragment key={key}>
+          <tr className="group-head"><td colSpan={span}>{groupHeader(g)}</td></tr>
+          {rows}
+          {more && <tr className="group-foot"><td colSpan={span}>{more}</td></tr>}
+        </Fragment>
+      )
+    }
+    return (
+      <section key={key} className="group-cards" aria-label={g.name}>
+        {groupHeader(g)}
+        {rows}
+        {more}
+      </section>
+    )
+  })
+
+  if (isMobile) {
+    return (
+      <>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+          <input
+            type="search"
+            value={search}
+            onChange={(ev) => handleSearch(ev.target.value)}
+            placeholder="Search title, auction, category…"
+            style={{ flex: '1 1 100%', padding: 8, fontSize: 16 }}
+          />
+          <select
+            value={MOBILE_SORTS.findIndex((s) => s.key === sort.key && s.dir === sort.dir)}
+            onChange={(ev) => {
+              const s = MOBILE_SORTS[Number(ev.target.value)] ?? MOBILE_SORTS[0]
+              setSort({ key: s.key, dir: s.dir })
+            }}
+            style={{ flex: 1, padding: 6, fontSize: 14, maxWidth: '48%' }}
+          >
+            {MOBILE_SORTS.map((s, i) => <option key={s.label} value={i}>{s.label}</option>)}
+          </select>
+          {/* Every filterable column, generated from the same list the
+              desktop header uses - the phone used to hand-maintain a subset
+              with no bid, cost, resale, max-bid, ROI or auction filter. The
+              title search above already binds the one text column. */}
+          <button style={{ flex: '1 1 100%', padding: 8, fontSize: 14 }}
+                  onClick={() => setShowFilters((v) => !v)}
+                  aria-expanded={showFilters}>
+            {showFilters ? 'Hide filters' : `Filters${activeFilterCount ? ` (${activeFilterCount} on)` : ''}`}
+          </button>
+          {showFilters && COLUMNS.filter((c) => c.filter && c.filter !== 'text').map((c) => (
+            <select
+              key={c.key}
+              value={colFilters[c.key] ?? ''}
+              onChange={(ev) => setFilter(c.key, ev.target.value)}
+              style={{ flex: '1 1 47%', padding: 6, fontSize: 14, maxWidth: '48%' }}
+            >
+              <option value="">{c.label}: all</option>
+              {presetsFor(c, distinctValues).map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          ))}
+          {activeFilterCount > 0 && (
+            <button style={{ flex: '1 1 100%', padding: 6, fontSize: 13 }}
+                    onClick={() => setColFilters({})}>
+              Clear {activeFilterCount} filter{activeFilterCount === 1 ? '' : 's'}
+            </button>
+          )}
+          {(unpricedShown.length > 0 || queuing) && (
+            <button className="primary" onClick={handleCompsMatching}
+                    disabled={queuing}
+                    title="The default: sold comps for every unpriced lot matching the filters, on each lot's own title. No AI cost."
+                    style={{ flex: '1 1 100%', padding: 10, fontSize: 15 }}>
+              {queuing ? <><span className="spinner" />Queuing…</>
+                       : `Price ${unpricedShown.length.toLocaleString()} with comps (no AI)`}
+            </button>
+          )}
+          {aiCheck}
+          {!selectedInView.length && sorted.length > 0 && (
+            <button style={{ flex: '1 1 100%', padding: 6, fontSize: 13 }}
+                    onClick={() => setSelected(selectAll(sorted))}
+                    title="Select every lot matching the current filters, then act on them together">
+              Select all {sorted.length.toLocaleString()}
+            </button>
+          )}
+          {likeBar && <div style={{ flexBasis: '100%' }}>{likeBar}</div>}
+          {bulkBar && <div style={{ flexBasis: '100%' }}>{bulkBar}</div>}
+          {anyQueued && <span style={{ flexBasis: '100%' }}><span className="spinner" />{lots.filter((l) => l.enrichment?.status === 'queued').length} lots in the queue… updates when they finish</span>}
+          {/* Length menu up here; the count and pager sit under the cards,
+              the way DataTables lays a table out. */}
+          <div style={{ flexBasis: '100%' }}>{arrangeControl}</div>
+          {arrange !== 'auction' && <div style={{ flexBasis: '100%' }}>{lengthMenu}</div>}
+        </div>
+        {arrange === 'auction' ? renderGroups(renderCard, false) : pageRows.map((lot) => renderCard(lot))}
+        <div className="table-footer">{countLine}{arrange === 'auction' ? null : pager}</div>
       </>
     )
   }
 
-  return (
-    <>
-    {(unpricedShown.length > 0 || queuing || aiCheck || anyQueued) && (
-      <div style={{ marginBottom: '0.5rem', display: 'flex', flexWrap: 'wrap',
-                    alignItems: 'center', gap: 8 }}>
-        {(unpricedShown.length > 0 || queuing) && (
-          <button className="primary" onClick={handleCompsMatching}
-                  disabled={queuing}
-                  title="The default: sold comps for every unpriced lot matching the filters, on each lot's own title. No AI cost.">
-            {queuing ? <><span className="spinner" />Queuing…</>
-                     : `Price ${unpricedShown.length.toLocaleString()} with comps (no AI)`}
-          </button>
-        )}
-        {aiCheck}
-        {anyQueued && <span><span className="spinner" />{lots.filter((l) => l.enrichment?.status === 'queued').length} lots in the queue… updates when they finish</span>}
-      </div>
-    )}
-    {likeBar}
-    {bulkBar}
-    {/* DataTables' top bar: page length left, the one search box right. */}
-    <div className="table-toolbar">
-      {lengthMenu}
-      <label className="table-search">
-        Search:{' '}
-        <input type="search" value={search} onChange={(ev) => handleSearch(ev.target.value)}
-               placeholder="title, auction, category, lot #" />
-      </label>
-    </div>
-    {/* No overflow wrapper: an overflow-x container becomes the scrollport
-        position:sticky binds to, and the thead's top offset then displaces
-        it INSIDE the table by the status bar's height — a blank band with
-        the header floating over the first rows whenever a job is running.
-        A too-narrow window falls back to page-level horizontal scrolling. */}
-    {sort.key && (
-      <style>{`.lot-table tbody td:nth-child(${COLUMNS.findIndex((c) => c.key === sort.key) + 2}) { background-image: linear-gradient(var(--sorted-tint), var(--sorted-tint)); }`}</style>
-    )}
-    <table className="data-table lot-table">
-      {/* Sticks below the status bar when one is showing (see StatusBar's
-          --statusbar-h). Solid background or the rows scroll through it. */}
-      <thead style={{
-        position: 'sticky', top: 'var(--statusbar-h, 0px)', zIndex: 10,
-        background: 'var(--card-bg)',
-      }}>
-        <tr>
-          <th style={{ width: 28 }}
-              title={`Select all ${sorted.length.toLocaleString()} lots matching the current filters`}>
-            <input type="checkbox"
-                   title="Select every lot in view"
-                   checked={allSelected(selected, sorted)}
-                   onChange={(ev) => setSelected(ev.target.checked ? selectAll(sorted) : new Set())} />
-          </th>
-          {COLUMNS.map((c) => (
-            <th
-              key={c.key}
-              className={c.num ? 'num' : undefined}
-              style={{ cursor: 'pointer', userSelect: 'none',
-                       ...(c.key === 'title' ? { width: '28%', minWidth: 220 } : {}) }}
-              onClick={() => handleSort(c.key)}
-              title="Click to sort"
-            >
-              {c.label}
-              <span className={`sort-arrows${sort.key === c.key ? (sort.dir === 1 ? ' asc' : ' desc') : ''}`}
-                    aria-hidden="true">
-                <span>▲</span><span>▼</span>
-              </span>
-            </th>
-          ))}
-          {/* The set-level AI action, in the column its per-row twin lives
-              in. The usage log is unambiguous: 34 one-at-a-time presses of
-              the row button against 11 of every bulk path combined, in runs
-              of up to nine - and each row press spends money. The toolbar
-              already had this button and it was used once. Moving the saved-
-              auction equivalent next to its rows took that one from 0 to used
-              and stopped the per-row clicking, so this is the same move. */}
-          <th style={{ whiteSpace: 'nowrap' }}>
-            {aiTargets.length > 1 && (
-              <button
-                disabled={queuing}
-                onClick={handleEnrichMatching}
-                data-track="AI check worth (header)"
-                title={`AI-check the ${aiTargets.length} lots in view worth $${aiMin}+ that `
-                       + `have not had one, most valuable first. Same action as the `
-                       + `button above the table; it asks first and shows the cost.`}
-                style={{ fontSize: 12, padding: '3px 9px' }}>
-                {queuing ? <><span className="spinner" />Queuing…</>
-                         : `AI check ${aiTargets.length.toLocaleString()}`}
-              </button>
-            )}
-          </th>
-        </tr>
-        <tr className="filter-row">
-          <th></th>
-          {COLUMNS.map((c) => (
-            <th key={c.key} style={{ fontWeight: 'normal',
-                                     textAlign: c.num ? 'right' : undefined }}>
-              {!c.filter ? null : c.filter === 'text' ? (
-                <input
-                  value={colFilters[c.key] ?? ''}
-                  onChange={(ev) => setFilter(c.key, ev.target.value)}
-                  placeholder="search"
-                  style={{ width: '90%', minWidth: 60 }}
-                />
-              ) : (
-                <select
-                  value={colFilters[c.key] ?? ''}
-                  onChange={(ev) => setFilter(c.key, ev.target.value)}
-                  style={{ maxWidth: 110 }}
-                >
-                  <option value="">all</option>
-                  {presetsFor(c, distinctValues).map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
-              )}
-            </th>
-          ))}
-          <th>
-            {Object.values(colFilters).some((v) => v?.trim()) && (
-              <button style={{ fontSize: 12, padding: '3px 8px' }} onClick={() => setColFilters({})}>clear</button>
-            )}
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        {pageRows.map((lot) => {
+  // One lot's table row. `kind` comes from the auction grouping; a flat
+  // list passes none.
+  const renderRow = (lot, kind) => {
           const e = lot.enrichment || {}
           const gold = e.roi_status === 'GOLD MINE'
           const ev = evidence(e)
           const paleGold = gold && isPaleEvidence(ev)
-          const overbid = isOverbid(lot, e)
+          const overbid = kind !== 'addon' && isOverbid(lot, e)
           const edited = new Set(e.user_overrides || [])
           return (
             <tr key={lot.lot_id}
-                className={gold ? 'row-gold' : overbid ? 'row-overbid' : undefined}
+                className={gold ? 'row-gold' : kind === 'addon' ? 'row-addon' : overbid ? 'row-overbid' : undefined}
                 title={overbid ? 'Bid has passed your max-bid ceiling'
                   : paleGold ? EVIDENCE_NOTE[ev] : undefined}
                 // Weak-evidence gold (asking prices, AI estimates) gets a
@@ -1394,6 +1441,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                 <button
                   className="bare"
                   onClick={() => handleWatch(lot.lot_id, !lot.watched)}
+                  data-track={lot.watched ? 'Stop watching lot' : 'Watch lot'}
                   title={lot.watched
                     ? 'Watching — you get a phone alert when this closes within 2 hours (click to stop)'
                     : 'Watch: get a phone alert when this lot closes within 2 hours'}
@@ -1547,6 +1595,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                 )}
               </td>
               <td style={cell}>
+                {kind === 'addon' && <>{addonBadge}{' '}</>}
                 <span
                   title={e.gold_check === 'confirmed'
                     ? `AI double-checked this gold${e.gold_check_note ? `: ${e.gold_check_note}` : ''}`
@@ -1578,10 +1627,139 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
               </td>
             </tr>
           )
-        })}
+  }
+
+  return (
+    <>
+    {(unpricedShown.length > 0 || queuing || aiCheck || anyQueued) && (
+      <div style={{ marginBottom: '0.5rem', display: 'flex', flexWrap: 'wrap',
+                    alignItems: 'center', gap: 8 }}>
+        {(unpricedShown.length > 0 || queuing) && (
+          <button className="primary" onClick={handleCompsMatching}
+                  disabled={queuing}
+                  title="The default: sold comps for every unpriced lot matching the filters, on each lot's own title. No AI cost.">
+            {queuing ? <><span className="spinner" />Queuing…</>
+                     : `Price ${unpricedShown.length.toLocaleString()} with comps (no AI)`}
+          </button>
+        )}
+        {aiCheck}
+        {anyQueued && <span><span className="spinner" />{lots.filter((l) => l.enrichment?.status === 'queued').length} lots in the queue… updates when they finish</span>}
+      </div>
+    )}
+    {likeBar}
+    {bulkBar}
+    {/* DataTables' top bar: page length left, the one search box right. */}
+    <div className="table-toolbar">
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 16 }}>
+        {arrangeControl}
+        {arrange !== 'auction' && lengthMenu}
+      </div>
+      <label className="table-search">
+        Search:{' '}
+        <input type="search" value={search} onChange={(ev) => handleSearch(ev.target.value)}
+               placeholder="title, auction, category, lot #" />
+      </label>
+    </div>
+    {/* No overflow wrapper: an overflow-x container becomes the scrollport
+        position:sticky binds to, and the thead's top offset then displaces
+        it INSIDE the table by the status bar's height — a blank band with
+        the header floating over the first rows whenever a job is running.
+        A too-narrow window falls back to page-level horizontal scrolling. */}
+    {sort.key && (
+      <style>{`.lot-table tbody td:nth-child(${COLUMNS.findIndex((c) => c.key === sort.key) + 2}) { background-image: linear-gradient(var(--sorted-tint), var(--sorted-tint)); }`}</style>
+    )}
+    <table className="data-table lot-table">
+      {/* Sticks below the status bar when one is showing (see StatusBar's
+          --statusbar-h). Solid background or the rows scroll through it. */}
+      <thead style={{
+        position: 'sticky', top: 'var(--statusbar-h, 0px)', zIndex: 10,
+        background: 'var(--card-bg)',
+      }}>
+        <tr>
+          <th style={{ width: 28 }}
+              title={`Select all ${sorted.length.toLocaleString()} lots matching the current filters`}>
+            <input type="checkbox"
+                   title="Select every lot in view"
+                   checked={allSelected(selected, sorted)}
+                   onChange={(ev) => setSelected(ev.target.checked ? selectAll(sorted) : new Set())} />
+          </th>
+          {COLUMNS.map((c) => (
+            <th
+              key={c.key}
+              className={c.num ? 'num' : undefined}
+              style={{ cursor: 'pointer', userSelect: 'none',
+                       ...(c.key === 'title' ? { width: '28%', minWidth: 220 } : {}) }}
+              onClick={() => handleSort(c.key)}
+              title="Click to sort"
+            >
+              {c.label}
+              <span className={`sort-arrows${sort.key === c.key ? (sort.dir === 1 ? ' asc' : ' desc') : ''}`}
+                    aria-hidden="true">
+                <span>▲</span><span>▼</span>
+              </span>
+            </th>
+          ))}
+          {/* The set-level AI action, in the column its per-row twin lives
+              in. The usage log is unambiguous: 34 one-at-a-time presses of
+              the row button against 11 of every bulk path combined, in runs
+              of up to nine - and each row press spends money. The toolbar
+              already had this button and it was used once. Moving the saved-
+              auction equivalent next to its rows took that one from 0 to used
+              and stopped the per-row clicking, so this is the same move. */}
+          <th style={{ whiteSpace: 'nowrap' }}>
+            {aiTargets.length > 1 && (
+              <button
+                disabled={queuing}
+                onClick={handleEnrichMatching}
+                data-track="AI check worth (header)"
+                title={`AI-check the ${aiTargets.length} lots in view worth $${aiMin}+ that `
+                       + `have not had one, most valuable first. Same action as the `
+                       + `button above the table; it asks first and shows the cost.`}
+                style={{ fontSize: 12, padding: '3px 9px' }}>
+                {queuing ? <><span className="spinner" />Queuing…</>
+                         : `AI check ${aiTargets.length.toLocaleString()}`}
+              </button>
+            )}
+          </th>
+        </tr>
+        <tr className="filter-row">
+          <th></th>
+          {COLUMNS.map((c) => (
+            <th key={c.key} style={{ fontWeight: 'normal',
+                                     textAlign: c.num ? 'right' : undefined }}>
+              {!c.filter ? null : c.filter === 'text' ? (
+                <input
+                  value={colFilters[c.key] ?? ''}
+                  onChange={(ev) => setFilter(c.key, ev.target.value)}
+                  placeholder="search"
+                  style={{ width: '90%', minWidth: 60 }}
+                />
+              ) : (
+                <select
+                  value={colFilters[c.key] ?? ''}
+                  onChange={(ev) => setFilter(c.key, ev.target.value)}
+                  style={{ maxWidth: 110 }}
+                >
+                  <option value="">all</option>
+                  {presetsFor(c, distinctValues).map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              )}
+            </th>
+          ))}
+          <th>
+            {Object.values(colFilters).some((v) => v?.trim()) && (
+              <button style={{ fontSize: 12, padding: '3px 8px' }} onClick={() => setColFilters({})}>clear</button>
+            )}
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {arrange === 'auction' ? renderGroups(renderRow, true) : pageRows.map((lot) => renderRow(lot))}
       </tbody>
     </table>
-    <div className="table-footer">{countLine}{pager}</div>
+    <div className="table-footer">{countLine}{arrange === 'auction' ? null : pager}</div>
     </>
   )
 }

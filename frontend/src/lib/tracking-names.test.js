@@ -82,6 +82,55 @@ function checkboxes() {
   return found
 }
 
+// The words a reader sees in a button's body: text outside braces, plus the
+// string literals inside them ('★' in `{on ? '★' : '☆'}`). An expression with
+// no literal at all - `{a.header}`, `{importLabel(a)}` - puts data on the
+// button that this scan cannot read, so the whole body counts as unknown
+// (null) rather than as symbols only.
+function visibleLiterals(body) {
+  let out = ''
+  let depth = 0
+  let exprLiterals = 0
+  for (let i = 0; i < body.length; i += 1) {
+    const c = body[i]
+    if (c === '{') { if (depth === 0) exprLiterals = 0; depth += 1; continue }
+    if (c === '}') {
+      depth -= 1
+      if (depth === 0 && exprLiterals === 0 && !/^\{\/\*/.test(body.slice(body.lastIndexOf('{', i), i))) return null
+      continue
+    }
+    if (depth === 0) { if (c !== '<') out += c; else i = scanPastTag(body, i) - 1; continue }
+    if (c === "'" || c === '"') {
+      const end = body.indexOf(c, i + 1)
+      if (end === -1) break
+      out += body.slice(i + 1, end)
+      exprLiterals += 1
+      i = end
+    }
+  }
+  return out.replace(/\s+/g, '')
+}
+
+function iconButtons() {
+  const found = []
+  for (const file of jsxFiles(SRC)) {
+    const src = readFileSync(file, 'utf8')
+    for (let i = src.indexOf('<button'); i !== -1; i = src.indexOf('<button', i + 1)) {
+      const tagEnd = scanPastTag(src, i)
+      const attrs = src.slice(i, tagEnd)
+      const close = src.indexOf('</button>', tagEnd)
+      if (close === -1) continue
+      const shown = visibleLiterals(src.slice(tagEnd, close))
+      // Symbols and nothing else: no letter a reader, or the log, can name it by.
+      if (!shown || /\p{L}/u.test(shown)) continue
+      const line = src.slice(0, i).split('\n').length
+      found.push({ where: `${file.split(/[\/]/).pop()}:${line}`,
+                   shown, named: attrs.includes('data-track') })
+    }
+  }
+  return found
+}
+
 describe('usage-log names', () => {
   const boxes = checkboxes()
 
@@ -104,5 +153,16 @@ describe('usage-log names', () => {
       .filter((b) => !b.named && !b.text)
       .map((b) => b.where)
     expect(anonymous, 'give these a data-track, aria-label or title').toEqual([])
+  })
+
+  it('every icon-only button names itself', () => {
+    // The tracker falls back to the button's text, so a star logs as "☆"
+    // - and two different stars (watch a lot, watch an auction house) both
+    // did, 43 clicks that could not be told apart.
+    const icons = iconButtons()
+    expect(icons.length, 'the scan should find the stars and the ✕').toBeGreaterThan(3)
+    const unnamed = icons.filter((b) => !b.named)
+      .map((b) => `${b.where} — shows only ${JSON.stringify(b.shown)}`)
+    expect(unnamed, 'add data-track="<what the click does>" to these').toEqual([])
   })
 })

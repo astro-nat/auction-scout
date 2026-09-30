@@ -506,3 +506,59 @@ tr.row-overbid td:first-child { box-shadow: inset 3px 0 0 var(--overbid-accent);
   .pager { gap: 6px; }
   .pager button { min-width: 44px; }
 }
+
+/* ======================== grouped by auction ======================== */
+
+/* "By auction" / "All lots": two buttons read as one switch. */
+.segmented { display: inline-flex; }
+.segmented button { border-radius: 0; }
+.segmented button + button { margin-left: -1px; }
+.segmented button:first-child { border-radius: var(--radius) 0 0 var(--radius); }
+.segmented button:last-child { border-radius: 0 var(--radius) var(--radius) 0; }
+.segmented button.on,
+.segmented button.on:hover:not(:disabled) {
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--bg);
+  font-weight: 600;
+}
+
+/* An auction's header: where it is and what's worth buying there. Set
+   apart from the lot rows by ground, not by a heavier border. */
+.lot-table tr.group-head td {
+  background: var(--badge-bg);
+  padding: 12px 12px 10px;
+  border-top: 1px solid var(--border-strong);
+}
+.group-head-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 24px;
+  font-stretch: 100%;
+}
+.group-title { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.group-title strong { font-size: 15px; }
+.group-meta { font-size: 13px; color: var(--muted); }
+.group-basket { display: flex; align-items: center; gap: 14px; text-align: right; }
+.lot-table tr.group-foot td { padding: 6px 12px 10px 48px; }
+.group-more { display: flex; gap: 16px; font-size: 13px; }
+.group-more .link-like { color: var(--link); text-decoration: none; font-weight: 600; }
+
+/* Phone: each auction is a block of cards under its header. */
+.group-cards { margin-bottom: 18px; }
+.group-cards > .group-head-inner {
+  background: var(--badge-bg);
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 8px;
+}
+.group-cards > .group-head-inner .group-basket { text-align: left; }
+.group-cards > .group-more { padding: 0 4px; }
+
+/* An add-on: worth buying because you're going for a gold mine anyway.
+   Ledger green, the working accent - quieter than gold's yellow. */
+tr.row-addon td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.card.row-addon { border-left: 3px solid var(--accent); }
+.badge.addon { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
