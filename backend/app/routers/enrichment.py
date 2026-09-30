@@ -7,7 +7,7 @@ from .. import models, schemas
 from ..database import get_db
 from ..services import jobs
 from ..workers.enrich import _apply_roi, ai_done, ai_done_sql
-from ..services import open_state
+from ..services import closing_order, open_state
 
 router = APIRouter(prefix="/lots", tags=["enrichment"])
 
@@ -113,12 +113,14 @@ def enrich_batch(payload: schemas.EnrichBatchRequest, db: Session = Depends(get_
     )
     by_lot = {lot_id: enrichment_id for lot_id, enrichment_id in rows}
     queued_at = datetime.now(timezone.utc)
-    # The caller sent lot_ids in the order they appear on screen; queue_rank
-    # keeps it, because the picking now happens in another process.
+    # Soonest-closing first (services/closing_order); lots closing together
+    # keep the caller's order - on-screen, most valuable first. queue_rank
+    # carries it, because the picking happens in another process.
+    ordered = closing_order.by_lot_id(db, [i for i in payload.lot_ids if i in by_lot])
     mappings = [
         {"id": by_lot[lot_id], "status": "queued", "queued_task": "enrich",
          "queued_at": queued_at, "queue_rank": rank, "claimed_at": None}
-        for rank, lot_id in enumerate(i for i in payload.lot_ids if i in by_lot)
+        for rank, lot_id in enumerate(ordered)
     ]
     if mappings:
         db.bulk_update_mappings(models.Enrichment, mappings)
@@ -328,6 +330,7 @@ def reinspect_no_comps(dry_run: bool = False,
     if dry_run:
         return {"lots": len(rows), "dry_run": True}
     queued_at = datetime.now(timezone.utc)
+    rows.sort(key=lambda l: l.closes_at or datetime.max)   # soonest-closing first
     for rank, lot in enumerate(rows):
         lot.enrichment.status = "queued"
         lot.enrichment.queued_task = "inspect"

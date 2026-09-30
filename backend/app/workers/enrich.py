@@ -2070,6 +2070,10 @@ def run_reprice(lot_db_ids: list[int], resume_job_id: str | None = None) -> None
         row = jobs.get(job)
         start_at = (row or {}).get("current") or 0
     else:
+        # Soonest-closing first (services/closing_order). Only on a fresh
+        # run: a resumed one keeps the order its checkpoint counts through.
+        from ..services import closing_order
+        lot_db_ids = closing_order.by_db_id(db, lot_db_ids)
         job = jobs.start("reprice", "Re-pricing lots with current comp rules",
                          total=len(lot_db_ids), payload={"lot_ids": lot_db_ids})
         start_at = 0

@@ -322,8 +322,12 @@ def claim_lots(limit: int) -> list[tuple]:
                         .filter(models.Enrichment.status == "queued",
                                 or_(models.Enrichment.claimed_at.is_(None),
                                     models.Enrichment.claimed_at < _stale_cutoff()))
+                        # Within a batch and rank, soonest-closing first:
+                        # paths that queue a whole set at one rank still
+                        # price what closes next before what closes later.
                         .order_by(models.Enrichment.queued_at.nullsfirst(),
                                   models.Enrichment.queue_rank.nullsfirst(),
+                                  models.Lot.closes_at.asc().nullslast(),
                                   models.Enrichment.lot_id)
                         .with_for_update(of=models.Enrichment, skip_locked=True)
                         .limit(limit)
