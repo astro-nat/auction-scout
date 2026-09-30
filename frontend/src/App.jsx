@@ -26,6 +26,30 @@ const panelLegend = { padding: 0, marginBottom: 2, fontSize: 11,
                       color: 'var(--muted)' }
 const panelRow = { display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }
 
+// The inventory filters, and what each starts at. A view keeps its own
+// set: tightening My Watched Items no longer tightens My Inventory. Module
+// level so a default is the same object every render - a fresh [] or {}
+// each time would re-run every effect that depends on it.
+const FILTER_DEFAULTS = {
+  selectedAuctions: [],
+  categoryFilter: '',
+  filters: { boloOnly: false, flaggedOnly: false },
+  goldOnly: false,
+  hideLowValue: true,
+  lowValueCutoff: 25,
+  hideHardShip: true,
+  hideNoUsShip: true,
+  hideClosed: true,
+  hideOverMax: true,
+  hideFar: true,
+  maxDriveMinutes: 30,
+  hidePowered: true,
+  hideNever: true,
+  cheapMediaOnly: false,
+  maxPerItem: '0.40',
+  showHiddenLots: false,
+}
+
 export default function App() {
   const isMobile = useMediaQuery('(max-width: 768px)')
   // Two jobs, two screens: finding auctions vs working through what you've
@@ -41,6 +65,28 @@ export default function App() {
   // throws outright in some privacy modes rather than returning null.
   const [view, setView] = useState(
     () => initialView(window.location.hash, window.localStorage))
+  // Per-view filters: My Watched Items keeps its own set, My Inventory
+  // another. The Auctions tab writes into the inventory's set, so its
+  // "View this auction" buttons still land on what they chose.
+  const [viewFilters, setViewFilters] = useState({})
+  const filterView = view === 'watched' ? 'watched' : 'items'
+  const filterViewRef = useRef(filterView)
+  filterViewRef.current = filterView
+  const filterSetters = useRef({})
+  function viewFilter(name) {
+    const value = viewFilters[filterView]?.[name] ?? FILTER_DEFAULTS[name]
+    if (!filterSetters.current[name]) {
+      // One setter per filter for the life of the app, like useState's:
+      // it writes to whichever view is open when it is called.
+      filterSetters.current[name] = (next) => setViewFilters((prev) => {
+        const key = filterViewRef.current
+        const cur = prev[key]?.[name] ?? FILTER_DEFAULTS[name]
+        const val = typeof next === 'function' ? next(cur) : next
+        return { ...prev, [key]: { ...prev[key], [name]: val } }
+      })
+    }
+    return [value, filterSetters.current[name]]
+  }
 
   // First sync REPLACES the history entry; later ones push. Pushing on
   // mount would put the hash-less URL behind us, so the first Back press
@@ -98,53 +144,53 @@ export default function App() {
   const [auctions, setAuctions] = useState([])
   // Which imported auctions the items view shows — an array, not one id,
   // so several can be ticked and read together. Empty = all of them.
-  const [selectedAuctions, setSelectedAuctions] = useState([])
+  const [selectedAuctions, setSelectedAuctions] = viewFilter('selectedAuctions')
   // Items-view category filter ('' = every category), and the categories
   // actually present in the database with their enrichable counts.
-  const [categoryFilter, setCategoryFilter] = useState('')
+  const [categoryFilter, setCategoryFilter] = viewFilter('categoryFilter')
   const [lotCategories, setLotCategories] = useState([])
   const [lots, setLots] = useState([])
-  const [filters, setFilters] = useState({ boloOnly: false, flaggedOnly: false })
-  const [goldOnly, setGoldOnly] = useState(false)
+  const [filters, setFilters] = viewFilter('filters')
+  const [goldOnly, setGoldOnly] = viewFilter('goldOnly')
   // Gold is NOT in `filters`, deliberately. loadLots depends on that whole
   // object, so a gold toggle living in it refetched every page - which is
   // what made a comparison cost a round trip. Its own state, applied in the
   // browser, is what makes the toggle free.
-  const [hideLowValue, setHideLowValue] = useState(true)
-  const [lowValueCutoff, setLowValueCutoff] = useState(25)
+  const [hideLowValue, setHideLowValue] = viewFilter('hideLowValue')
+  const [lowValueCutoff, setLowValueCutoff] = viewFilter('lowValueCutoff')
   // HARD-ship lots (furniture, appliances) rarely clear the ROI bar and
   // cost the most to move — hidden by default, one click to see them.
-  const [hideHardShip, setHideHardShip] = useState(true)
+  const [hideHardShip, setHideHardShip] = viewFilter('hideHardShip')
   // A Canadian house that has said it won't ship into the US: its lots can
   // be won but never received. Hidden by default, one click to see them.
-  const [hideNoUsShip, setHideNoUsShip] = useState(true)
+  const [hideNoUsShip, setHideNoUsShip] = viewFilter('hideNoUsShip')
   // Closed auctions can't be bid on — hide their lots by default, but
   // keep them reachable: the enrichment work is still useful history.
-  const [hideClosed, setHideClosed] = useState(true)
+  const [hideClosed, setHideClosed] = viewFilter('hideClosed')
   // On by default: a lot whose bid has passed its ceiling cannot be bought
   // profitably, and at any moment that is most of the catalogue. It stays a
   // box rather than a silent rule because it removes 4 lots in every 5, and
   // an inventory that shrinks by 82% with no way back reads as a fault.
-  const [hideOverMax, setHideOverMax] = useState(true)
+  const [hideOverMax, setHideOverMax] = viewFilter('hideOverMax')
   // Pickup auctions too far to drive to. On at 30 minutes; does nothing
   // until a drive-from address is saved (the times come from it). Lots of
   // an auction with no drive time yet are kept - unknown is not far.
-  const [hideFar, setHideFar] = useState(true)
-  const [maxDriveMinutes, setMaxDriveMinutes] = useState(30)
+  const [hideFar, setHideFar] = viewFilter('hideFar')
+  const [maxDriveMinutes, setMaxDriveMinutes] = viewFilter('maxDriveMinutes')
   // On by default: the only thing that matters about a saw or a compressor
   // is whether the motor runs, and that is exactly what a listing photo
   // cannot show. Not a judgement about the tools - a judgement about what
   // can be checked before bidding.
-  const [hidePowered, setHidePowered] = useState(true)
+  const [hidePowered, setHidePowered] = viewFilter('hidePowered')
   // Kinds of thing the user does not buy at all (the never list - the
   // inverse of BOLO). The rules live in the database so they can be added
   // without a deploy; the server stamps never_label on each lot it covers.
-  const [hideNever, setHideNever] = useState(true)
+  const [hideNever, setHideNever] = viewFilter('hideNever')
   // Bulk media priced by the piece. A pile of discs is only worth buying by
   // the item, and the ask alone cannot say - the count comes off the
   // seller's own title (backend services/media_lots.py).
-  const [cheapMediaOnly, setCheapMediaOnly] = useState(false)
-  const [maxPerItem, setMaxPerItem] = useState('0.40')
+  const [cheapMediaOnly, setCheapMediaOnly] = viewFilter('cheapMediaOnly')
+  const [maxPerItem, setMaxPerItem] = viewFilter('maxPerItem')
   const [neverRules, setNeverRules] = useState([])
   const [neverOpen, setNeverOpen] = useState(false)
   // The Filters panel. Closed by default: its contents are set once and
@@ -199,7 +245,7 @@ export default function App() {
     status: 'OPEN', zip: '', radius_miles: 25,
   })
   const [hideUnshippable, setHideUnshippable] = useState(true)
-  const [showHiddenLots, setShowHiddenLots] = useState(false)
+  const [showHiddenLots, setShowHiddenLots] = viewFilter('showHiddenLots')
   const [importedRows, setImportedRows] = useState({})
   // Where drive times are measured from (null until saved), and whether the
   // server can measure them at all.
@@ -1938,7 +1984,8 @@ export default function App() {
           </div>
         )
       ) : (
-        <LotTable lots={visibleLots} onLotUpdated={handleLotUpdated} onRefresh={loadLots}
+        <LotTable key={filterView} viewKey={filterView}
+                  lots={visibleLots} onLotUpdated={handleLotUpdated} onRefresh={loadLots}
                   toolbar={<>{invScope}{invLenses}</>}
                   toolbarEnd={invActions}
                   toolbarAllLots={invImportMissing}

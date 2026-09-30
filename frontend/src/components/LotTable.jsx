@@ -328,6 +328,10 @@ function EditableCell({ display, rawValue, onSave, options, inputType = 'text', 
 }
 
 // Mobile sort choices — a dropdown replaces click-to-sort headers on phones.
+// Each view's search, column filters and sort, kept while the app is open:
+// the table remounts when the view changes, and picks its own back up.
+const VIEW_TABLE_STATE = new Map()
+
 const MOBILE_SORTS = [
   { label: 'ROI % (high first)', key: 'roi', dir: -1 },
   { label: 'Lot # (low first)', key: 'lot_number', dir: 1 },
@@ -348,7 +352,8 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                                   toolbarAllLots = null, onImportMissing,
                                   loadedByAuction = {}, onShowFilters,
                                   phoneFilters = null, phoneBehindFilters = null,
-                                  filtersOpen = false }) {
+                                  filtersOpen = false, viewKey = 'items' }) {
+  const remembered = VIEW_TABLE_STATE.get(viewKey) || {}
   const isMobile = useMediaQuery('(max-width: 768px)')
   const [pollingIds, setPollingIds] = useState(new Set())
   // Row menus (the ⋯ at the end of a row) are <details>: close any open one
@@ -373,8 +378,8 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
   }, [])
   // Best return first is the default view — that's the question the app
   // exists to answer. Click any header (or the mobile Sort menu) to change it.
-  const [sort, setSort] = useState({ key: 'roi', dir: -1 })
-  const [colFilters, setColFilters] = useState({})
+  const [sort, setSort] = useState(remembered.sort ?? { key: 'roi', dir: -1 })
+  const [colFilters, setColFilters] = useState(remembered.colFilters ?? {})
   // Phone layout: the filters live behind a toggle. Twelve selects at the
   // top of a 375px screen pushed the first card below the fold; the label
   // carries the active count so a hidden filter is never a mystery.
@@ -401,7 +406,10 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     savePageSize(n, typeof window === 'undefined' ? null : window.localStorage)
   }
   // One search box across title, AI title, auction, category and lot number.
-  const [search, setSearch] = useState('')
+  const [search, setSearch] = useState(remembered.search ?? '')
+  useEffect(() => {
+    VIEW_TABLE_STATE.set(viewKey, { sort, colFilters, search })
+  }, [viewKey, sort, colFilters, search])
   // "By auction" groups lots under their sale, because a pickup trip is a
   // fixed cost: once you're going for a gold mine, a weaker lot at the same
   // auction is worth adding. Both the view and the add-on bar are
@@ -1875,7 +1883,9 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
   )
 
   const DECISION_HEADS = [
-    { label: 'Lot', sort: 'title' }, { label: 'Closes', sort: 'closes' },
+    // "Lot" sorts by lot number, numerically (37 before 114, 198f beside
+    // 198) - it sorted by title, which read as a broken number sort.
+    { label: 'Lot', sort: 'lot_number' }, { label: 'Closes', sort: 'closes' },
     { label: 'Bid against your max', sort: 'bid' }, { label: 'Resale', sort: 'est_resale', num: true },
     { label: 'ROI', sort: 'roi', num: true }, { label: 'Verdict', sort: 'verdict' },
   ]
