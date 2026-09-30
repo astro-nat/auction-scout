@@ -792,6 +792,37 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     finally { setQueuing(false) }
   }
 
+  // One auction's lots that "Further inspect with AI" would run on: priced,
+  // not yet AI-checked, not already queued, still open - the same rule the
+  // row button follows. Most valuable first, as the bulk check does.
+  const auctionAiTargets = (g) => g.lots
+    .filter((l) => rowAction(l.enrichment || {}, pollingIds.has(l.lot_id)).step === 'ai'
+                   && !(l.item_closed ?? l.auction_closed))
+    .sort((a, b) => Number(b.enrichment?.est_resale || 0) - Number(a.enrichment?.est_resale || 0))
+
+  async function handleEnrichAuction(g) {
+    const targets = auctionAiTargets(g)
+    if (!targets.length || queuing) return
+    const cost = (targets.length * 0.005).toFixed(2)
+    const ok = window.confirm(
+      `Further inspect with AI the ${targets.length} priced ${targets.length === 1 ? 'lot' : 'lots'} `
+      + `at ${g.name} that haven't had one?\n\n`
+      + `AI reads each one's photo and listing for condition and a closer identification, `
+      + `then prices it again - roughly $${cost} of API usage, most valuable first.\n\n`
+      + `Progress appears in the bar at the top of the page.`)
+    if (!ok) return
+    setQueuing(true)
+    try {
+      const r = await enrichBatch(targets.map((l) => l.lot_id))
+      onRefresh?.()
+      if (!r.queued) alert('Nothing to queue - those lots are already inspected or in progress.')
+    } catch (e) {
+      alertOnce(e.message)
+    } finally {
+      setQueuing(false)
+    }
+  }
+
   async function handleEnrichMatching() {
     if (!aiTargets.length || queuing) return
     const cost = (aiTargets.length * 0.005).toFixed(2)
@@ -1326,6 +1357,14 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
               <span className="group-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
               <strong>{g.name}</strong>
             </button>
+            {auctionAiTargets(g).length > 0 && (
+              <button type="button" className="group-import" data-track="AI-inspect this auction"
+                      disabled={queuing}
+                      title={`Further inspect with AI every priced lot here that hasn't had one (${auctionAiTargets(g).length}), most valuable first. Asks first and shows the cost.`}
+                      onClick={() => handleEnrichAuction(g)}>
+                AI-inspect {auctionAiTargets(g).length.toLocaleString()}
+              </button>
+            )}
             {missing > 0 && onImportMissing && (
               <button type="button" className="group-import" data-track="Import N missing"
                       title={`HiBid lists ${a.lot_count} lots for this sale; ${a.lots_imported} are imported. Import the rest (free, no AI calls).`}
@@ -1852,7 +1891,8 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
           {DECISION_HEADS.map((h) => (
             <th key={h.label} className={h.num ? 'num' : undefined}
                 aria-sort={sort.key === h.sort ? (sort.dir === 1 ? 'ascending' : 'descending') : undefined}>
-              <button type="button" className="th-sort" onClick={() => handleSort(h.sort)} title="Sort by this">
+              <button type="button" className="th-sort" onClick={() => handleSort(h.sort)} title="Sort by this"
+                      data-track={`Sort by ${h.label}`}>
                 {h.label}
                 <span className={`sort-arrows${sort.key === h.sort ? (sort.dir === 1 ? ' asc' : ' desc') : ''}`}
                       aria-hidden="true"><span>▲</span><span>▼</span></span>
