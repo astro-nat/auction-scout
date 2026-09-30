@@ -644,6 +644,32 @@ class _Throttle:
 
 
 _throttle = _Throttle(SOLDCOMPS_RPS)
+# What the current thread's lookups cost, for the enrichment timings. The
+# comps step used to be one number covering every query variant, the
+# throttle queue and any eBay fallback, so a slower step could not say
+# whether SoldComps got slower or a lot asked it more. Per thread because
+# the worker enriches several lots at once, one per thread.
+_usage = threading.local()
+
+
+def soldcomps_usage_reset() -> None:
+    _usage.calls = 0
+    _usage.http_ms = 0.0
+    _usage.cached = 0
+
+
+def soldcomps_usage() -> dict:
+    """Requests sent, their time on the wire, and answers served from cache
+    since the last reset on this thread."""
+    return {"calls": getattr(_usage, "calls", 0),
+            "http_ms": round(getattr(_usage, "http_ms", 0.0), 1),
+            "cached": getattr(_usage, "cached", 0)}
+
+
+def _usage_add(*, calls: int = 0, http_ms: float = 0.0, cached: int = 0) -> None:
+    _usage.calls = getattr(_usage, "calls", 0) + calls
+    _usage.http_ms = getattr(_usage, "http_ms", 0.0) + http_ms
+    _usage.cached = getattr(_usage, "cached", 0) + cached
 _cache: dict[str, tuple[float, list]] = {}
 _cache_lock = threading.Lock()
 _breaker_lock = threading.Lock()
@@ -772,7 +798,7 @@ def _item_fields(items: list) -> str | None:
 
 
 def _note_response(query: str, status, *, total_items=None, items=None,
-                   parsed=None, note=None) -> None:
+                   parsed=None, note=None, duration_ms=None) -> None:
     """Write one reply row. Never raises - a lost trace must not cost the
     lookup that produced it."""
     from ..database import SessionLocal
@@ -783,7 +809,8 @@ def _note_response(query: str, status, *, total_items=None, items=None,
         db.add(models.ApiReply(
             source="soldcomps", query=(query or "")[:200], status=status,
             total_items=total_items, items=items, parsed=parsed,
-            note=(note or "")[:200] or None))
+            note=(note or "")[:200] or None,
+            duration_ms=(round(duration_ms, 1) if duration_ms is not None else None)))
         db.commit()
     except Exception as exc:  # noqa: BLE001
         logger.warning("Could not record SoldComps reply for %r: %s", query, exc)
@@ -952,11 +979,13 @@ def _soldcomps_lookup(query: str, count: int = 120) -> list[tuple[float, str]]:
     key = f"{query}|{count}"
     cached = _cache_get(key)
     if cached is not None:
+        _usage_add(cached=1)
         return cached
     # Durable hop: survives restarts and spans jobs, so a re-price inside
     # the TTL asks the API almost nothing.
     cached = _db_cache_get(key, "soldcomps")
     if cached is not None:
+        _usage_add(cached=1)
         _cache_put(key, cached)
         if not cached:
             # An empty answer served from cache is the one hop that can hide
@@ -973,6 +1002,9 @@ def _soldcomps_lookup(query: str, count: int = 120) -> list[tuple[float, str]]:
     last_status = None
     for attempt in range(SOLDCOMPS_MAX_RETRIES):
         _throttle.wait()
+        # Timed from here, after the throttle: queueing behind our own rate
+        # limit is not the API being slow.
+        sent = time.perf_counter()
         try:
             with httpx.Client(timeout=httpx.Timeout(
                     SOLDCOMPS_TIMEOUT_SECONDS,
@@ -999,12 +1031,17 @@ def _soldcomps_lookup(query: str, count: int = 120) -> list[tuple[float, str]]:
                     },
                 )
         except Exception as exc:  # noqa: BLE001
+            took = (time.perf_counter() - sent) * 1000
+            _usage_add(calls=1, http_ms=took)
             logger.warning("SoldComps failed for %r: %s", query, exc)
-            _note_response(query, None, note=f"{type(exc).__name__}: {exc}"[:120])
+            _note_response(query, None, note=f"{type(exc).__name__}: {exc}"[:120],
+                           duration_ms=took)
             if isinstance(exc, httpx.TimeoutException):
                 _note_timeout()
             return []
 
+        took = (time.perf_counter() - sent) * 1000
+        _usage_add(calls=1, http_ms=took)
         last_status = r.status_code
         if r.status_code == 429:
             wait = _retry_after_seconds(r, attempt)
@@ -1016,7 +1053,8 @@ def _soldcomps_lookup(query: str, count: int = 120) -> list[tuple[float, str]]:
             # through to active listings immediately.
             if wait >= _QUOTA_WALL_SECONDS:
                 _open_breaker(reason=f"Retry-After {wait:.0f}s — quota, not pace")
-                _note_response(query, 429, note=f"quota wall, retry-after {wait:.0f}s")
+                _note_response(query, 429, note=f"quota wall, retry-after {wait:.0f}s",
+                               duration_ms=took)
                 return []
             _note_429()
             if attempt < SOLDCOMPS_MAX_RETRIES - 1 and not _breaker_open():
@@ -1024,11 +1062,12 @@ def _soldcomps_lookup(query: str, count: int = 120) -> list[tuple[float, str]]:
                 continue
             logger.warning("SoldComps rate-limited on %r, giving up after %d "
                            "attempts", query, attempt + 1)
-            _note_response(query, 429, note=f"gave up after {attempt + 1} attempts")
+            _note_response(query, 429, note=f"gave up after {attempt + 1} attempts",
+                           duration_ms=took)
             return []
         if r.status_code != 200:
             logger.warning("SoldComps HTTP %s for %r", r.status_code, query)
-            _note_response(query, r.status_code)
+            _note_response(query, r.status_code, duration_ms=took)
             return []
 
         _note_ok()
@@ -1054,7 +1093,7 @@ def _soldcomps_lookup(query: str, count: int = 120) -> list[tuple[float, str]]:
                             "kind": "sold"})
         _note_response(query, 200, total_items=body.get("totalItems"),
                        items=len(items), parsed=len(out),
-                       note=_item_fields(items))
+                       note=_item_fields(items), duration_ms=took)
         # Cached even when empty: "nothing sold matching this" is an answer,
         # and re-asking it per variant is what built the burst.
         _cache_put(key, out)

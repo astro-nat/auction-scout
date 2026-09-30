@@ -251,6 +251,8 @@ def test_every_reply_is_recorded_for_the_status_bar(monkeypatch):
     FakeClient, _ = _client([_Resp(200, [], total=0)])
     monkeypatch.setattr(pricing.httpx, "Client", FakeClient)
     pricing._soldcomps_lookup("nothing")
+    took = RECORDED[-1].pop("duration_ms")
+    assert isinstance(took, float) and took >= 0
     assert RECORDED[-1] == {"query": "nothing", "status": 200,
                             "total_items": 0, "items": 0, "parsed": 0,
                             # No items, so nothing to describe.
@@ -394,3 +396,78 @@ def test_one_slow_query_does_not_pause_everything(monkeypatch):
         pricing._soldcomps_lookup(f"q-{i}")
     assert not pricing._breaker_open()
     assert pricing._consecutive_timeouts == 1
+
+
+def test_each_reply_records_its_time_on_the_wire_not_the_queue(monkeypatch):
+    """A slower comps step has to say whether SoldComps got slower or we
+    asked it more. So each reply carries the request's own duration - and
+    waiting behind our own rate limiter is not the API being slow."""
+    class SlowThrottle:
+        def wait(self):
+            time.sleep(0.05)
+
+    class Client:
+        def __init__(self, *a, **kw):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def get(self, *a, **kw):
+            time.sleep(0.02)
+            return _Resp(200, [])
+
+    monkeypatch.setattr(pricing, "_throttle", SlowThrottle())
+    monkeypatch.setattr(pricing.httpx, "Client", Client)
+    pricing._soldcomps_lookup("widget")
+    took = RECORDED[-1]["duration_ms"]
+    assert 15 <= took < 45, f"expected the ~20ms request alone, got {took}ms"
+
+
+def test_a_timeout_records_how_long_it_waited(monkeypatch):
+    import httpx
+    FakeClient, _ = _client([httpx.ReadTimeout("slow")])
+    monkeypatch.setattr(pricing.httpx, "Client", FakeClient)
+    pricing._soldcomps_lookup("widget")
+    assert RECORDED[-1]["duration_ms"] is not None
+
+
+def test_usage_counts_requests_and_cache_answers_per_lot(monkeypatch):
+    """The enrichment timing stores this beside the comps step: how many
+    variants actually went to the API, and how many the cache answered."""
+    sold = [{"soldPrice": "$5.00", "title": "w"}]
+    FakeClient, calls = _client([_Resp(429), _Resp(200, sold)])
+    monkeypatch.setattr(pricing.httpx, "Client", FakeClient)
+    pricing.soldcomps_usage_reset()
+    pricing._soldcomps_lookup("a")        # a 429, then a 200: two requests
+    pricing._soldcomps_lookup("a")        # the same query: from cache
+    u = pricing.soldcomps_usage()
+    assert u["calls"] == 2 and u["cached"] == 1
+    assert u["http_ms"] >= 0
+    pricing.soldcomps_usage_reset()
+    assert pricing.soldcomps_usage() == {"calls": 0, "http_ms": 0.0, "cached": 0}
+
+
+def test_usage_is_kept_per_thread(monkeypatch):
+    """The worker enriches several lots at once; one lot's count must not
+    absorb another's."""
+    FakeClient, _ = _client([_Resp(200, [])])
+    monkeypatch.setattr(pricing.httpx, "Client", FakeClient)
+    seen = {}
+
+    def lot(name, n):
+        pricing.soldcomps_usage_reset()
+        for i in range(n):
+            pricing._soldcomps_lookup(f"{name}-{i}")
+        seen[name] = pricing.soldcomps_usage()["calls"]
+
+    threads = [threading.Thread(target=lot, args=("x", 1)),
+               threading.Thread(target=lot, args=("y", 3))]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert seen == {"x": 1, "y": 3}

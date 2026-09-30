@@ -835,8 +835,14 @@ def _enrich(lot: models.Lot, e: models.Enrichment, db: Session,
             comps = titled
         else:
             _progress(db, e, "searching eBay for comparable sales…")
+            pricing.soldcomps_usage_reset()
             with _step(phase, "comps"):
                 comps = pricing.lookup_comps(search_title)
+            if phase is not None:
+                # What the comps step spent on SoldComps itself: requests
+                # sent, time on the wire, answers from cache. The rest of
+                # the step is our own throttle queue and any eBay fallback.
+                phase.note(soldcomps=pricing.soldcomps_usage())
         mult = CONDITION_MULTIPLIER.get(e.verdict, 1.0)
         prior_resale = e.est_resale
         if not comps["est_resale"] and e.est_resale is not None:

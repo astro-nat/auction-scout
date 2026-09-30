@@ -502,6 +502,9 @@ class ApiReply(Base):
     items = Column(Integer)           # how many it returned on this page
     parsed = Column(Integer)          # how many carried a usable price
     note = Column(String)
+    # The HTTP request alone, from send to reply or timeout - not the time
+    # spent queued behind our own rate limiter. NULL when nothing was sent.
+    duration_ms = Column(Float)
     created_at = Column(DateTime, server_default=func.now(), index=True)
 
 

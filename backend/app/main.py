@@ -152,6 +152,9 @@ _MIGRATIONS = [
     # wrong, independent of a hand-corrected value.
     "ALTER TABLE enrichment ADD COLUMN IF NOT EXISTS comp_flagged BOOLEAN DEFAULT FALSE",
     "ALTER TABLE enrichment ADD COLUMN IF NOT EXISTS comp_flag_note VARCHAR",
+    # How long each SoldComps request took on the wire, so a slower comps
+    # step can be split into "the API got slower" vs "we asked it more".
+    "ALTER TABLE api_replies ADD COLUMN IF NOT EXISTS duration_ms DOUBLE PRECISION",
 ]
 
 def _run_migrations() -> list[str]:
