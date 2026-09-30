@@ -25,7 +25,7 @@ from datetime import datetime, timedelta, timezone
 
 import httpx
 
-from . import ebay, funko
+from . import coins, ebay, funko
 
 logger = logging.getLogger(__name__)
 
@@ -1147,7 +1147,8 @@ def lookup_comps(title: str) -> dict:
                  and _model_match(query, c["title"])
                  and _audience_match(title, c["title"])
                  and _promo_match(title, c["title"])
-                 and funko.comp_fits(title, c["title"])]
+                 and funko.comp_fits(title, c["title"])
+                 and coins.comp_fits(title, c["title"])]
         kept = _iqr_records(comps)
         if len(kept) >= _MIN_FULL_COMPS:
             return _finalize(title, kept, source, result)
@@ -1171,7 +1172,8 @@ def lookup_comps(title: str) -> dict:
                  and _model_match(title, c["title"])
                  and _audience_match(title, c["title"])
                  and _promo_match(title, c["title"])
-                 and funko.comp_fits(title, c["title"])]
+                 and funko.comp_fits(title, c["title"])
+                 and coins.comp_fits(title, c["title"])]
         kept = _iqr_records(comps)
         if not kept:
             continue
