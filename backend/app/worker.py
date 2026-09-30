@@ -157,8 +157,10 @@ def main() -> None:
     # them, and they competed with requests for the same connections.
     from .workers.maintenance import start_maintenance
     from .workers.notify import start_notifier
+    from .workers.live import start_live_loop
     start_maintenance()
     start_notifier()
+    start_live_loop()
 
     from concurrent.futures import ThreadPoolExecutor
     pool = ThreadPoolExecutor(max_workers=max(1, config.ENRICH_CONCURRENCY),

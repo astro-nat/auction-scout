@@ -352,7 +352,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                                   toolbarAllLots = null, onImportMissing,
                                   loadedByAuction = {}, onShowFilters,
                                   phoneFilters = null, phoneBehindFilters = null,
-                                  filtersOpen = false, viewKey = 'items' }) {
+                                  filtersOpen = false, viewKey = 'items', onSetLive }) {
   const remembered = VIEW_TABLE_STATE.get(viewKey) || {}
   const isMobile = useMediaQuery('(max-width: 768px)')
   const [pollingIds, setPollingIds] = useState(new Set())
@@ -1323,6 +1323,39 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     if (opening && !g.hasGold && !openGroups.get(key)) openMore(key, g.lots.length)
   }
 
+  // Live Auction mode, per auction: the switch, and while on, how fresh the
+  // bids are and how many watched lots have gone past your max.
+  function liveControl(g) {
+    const a = g.auction
+    if (!a || !a.hibid_id || !onSetLive) return null
+    const open = g.lots.some((l) => !(l.item_closed ?? l.auction_closed))
+    if (!open && !a.live) return null
+    const ago = a.live_refreshed_at
+      ? Math.max(0, Math.round((now - parseUtc(a.live_refreshed_at).getTime()) / 1000)) : null
+    const pastMax = a.live ? g.lots.filter((l) => l.watched && l.enrichment?.max_bid != null
+      && Number(l.current_bid) > Number(l.enrichment.max_bid)).length : 0
+    return (
+      <span className="live-control">
+        <button type="button" className={`live-toggle${a.live ? ' on' : ''}`} aria-pressed={!!a.live}
+                data-track={a.live ? 'Live auction off' : 'Live auction on'}
+                title={a.live ? 'Stop the minute-by-minute bid refresh for this auction'
+                              : 'Refresh this auction\'s bids every minute while it runs, and alert when a watched lot passes your max bid'}
+                onClick={() => onSetLive(a.id, !a.live)}>
+          {a.live ? <><span className="live-dot" aria-hidden="true" />Live</> : 'Go live'}
+        </button>
+        {a.live && (
+          <span className="group-meta">
+            {ago == null ? 'first refresh within a minute'
+              : ago < 90 ? `updated ${ago}s ago` : `updated ${Math.round(ago / 60)} min ago`}
+          </span>
+        )}
+        {pastMax > 0 && (
+          <span className="live-past-max">{pastMax} watched past your max</span>
+        )}
+      </span>
+    )
+  }
+
   function groupHeader(g) {
     const a = g.auction
     const meta = [
@@ -1380,6 +1413,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                 Import {missing.toLocaleString()} missing
               </button>
             )}
+            {liveControl(g)}
             {g.auction?.drive_minutes != null && (
               <span className="group-drive"
                     title={`One way from ${driveFrom?.label || driveFrom?.address || 'your address'}, typical traffic`}>

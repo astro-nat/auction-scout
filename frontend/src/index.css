@@ -730,3 +730,19 @@ details.peek > summary::-webkit-details-marker { display: none; }
 }
 .group-toggle:hover:not(:disabled) { background: none; transform: none; color: var(--link); }
 .group-caret { display: inline-block; width: 12px; color: var(--muted); font-size: 12px; }
+
+/* Live Auction mode switch in an auction header. */
+.live-control { display: inline-flex; align-items: center; gap: 8px; }
+.live-toggle { font-size: 12.5px; padding: 2px 10px; font-weight: 600; }
+.live-toggle.on, .live-toggle.on:hover:not(:disabled) {
+  background: var(--danger); border-color: var(--danger); color: #fff;
+}
+.live-dot {
+  display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+  background: currentColor; margin-right: 6px; vertical-align: 1px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .live-toggle.on .live-dot { animation: live-pulse 1.6s ease-in-out infinite; }
+}
+@keyframes live-pulse { 50% { opacity: 0.35; } }
+.live-past-max { font-size: 13px; font-weight: 700; color: var(--danger); }

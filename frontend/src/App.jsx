@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, scanVinted, importLots, importAllAuctions, importVintedSeller, flushClosed, refreshBids, reinspectNoComps, repriceUnpriced, fetchSettings, saveTargetRoi, saveDriveFrom, clearDriveFrom, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
+import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, scanVinted, importLots, importAllAuctions, importVintedSeller, flushClosed, refreshBids, reinspectNoComps, repriceUnpriced, fetchSettings, saveTargetRoi, saveDriveFrom, clearDriveFrom, setAuctionLive, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
 import { fetchNeverRules } from './api'
 import { auctionClosed } from './lib/pacing'
 import { houseRatioLabel, houseRatioTitle } from './lib/calibration'
@@ -345,6 +345,38 @@ export default function App() {
       setLotsLoadState('error')
     })
   }, [selectedAuctions, categoryFilter, filters, watchedOnly])
+
+  // Live Auction mode: every minute, the live auctions' lots (only theirs,
+  // within the current view and filters) are fetched again and swapped in,
+  // and the auction rows too, for "updated Ns ago". The worker does the
+  // HiBid reading on the same minute; this just picks up what it wrote.
+  const liveIds = useMemo(
+    () => Object.values(importedRows).filter((a) => a.live).map((a) => a.id),
+    [importedRows])
+  const liveKey = liveIds.join(',')
+  useEffect(() => {
+    if (!liveIds.length || !['items', 'watched'].includes(view)) return undefined
+    const inScope = selectedAuctions.length
+      ? liveIds.filter((id) => selectedAuctions.includes(id)) : liveIds
+    const tick = async () => {
+      try {
+        if (inScope.length) {
+          const fresh = await fetchLots({
+            auctionIds: inScope, category: categoryFilter || undefined,
+            boloOnly: filters.boloOnly, flaggedOnly: filters.flaggedOnly, watchedOnly,
+          })
+          const ids = new Set(inScope)
+          setLots((prev) => [...prev.filter((l) => !ids.has(l.auction_id)), ...fresh])
+        }
+        rememberAuctions(await fetchAuctions(), { full: true })
+      } catch (e) {
+        console.error(e)   // a missed minute is not worth a popup
+      }
+    }
+    const t = setInterval(tick, 60000)
+    return () => clearInterval(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveKey, view, selectedAuctions, categoryFilter, filters, watchedOnly])
 
   // Accumulate imported auctions as FULL rows, separately from the visible
   // list: scans replace `auctions` with whatever HiBid returned, and your
@@ -1993,6 +2025,11 @@ export default function App() {
                   phoneBehindFilters={<>{invScope}{invGold}{invHidden}</>}
                   filtersOpen={filtersOpen}
                   loadedByAuction={loadedByAuction}
+                  onSetLive={async (id, on) => {
+                    try {
+                      rememberAuctions([await setAuctionLive(id, on)])
+                    } catch (e) { alertOnce(e.message) }
+                  }}
                   onShowFilters={() => {
                     setFiltersOpen(true)
                     window.scrollTo?.({ top: 0, behavior: 'smooth' })

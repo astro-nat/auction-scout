@@ -345,6 +345,12 @@ export function saveDriveFrom(address, label) {
   })
 }
 
+// Live Auction mode: bids refresh every minute while on, and a watched lot
+// passing its max bid sends an alert. Returns the updated auction.
+export function setAuctionLive(auctionId, live) {
+  return request(`/auctions/${auctionId}/live?live=${live ? 'true' : 'false'}`, { method: 'POST' })
+}
+
 export function clearDriveFrom() {
   return request('/settings/drive-from', { method: 'DELETE' })
 }

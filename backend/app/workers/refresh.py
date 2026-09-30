@@ -64,9 +64,16 @@ def live_hammered_through(fresh: list[dict]) -> int | None:
     return max(done) if done else None
 
 
-def run_bid_refresh(auction_ids: list[int], resume_job_id: str | None = None) -> None:
+def run_bid_refresh(auction_ids: list[int], resume_job_id: str | None = None,
+                    track_job: bool = True) -> None:
+    """track_job=False is Live mode's minute-by-minute refresh: the same
+    work, without a job row in the Queue every minute."""
     db: Session = SessionLocal()
-    if resume_job_id:
+    if not track_job:
+        job = None
+        row = None
+        start_at = 0
+    elif resume_job_id:
         job = resume_job_id
         row = jobs.get(job)
         start_at = (row or {}).get("current") or 0
@@ -87,15 +94,15 @@ def run_bid_refresh(auction_ids: list[int], resume_job_id: str | None = None) ->
     try:
         remaining = auction_ids[start_at:]
         for i, auction_id in enumerate(remaining, start_at + 1):
-            if jobs.is_cancelled(job):
+            if (job is not None and jobs.is_cancelled(job)):
                 print(f"Bid refresh cancelled after {i - 1} auctions")
                 break
             auction = (db.query(models.Auction)
                          .filter(models.Auction.id == auction_id).first())
             if not auction or not auction.hibid_id:
-                jobs.update(job, current=i)
+                job and jobs.update(job, current=i)
                 continue
-            jobs.update(job, current=i, detail=(auction.name or "")[:40])
+            job and jobs.update(job, current=i, detail=(auction.name or "")[:40])
             try:
                 ctx = {"premium_mult": auction.buyer_premium_mult,
                        "source": auction.source}
@@ -103,7 +110,7 @@ def run_bid_refresh(auction_ids: list[int], resume_job_id: str | None = None) ->
                 async def _fetch():
                     return await hibid.fetch_lots(
                         auction.hibid_id, auction_ctx=ctx,
-                        should_cancel=lambda: jobs.is_cancelled(job))
+                        should_cancel=lambda: (job is not None and jobs.is_cancelled(job)))
 
                 picked = ([l for l in db.query(models.Lot)
                                         .filter(models.Lot.auction_id == auction_id,
@@ -115,7 +122,7 @@ def run_bid_refresh(auction_ids: list[int], resume_job_id: str | None = None) ->
                         return await hibid.fetch_lots_by_number(
                             auction.hibid_id, [l.lot_number for l in picked],
                             auction_ctx=ctx,
-                            should_cancel=lambda: jobs.is_cancelled(job))
+                            should_cancel=lambda: (job is not None and jobs.is_cancelled(job)))
 
                     found, missed = asyncio.run(_fetch_some())
                     if missed:
@@ -176,7 +183,8 @@ def run_bid_refresh(auction_ids: list[int], resume_job_id: str | None = None) ->
                 updated_total += 1
             db.commit()
     finally:
-        jobs.finish(job)
+        if job is not None:
+            jobs.finish(job)
         db.close()
     print(f"Bid refresh complete: {updated_total} lots updated")
 

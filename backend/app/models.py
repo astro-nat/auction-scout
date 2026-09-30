@@ -33,6 +33,10 @@ class Auction(Base):
     # auction is measured again.
     drive_minutes = Column(Float)
     drive_from = Column(String)
+    # Live Auction mode (workers/live): bids refresh every minute while on;
+    # it switches itself off once the last lot has closed.
+    live = Column(Boolean, default=False)
+    live_refreshed_at = Column(DateTime)
     source = Column(String)          # Local Pickup | Ship
     source_url = Column(String)
     closing_date = Column(DateTime)
@@ -107,6 +111,8 @@ class Lot(Base):
     # the timestamp dedupes so each lot alerts exactly once.
     watched = Column(Boolean, default=False)
     closing_alert_sent_at = Column(DateTime)
+    # When Live mode alerted that the bid passed your max - once per lot.
+    max_passed_alert_at = Column(DateTime)
     # Manually hidden by the user — stays in the DB (and keeps its
     # enrichment) but drops out of the items view until unhidden.
     hidden = Column(Boolean, default=False)

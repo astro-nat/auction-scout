@@ -458,6 +458,32 @@ def backfill_photos(db: Session = Depends(get_db)):
     return {"auctions": len(ids), "queued": True}
 
 
+@router.post("/{auction_id}/live", response_model=schemas.AuctionOut)
+def set_auction_live(auction_id: int, live: bool = True,
+                     db: Session = Depends(get_db)):
+    """Switch Live Auction mode on or off (workers/live): bids refresh every
+    minute, and a watched lot passing your max bid sends an alert. An
+    auction whose last lot has closed can't be switched on."""
+    auction = (db.query(models.Auction)
+                 .filter(models.Auction.id == auction_id).first())
+    if not auction:
+        raise HTTPException(status_code=404, detail="Auction not found")
+    if live:
+        if not auction.hibid_id:
+            raise HTTPException(status_code=422,
+                                detail="Live mode reads bids from HiBid; this auction isn't a HiBid sale.")
+        still = (db.query(models.Auction)
+                   .filter(models.Auction.id == auction_id,
+                           open_state.still_open(datetime.utcnow()))
+                   .count())
+        if not still:
+            raise HTTPException(status_code=422, detail="This auction has closed.")
+    auction.live = live
+    db.commit()
+    db.refresh(auction)
+    return _attach_stats(db, [auction])[0]
+
+
 @router.post("/{auction_id}/hide", response_model=schemas.AuctionOut)
 def set_auction_hidden(auction_id: int, hidden: bool = True,
                        db: Session = Depends(get_db)):

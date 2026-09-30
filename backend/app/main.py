@@ -162,6 +162,10 @@ _MIGRATIONS = [
     "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS geo_lng DOUBLE PRECISION",
     "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS drive_minutes DOUBLE PRECISION",
     "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS drive_from VARCHAR",
+    # Live Auction mode (workers/live).
+    "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS live BOOLEAN DEFAULT FALSE",
+    "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS live_refreshed_at TIMESTAMP",
+    "ALTER TABLE lots ADD COLUMN IF NOT EXISTS max_passed_alert_at TIMESTAMP",
 ]
 
 def _run_migrations() -> list[str]:
