@@ -1018,8 +1018,10 @@ export default function App() {
       <StatusBar onQuiet={refreshAll} onStatus={onStatus} />
       <div style={{ padding: isMobile ? '0.75rem' : '1.5rem 2rem',
                     maxWidth: 1500, margin: '0 auto' }}>
+      <div style={isMobile ? undefined : { display: 'flex', alignItems: 'flex-end', gap: 28,
+                                           borderBottom: '1px solid var(--border)' }}>
       <h1 className="wordmark"
-          style={{ fontSize: isMobile ? 22 : 28, margin: '0 0 2px',
+          style={{ fontSize: isMobile ? 22 : 28, margin: isMobile ? '0 0 2px' : '0 0 8px',
                    display: 'flex', alignItems: 'baseline', gap: 10 }}>
         AuctionScout
         {!isMobile && (
@@ -1030,7 +1032,7 @@ export default function App() {
       </h1>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4,
-                    borderBottom: '1px solid var(--border)' }}>
+                    borderBottom: isMobile ? '1px solid var(--border)' : 'none' }}>
         {TABS.map((t) => (
           <button
             key={t.key}
@@ -1041,6 +1043,7 @@ export default function App() {
             {t.label}
           </button>
         ))}
+      </div>
       </div>
       {/* Every in-flight action shows here — several can run at once, since
           starting one no longer blocks another. */}
@@ -1571,30 +1574,35 @@ export default function App() {
               <option key={c.category} value={c.category}>{c.category} ({c.lots})</option>
             ))}
           </select>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8,
-                        marginLeft: isMobile ? 0 : 'auto' }}>
-            <button style={isMobile ? { flex: '1 1 45%', padding: 8 } : undefined}
+          {/* The app-wide actions, behind one door: the one green button on
+              the page is the table's own "Price N unpriced lots", which prices
+              exactly what the filters show. These reach past the filters. */}
+          <details className="picker" style={{ position: 'relative', marginLeft: isMobile ? 0 : 'auto' }}>
+            <summary>More actions ▾</summary>
+            <div className="panel" style={{ display: 'flex', flexDirection: 'column', gap: 6,
+                                            left: isMobile ? 0 : 'auto', right: isMobile ? 'auto' : 0 }}>
+            <button style={{ textAlign: 'left' }}
                     onClick={runBusy('bid-refresh', 'Starting the bid refresh…', handleRefreshBids)}
                     disabled={!!busy['bid-refresh']}
                     title="Re-pull current bids from HiBid for every imported open auction and recompute ROI. Free — progress shows in the top bar.">
               Refresh bids
             </button>
             {!pricedOnly && (<>
-            <button className="primary"
-                    style={isMobile ? { flex: '1 1 45%', padding: 8 } : undefined}
+            <button style={{ textAlign: 'left' }}
                     onClick={runBusy('comps-all', 'Counting unpriced items…', handleCompsOnly)}
                     disabled={!!busy['comps-all']}
                     title="The default way to price: for every unpriced item in view (the ticked auctions and the category dropdown), look up sold comps on its auction title as-is. No AI cost - about one SoldComps request per title (asks first, shows the count)">
               {categoryFilter ? `Price all in ${categoryFilter} with comps (no AI)` : 'Price all with comps (no AI)'}
             </button>
-            <button style={isMobile ? { flex: '1 1 45%', padding: 8 } : undefined}
+            <button style={{ textAlign: 'left' }}
                     onClick={runBusy('inspect-no-value', 'Counting items with no value…', handleInspectNoValue)}
                     disabled={!!busy['inspect-no-value']}
                     title="For the items comps couldn't price: AI reads each photo, identifies what is in it and prices it (asks first, shows cost)">
               AI-price what comps missed
             </button>
             </>)}
-          </div>
+            </div>
+          </details>
         </div>
 
         {/* Row 2: the two lenses used every session, and one door to

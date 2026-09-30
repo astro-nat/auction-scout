@@ -566,3 +566,102 @@ tr.row-addon td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 /* Drive time in an auction header: part of the trip decision, so it reads
    at the same weight as the name, in ink rather than muted grey. */
 .group-drive { font-size: 13.5px; font-weight: 600; white-space: nowrap; }
+
+/* ===================== By auction: decision-first rows ================ */
+
+/* The summary over the grouped view: where the gold is, in one line. */
+.gold-summary {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  box-shadow: inset 3px 0 0 var(--gold-accent);
+  padding: 10px 14px;
+  margin: 0 0 10px;
+  font-size: 15px;
+}
+
+.decision-table td { vertical-align: middle; padding-top: 9px; padding-bottom: 9px; }
+.decision-table th { vertical-align: bottom; }
+.th-sort {
+  background: none; border: none; padding: 0; font: inherit; color: inherit;
+  font-weight: 600; display: inline-flex; align-items: center; white-space: nowrap;
+}
+.th-sort:hover:not(:disabled) { background: none; color: var(--text); transform: none; }
+.decision-table th.num .th-sort { justify-content: flex-end; width: 100%; }
+
+.d-lot { min-width: 260px; }
+.d-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.d-title a { font-weight: 600; }
+.d-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.d-urgent { color: var(--danger); font-weight: 700; }
+
+/* Bid against your max: the two numbers, then how much of the ceiling the
+   bid has used. Green when there's room, brick when it's past. */
+.d-bid { min-width: 200px; display: flex; flex-direction: column; gap: 5px; }
+.d-bid-line {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.d-max { color: var(--muted); }
+.d-over { color: var(--danger); font-weight: 700; white-space: nowrap; }
+.d-bar { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; }
+.d-bar > span { display: block; height: 100%; border-radius: 3px; background: var(--muted); }
+.d-bar-gold { background: color-mix(in srgb, var(--gold-accent) 28%, transparent); }
+.d-bar-gold > span, .d-bar-addon > span { background: var(--accent); }
+.d-bar-over { background: color-mix(in srgb, var(--danger) 22%, transparent); }
+.d-bar-over > span { background: var(--danger); }
+
+.d-roi { font-variant-numeric: tabular-nums; }
+.d-roi-gold { color: var(--success); font-weight: 700; }
+.d-roi-over { color: var(--danger); }
+
+/* Verdict chips. Gold wears the sticker stock; add-on the working green;
+   over-your-max the brick; the rest stay quiet. */
+.chip {
+  display: inline-block; font-size: 13px; font-weight: 600; padding: 1px 8px;
+  border-radius: 3px; white-space: nowrap; color: var(--muted);
+}
+.chip-gold { background: var(--sticker); color: var(--sticker-ink); }
+.chip-addon { background: var(--accent-soft); color: var(--accent); }
+.chip-over { color: var(--danger); }
+.chip-unpriced { background: var(--badge-bg); color: var(--text); }
+
+.badge.hard { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger); font-weight: 600; }
+
+/* Row actions live at the end of the row: price or re-check, watch, and a
+   menu for the rest. */
+.d-actions { white-space: nowrap; text-align: right; }
+.d-actions > * { vertical-align: middle; }
+.icon-btn {
+  width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center;
+  color: var(--muted); border-radius: var(--radius);
+}
+.icon-btn:hover:not(:disabled) { color: var(--text); background: var(--highlight); }
+.row-menu { position: relative; display: inline-block; }
+.row-menu > summary {
+  list-style: none; cursor: pointer; width: 32px; height: 32px; display: inline-flex;
+  align-items: center; justify-content: center; color: var(--muted); border-radius: var(--radius);
+}
+.row-menu > summary::-webkit-details-marker { display: none; }
+.row-menu > summary:hover, .row-menu[open] > summary { color: var(--text); background: var(--highlight); }
+.row-menu-panel {
+  position: absolute; right: 0; top: 100%; z-index: 400; margin-top: 4px; min-width: 200px;
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: 6px;
+  box-shadow: var(--shadow-pop); padding: 6px; display: flex; flex-direction: column; gap: 2px;
+  text-align: left;
+}
+.row-menu-panel button, .row-menu-panel a {
+  border: none; background: none; text-align: left; padding: 8px 10px; border-radius: 4px;
+  font-size: 13.5px; color: var(--text);
+}
+.row-menu-panel button:hover:not(:disabled), .row-menu-panel a:hover {
+  background: var(--highlight); text-decoration: none;
+}
+
+/* Phone cards in the grouped view. */
+.d-card { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.d-card-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 14px; }
+.d-card-title { font-weight: 600; font-size: 15px; }
+.d-card-nums { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; font-variant-numeric: tabular-nums; }
+.d-card-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.d-card-tags:empty { display: none; }
+.d-card-actions { display: flex; align-items: center; gap: 6px; }

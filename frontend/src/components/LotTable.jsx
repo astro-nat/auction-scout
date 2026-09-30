@@ -345,6 +345,20 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                                   onSaveDriveFrom, onClearDriveFrom }) {
   const isMobile = useMediaQuery('(max-width: 768px)')
   const [pollingIds, setPollingIds] = useState(new Set())
+  // Row menus (the ⋯ at the end of a row) are <details>: close any open one
+  // on a click outside it or on Escape, the way a menu is expected to.
+  useEffect(() => {
+    const closeOpen = (except) => document.querySelectorAll('details.row-menu[open]')
+      .forEach((d) => { if (d !== except) d.open = false })
+    const onClick = (ev) => closeOpen(ev.target.closest?.('details.row-menu'))
+    const onKey = (ev) => { if (ev.key === 'Escape') closeOpen(null) }
+    document.addEventListener('click', onClick)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('click', onClick)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [])
   // Countdown clock — a 30s tick keeps every "closes in" cell live.
   const [now, setNow] = useState(Date.now())
   useEffect(() => {
@@ -1302,7 +1316,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
 
   // Each auction: its header, its gold mines and add-ons, then the rest
   // folded away - at an auction with no gold mine, all of it.
-  const renderGroups = (renderOne, asTable) => groups.map((g) => {
+  const renderGroups = (renderOne, asTable, span = COLUMNS.length + 2) => groups.map((g) => {
     const key = g.auctionId ?? 'none'
     const rest = g.hasGold ? g.others : g.lots
     const shown = Math.min(openGroups.get(key) || 0, rest.length)
@@ -1328,7 +1342,6 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
       </div>
     )
     if (asTable) {
-      const span = COLUMNS.length + 2
       return (
         <Fragment key={key}>
           <tr className="group-head"><td colSpan={span}>{groupHeader(g)}</td></tr>
@@ -1345,6 +1358,372 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
       </section>
     )
   })
+
+  // --- the "By auction" rows: decision first -----------------------------
+  // Lot, when it closes, where the bid stands against your ceiling, what it
+  // resells for, the return, the verdict - left to right, the order the
+  // decision is made in. The full column set (and a filter under each)
+  // stays in "All lots".
+
+  const aiHeaderAction = (
+    <>
+            {aiTargets.length > 1 && (
+              <button
+                disabled={queuing}
+                onClick={handleEnrichMatching}
+                data-track="AI check worth (header)"
+                title={`AI-check the ${aiTargets.length} lots in view worth $${aiMin}+ that `
+                       + `have not had one, most valuable first. Same action as the `
+                       + `button above the table; it asks first and shows the cost.`}
+                style={{ fontSize: 12, padding: '3px 9px' }}>
+                {queuing ? <><span className="spinner" />Queuing…</>
+                         : `AI check ${aiTargets.length.toLocaleString()}`}
+              </button>
+            )}
+    </>
+  )
+
+  const closeMenu = (ev) => {
+    const d = ev.currentTarget.closest('details')
+    if (d) d.open = false
+  }
+
+  const starButton = (lot) => (
+    <button type="button" className="bare icon-btn"
+            aria-label={lot.watched ? 'Stop watching lot' : 'Watch lot'}
+            title={lot.watched ? 'Watching - phone alert when this closes within 2 hours (click to stop)'
+                               : 'Watch: phone alert when this closes within 2 hours'}
+            data-track={lot.watched ? 'Stop watching lot' : 'Watch lot'}
+            onClick={() => handleWatch(lot.lot_id, !lot.watched)}>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill={lot.watched ? 'currentColor' : 'none'}
+           stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden="true">
+        <path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" />
+      </svg>
+    </button>
+  )
+
+  const rowMenu = (lot) => (
+    <details className="row-menu">
+      <summary aria-label="More for this lot" title="Hide, hide similar, open the listing">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" />
+        </svg>
+      </summary>
+      <div className="row-menu-panel">
+        <button type="button" data-track={lot.hidden ? 'show' : 'hide'}
+                onClick={(ev) => { closeMenu(ev); handleHide(lot.lot_id, !lot.hidden) }}>
+          {lot.hidden ? 'Show this lot again' : 'Hide this lot'}
+        </button>
+        <button type="button" data-track={lot.hidden ? 'Show all like this' : 'Hide all like this'}
+                onClick={(ev) => { closeMenu(ev); handleHideLike(lot.lot_id, !lot.hidden) }}>
+          {lot.hidden ? 'Show every lot like this' : 'Hide every lot like this'}
+        </button>
+        <a href={lot.lot_link} target="_blank" rel="noreferrer" onClick={closeMenu}>Open the listing</a>
+      </div>
+    </details>
+  )
+
+  const VERDICT_CHIP = {
+    gold: 'Gold mine', addon: 'Add-on', over: 'Over your max', unpriced: 'Not priced', pass: 'Pass',
+  }
+
+  function verdictChip(lot, e, kind) {
+    if (isWorking(lot)) {
+      return <span className="chip"><span className="spinner" />{e.progress || (e.status === 'queued' ? 'in the queue' : 'working')}</span>
+    }
+    const confirmed = kind === 'gold' && (e.gold_check === 'confirmed' || e.gold_check === 'corrected')
+    const why = e.gold_check === 'confirmed'
+      ? `AI double-checked this gold${e.gold_check_note ? `: ${e.gold_check_note}` : ''}`
+      : e.gold_check === 'corrected'
+        ? `AI replaced the comp value with its own - ${e.gold_check_note || 'see price source'}`
+        : e.gold_check === 'demoted'
+          ? `AI demoted this gold - ${e.gold_check_note || 'value judged implausible'}`
+          : kind === 'addon'
+            ? `Worth adding: you're already going to this auction for a gold mine, and this clears your ${addonFloor}% add-on bar`
+            : e.roi_reason || undefined
+    return (
+      <span className={`chip chip-${kind}`} title={why} style={why ? { cursor: 'help' } : undefined}>
+        {VERDICT_CHIP[kind] || 'Pass'}{confirmed ? ' ✓' : ''}
+      </span>
+    )
+  }
+
+  // Bid against your ceiling: the two numbers side by side, and a bar for
+  // how much of the ceiling the bid has used. A gold mine's ceiling is the
+  // sticker; over it, the overage is what's said.
+  function bidAgainstMax(lot, e, kind, { compact = false } = {}) {
+    const bid = num(lot.current_bid)
+    const max = num(e.max_bid)
+    const over = kind === 'over' && bid != null && max != null
+    const fill = bid != null && max ? Math.min(100, Math.round((bid / max) * 100)) : 0
+    return (
+      <div className="d-bid">
+        <div className="d-bid-line">
+          <span>Bid {money(lot.current_bid)}</span>
+          {kind === 'gold' && max != null ? <span className="price-sticker">max {money(max)}</span>
+            : over ? <span className="d-over">{money(bid - max)} over max</span>
+            : max != null ? <span className="d-max">max {money(max)}</span>
+            : !compact && rowButton(lot, { fontSize: 12.5, padding: '2px 10px' })}
+        </div>
+        {max != null && (
+          <div className={`d-bar d-bar-${kind}`} aria-hidden="true">
+            <span style={{ width: `${fill}%` }} />
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  function resaleCell(lot, e, edited) {
+    const ev = evidence(e)
+    return (
+      <>
+        <EditableCell
+          display={money(e.est_resale)}
+          rawValue={e.est_resale}
+          inputType="number"
+          edited={edited.has('est_resale')}
+          onSave={(v) => handleCorrect(lot.lot_id, 'est_resale', v)}
+        />
+        {ev && (
+          <div title={(EVIDENCE_NOTE[ev] || '') + (e.comp_count ? ` (${e.comp_count} comps)` : '')}
+               style={{ color: isPaleEvidence(ev) ? 'var(--warn)' : 'var(--muted)', fontSize: 11.5, cursor: 'help' }}>
+            {EVIDENCE_LABEL[ev] || ev}{e.comp_count ? ` · ${e.comp_count}` : ''}
+          </div>
+        )}
+        {e.gold_check === 'demoted' && (
+          <div title={e.gold_check_note || 'The second-opinion audit judged this value implausible'}
+               style={{ color: 'var(--danger)', fontSize: 11, fontWeight: 600, cursor: 'help' }}>
+            rejected by audit
+          </div>
+        )}
+        {houseEstimate(lot) && (
+          <div style={{ color: 'var(--muted)', fontSize: 11 }}
+               title={houseRatioTitle(lot.house_ratio, lot.house_ratio_n)
+                 || "The auction house's own estimate range - promotional, but weak-evidence values are capped against it"}>
+            house {houseEstimate(lot)}
+          </div>
+        )}
+        {e.est_resale != null && <CompsPeek lot={lot} e={e} onLotUpdated={onLotUpdated} />}
+      </>
+    )
+  }
+
+  function lotNotes(e) {
+    return (
+      <>
+        {e.fraud_note && (
+          <div style={{ color: 'var(--warn)', fontSize: 12 }}
+               title="Funko fraud check: how the listing's own words changed the pricing">
+            fraud check: {e.fraud_note}
+          </div>
+        )}
+        {e.identity_note && (
+          <div style={{ color: 'var(--danger)', fontSize: 12 }}
+               title="The AI's title asserts something the listing never said, so the value came from the listing's own title and the gold badge is withheld. Correct the title to confirm what it is.">
+            identity uncertain: AI added {e.identity_note} - not in the listing
+          </div>
+        )}
+        {e.notes && e.ai_source === 'vision-itemized' && (
+          <details style={{ fontSize: 12, color: 'var(--muted)' }}>
+            <summary>itemized breakdown</summary>
+            <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{e.notes}</pre>
+          </details>
+        )}
+      </>
+    )
+  }
+
+  function lotTags(lot, e) {
+    return (
+      <>
+        {e.bolo_brand && (
+          <span className="badge bolo" title={`BOLO match: ${e.bolo_brand} (tier ${e.bolo_tier ?? '?'})`}>
+            BOLO · {e.bolo_brand}
+          </span>
+        )}
+        {e.auth_required && (
+          <span className="badge bolo"
+                title="Luxury/precious-metal match - resale depends on authentication; don't trust the comps until verified in hand">
+            verify
+          </span>
+        )}
+        {lot.logistics_ease === 'HARD' && <span className="badge hard">Hard to ship</span>}
+      </>
+    )
+  }
+
+  const renderDecisionRow = (lot, kind) => {
+    const e = lot.enrichment || {}
+    const edited = new Set(e.user_overrides || [])
+    const closing = closesIn(lot.closes_at, now)
+    const roi = e.est_roi == null ? null : Math.round(Number(e.est_roi) * 100)
+    const rowClass = kind === 'gold' ? 'row-gold' : kind === 'addon' ? 'row-addon'
+      : kind === 'over' ? 'row-overbid' : undefined
+    return (
+      <tr key={lot.lot_id} className={rowClass}>
+        <td>
+          <input type="checkbox" checked={selected.has(lot.lot_id)}
+                 onChange={() => setSelected(toggle(selected, lot.lot_id))}
+                 title="Select this lot for a bulk action" />
+        </td>
+        <td className="d-lot">
+          <div className="d-title">
+            <a href={lot.lot_link} target="_blank" rel="noreferrer"
+               style={lot.hidden ? { opacity: 0.5, textDecoration: 'line-through' } : undefined}>{lot.title}</a>
+            {lotTags(lot, e)}
+          </div>
+          <div className="d-sub">
+            #{lot.lot_number || '—'} ·{' '}
+            <EditableCell
+              display={e.enriched_title || '(no enriched title)'}
+              rawValue={e.enriched_title}
+              edited={edited.has('enriched_title')}
+              onSave={(v) => handleCorrect(lot.lot_id, 'enriched_title', v)}
+            />
+          </div>
+          {lotNotes(e)}
+        </td>
+        <td className={closing.urgent ? 'd-urgent' : undefined} style={{ whiteSpace: 'nowrap' }}>
+          {(lot.item_closed ?? lot.auction_closed) ? 'closed' : closing.text}
+        </td>
+        <td>{bidAgainstMax(lot, e, kind)}</td>
+        <td className="num">{resaleCell(lot, e, edited)}</td>
+        <td className="num" title={roiTooltip(lot, e)}
+            style={{ cursor: roi != null ? 'help' : undefined }}>
+          <span className={`d-roi d-roi-${kind}`}>{roi == null ? '—' : `${roi}%`}</span>
+          {e.all_in_cost != null && (
+            <div style={{ color: 'var(--muted)', fontSize: 11 }}>all-in {money(e.all_in_cost)}</div>
+          )}
+        </td>
+        <td>
+          {verdictChip(lot, e, kind)}
+          <div className="d-sub">
+            <EditableCell
+              display={e.verdict ?? 'condition?'}
+              rawValue={e.verdict}
+              options={VERDICTS}
+              edited={edited.has('verdict')}
+              onSave={(v) => handleCorrect(lot.lot_id, 'verdict', v)}
+            />
+          </div>
+          {e.status === 'failed' && e.error_message && (
+            <div style={{ color: 'var(--error)', fontSize: 12 }}>{e.error_message.slice(0, 80)}</div>
+          )}
+        </td>
+        <td className="d-actions">
+          {kind !== 'unpriced' && rowButton(lot, { fontSize: 12, padding: '3px 8px' })}
+          {starButton(lot)}
+          {rowMenu(lot)}
+        </td>
+      </tr>
+    )
+  }
+
+  // The phone's version: the verdict and the clock lead, because on a
+  // phone the question is "do I bid on this, and how soon".
+  const renderDecisionCard = (lot, kind) => {
+    const e = lot.enrichment || {}
+    const closing = closesIn(lot.closes_at, now)
+    const roi = e.est_roi == null ? null : Math.round(Number(e.est_roi) * 100)
+    const bid = num(lot.current_bid)
+    const max = num(e.max_bid)
+    const ev = evidence(e)
+    const cls = kind === 'gold' ? ' row-gold' : kind === 'addon' ? ' row-addon' : kind === 'over' ? ' row-overbid' : ''
+    return (
+      <div key={lot.lot_id} className={`card d-card${cls}`}>
+        <div className="d-card-top">
+          {kind === 'gold' && max != null ? <span className="price-sticker">max {money(max)}</span>
+            : kind === 'over' && bid != null && max != null
+              ? <span className="d-over">{money(bid - max)} over your max</span>
+              : <span>{verdictChip(lot, e, kind)}{kind === 'addon' && max != null ? <span className="d-max"> · max {money(max)}</span> : null}</span>}
+          <span className={closing.urgent ? 'd-urgent' : undefined}>
+            {(lot.item_closed ?? lot.auction_closed) ? 'closed' : `closes ${closing.text}`}
+          </span>
+        </div>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'baseline' }}>
+          <input type="checkbox" checked={selected.has(lot.lot_id)}
+                 onChange={() => setSelected(toggle(selected, lot.lot_id))}
+                 title="Select this lot for a bulk action" />
+          <a href={lot.lot_link} target="_blank" rel="noreferrer" className="d-card-title"
+             style={lot.hidden ? { opacity: 0.5, textDecoration: 'line-through' } : undefined}>{lot.title}</a>
+        </div>
+        <div className="d-sub">#{lot.lot_number || '—'}{e.enriched_title && e.enriched_title !== lot.title ? ` · ${e.enriched_title}` : ''}</div>
+        {lotNotes(e)}
+        <div className="d-card-nums">
+          <span>
+            Bid {money(lot.current_bid)}
+            {e.est_resale != null && <> · resale {money(e.est_resale)}</>}
+            {ev && isPaleEvidence(ev) && <span style={{ color: 'var(--warn)' }}> ({EVIDENCE_LABEL[ev] || ev})</span>}
+          </span>
+          {roi != null && <span className={`d-roi d-roi-${kind}`}>ROI {roi}%</span>}
+        </div>
+        {max != null && (
+          <div className={`d-bar d-bar-${kind}`} aria-hidden="true">
+            <span style={{ width: `${bid != null && max ? Math.min(100, Math.round((bid / max) * 100)) : 0}%` }} />
+          </div>
+        )}
+        <div className="d-card-tags">{lotTags(lot, e)}</div>
+        {e.est_resale != null && <CompsPeek lot={lot} e={e} onLotUpdated={onLotUpdated} />}
+        <div className="d-card-actions">
+          {rowButton(lot, { flex: 1, padding: 8 })}
+          {starButton(lot)}
+          {rowMenu(lot)}
+        </div>
+      </div>
+    )
+  }
+
+  const goldGroups = groups.filter((g) => g.hasGold)
+  const addonTotal = groups.reduce((n, g) => n + g.addonCount, 0)
+  const goldSummary = arrange === 'auction' && goldGroups.length > 0 && (
+    <div className="gold-summary">
+      <strong>Gold mines at {goldGroups.length} {goldGroups.length === 1 ? 'auction' : 'auctions'}.</strong>{' '}
+      {addonTotal
+        ? `${addonTotal} more ${addonTotal === 1 ? 'lot there is' : 'lots there are'} worth adding, since you'd be picking up anyway.`
+        : 'Nothing else there clears the add-on bar.'}
+    </div>
+  )
+  // Column filters are set in "All lots" and have no widgets here, so say
+  // when one is quietly narrowing this view.
+  const columnFilterNote = arrange === 'auction' && activeFilterCount > 0 && (
+    <div style={{ fontSize: 13, color: 'var(--muted)', margin: '4px 0 8px' }}>
+      {activeFilterCount} column {activeFilterCount === 1 ? 'filter' : 'filters'} from All lots {activeFilterCount === 1 ? 'is' : 'are'} also narrowing this view.{' '}
+      <button type="button" className="link-like" style={{ color: 'var(--link)' }}
+              onClick={() => setColFilters({})}>Clear {activeFilterCount === 1 ? 'it' : 'them'}</button>
+    </div>
+  )
+
+  const DECISION_HEADS = [
+    { label: 'Lot', sort: 'title' }, { label: 'Closes', sort: 'closes' },
+    { label: 'Bid against your max', sort: 'bid' }, { label: 'Resale', sort: 'est_resale', num: true },
+    { label: 'ROI', sort: 'roi', num: true }, { label: 'Verdict', sort: 'verdict' },
+  ]
+  const decisionTable = (
+    <table className="data-table lot-table decision-table">
+      <thead style={{ position: 'sticky', top: 'var(--statusbar-h, 0px)', zIndex: 10, background: 'var(--card-bg)' }}>
+        <tr>
+          <th style={{ width: 28 }}>
+            <input type="checkbox" title="Select every lot in view"
+                   checked={allSelected(selected, sorted)}
+                   onChange={(ev) => setSelected(ev.target.checked ? selectAll(sorted) : new Set())} />
+          </th>
+          {DECISION_HEADS.map((h) => (
+            <th key={h.label} className={h.num ? 'num' : undefined}
+                aria-sort={sort.key === h.sort ? (sort.dir === 1 ? 'ascending' : 'descending') : undefined}>
+              <button type="button" className="th-sort" onClick={() => handleSort(h.sort)} title="Sort by this">
+                {h.label}
+                <span className={`sort-arrows${sort.key === h.sort ? (sort.dir === 1 ? ' asc' : ' desc') : ''}`}
+                      aria-hidden="true"><span>▲</span><span>▼</span></span>
+              </button>
+            </th>
+          ))}
+          <th style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>{aiHeaderAction}</th>
+        </tr>
+      </thead>
+      <tbody>{renderGroups(renderDecisionRow, true, DECISION_HEADS.length + 2)}</tbody>
+    </table>
+  )
 
   if (isMobile) {
     return (
@@ -1398,10 +1777,11 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
           {(unpricedShown.length > 0 || queuing) && (
             <button className="primary" onClick={handleCompsMatching}
                     disabled={queuing}
+                    data-track="Price N with comps (no AI)"
                     title="The default: sold comps for every unpriced lot matching the filters, on each lot's own title. No AI cost."
                     style={{ flex: '1 1 100%', padding: 10, fontSize: 15 }}>
               {queuing ? <><span className="spinner" />Queuing…</>
-                       : `Price ${unpricedShown.length.toLocaleString()} with comps (no AI)`}
+                       : `Price ${unpricedShown.length.toLocaleString()} unpriced ${unpricedShown.length === 1 ? 'lot' : 'lots'}`}
             </button>
           )}
           {aiCheck}
@@ -1420,7 +1800,9 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
           <div style={{ flexBasis: '100%' }}>{arrangeControl}</div>
           {arrange !== 'auction' && <div style={{ flexBasis: '100%' }}>{lengthMenu}</div>}
         </div>
-        {arrange === 'auction' ? renderGroups(renderCard, false) : pageRows.map((lot) => renderCard(lot))}
+        {goldSummary}
+        {columnFilterNote}
+        {arrange === 'auction' ? renderGroups(renderDecisionCard, false) : pageRows.map((lot) => renderCard(lot))}
         <div className="table-footer">{countLine}{arrange === 'auction' ? null : pager}</div>
       </>
     )
@@ -1652,9 +2034,10 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
         {(unpricedShown.length > 0 || queuing) && (
           <button className="primary" onClick={handleCompsMatching}
                   disabled={queuing}
+                  data-track="Price N with comps (no AI)"
                   title="The default: sold comps for every unpriced lot matching the filters, on each lot's own title. No AI cost.">
             {queuing ? <><span className="spinner" />Queuing…</>
-                     : `Price ${unpricedShown.length.toLocaleString()} with comps (no AI)`}
+                     : `Price ${unpricedShown.length.toLocaleString()} unpriced ${unpricedShown.length === 1 ? 'lot' : 'lots'}`}
           </button>
         )}
         {aiCheck}
@@ -1663,6 +2046,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     )}
     {likeBar}
     {bulkBar}
+    {goldSummary}
     {/* DataTables' top bar: page length left, the one search box right. */}
     <div className="table-toolbar">
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 16 }}>
@@ -1680,6 +2064,8 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
         it INSIDE the table by the status bar's height — a blank band with
         the header floating over the first rows whenever a job is running.
         A too-narrow window falls back to page-level horizontal scrolling. */}
+    {columnFilterNote}
+    {arrange === 'auction' ? decisionTable : (<>
     {sort.key && (
       <style>{`.lot-table tbody td:nth-child(${COLUMNS.findIndex((c) => c.key === sort.key) + 2}) { background-image: linear-gradient(var(--sorted-tint), var(--sorted-tint)); }`}</style>
     )}
@@ -1722,19 +2108,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
               auction equivalent next to its rows took that one from 0 to used
               and stopped the per-row clicking, so this is the same move. */}
           <th style={{ whiteSpace: 'nowrap' }}>
-            {aiTargets.length > 1 && (
-              <button
-                disabled={queuing}
-                onClick={handleEnrichMatching}
-                data-track="AI check worth (header)"
-                title={`AI-check the ${aiTargets.length} lots in view worth $${aiMin}+ that `
-                       + `have not had one, most valuable first. Same action as the `
-                       + `button above the table; it asks first and shows the cost.`}
-                style={{ fontSize: 12, padding: '3px 9px' }}>
-                {queuing ? <><span className="spinner" />Queuing…</>
-                         : `AI check ${aiTargets.length.toLocaleString()}`}
-              </button>
-            )}
+            {aiHeaderAction}
           </th>
         </tr>
         <tr className="filter-row">
@@ -1771,9 +2145,10 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
         </tr>
       </thead>
       <tbody>
-        {arrange === 'auction' ? renderGroups(renderRow, true) : pageRows.map((lot) => renderRow(lot))}
+        {pageRows.map((lot) => renderRow(lot))}
       </tbody>
     </table>
+    </>)}
     <div className="table-footer">{countLine}{arrange === 'auction' ? null : pager}</div>
     </>
   )
