@@ -10,3 +10,32 @@ describe('formatDrive', () => {
     expect(formatDrive(120)).toBe('2 h drive')
   })
 })
+
+import { farAuctionIds } from './drive'
+
+describe('farAuctionIds', () => {
+  const auctions = [
+    { id: 1, source: 'Local Pickup', drive_minutes: 24 },
+    { id: 2, source: 'Local Pickup', drive_minutes: 41 },
+    { id: 3, source: 'Ship', drive_minutes: 600 },
+    { id: 4, source: 'Local Pickup', drive_minutes: null },
+    { id: 5, source: 'Local Pickup', drive_minutes: 30 },
+  ]
+
+  it('hides pickup auctions past the limit, and only those', () => {
+    expect([...farAuctionIds(auctions, 30)]).toEqual([2])
+  })
+
+  it('never hides an auction that ships, however far', () => {
+    expect(farAuctionIds(auctions, 10).has(3)).toBe(false)
+  })
+
+  it('keeps an auction with no drive time yet', () => {
+    expect(farAuctionIds(auctions, 0).has(4)).toBe(false)
+  })
+
+  it('moves with the limit', () => {
+    expect([...farAuctionIds(auctions, 20)].sort()).toEqual([1, 2, 5])
+    expect(farAuctionIds(auctions, 60).size).toBe(0)
+  })
+})

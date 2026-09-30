@@ -14,6 +14,7 @@ import LotTable from './components/LotTable'
 import StatusBar from './components/StatusBar'
 import useMediaQuery from './useMediaQuery'
 import NeverListEditor from './components/NeverListEditor'
+import { farAuctionIds } from './lib/drive'
 
 // The Filters panel's three groups. Module-level so they are not rebuilt
 // on every render of a component that re-renders on every bid.
@@ -119,6 +120,11 @@ export default function App() {
   // box rather than a silent rule because it removes 4 lots in every 5, and
   // an inventory that shrinks by 82% with no way back reads as a fault.
   const [hideOverMax, setHideOverMax] = useState(true)
+  // Pickup auctions too far to drive to. On at 30 minutes; does nothing
+  // until a drive-from address is saved (the times come from it). Lots of
+  // an auction with no drive time yet are kept - unknown is not far.
+  const [hideFar, setHideFar] = useState(true)
+  const [maxDriveMinutes, setMaxDriveMinutes] = useState(30)
   // On by default: the only thing that matters about a saw or a compressor
   // is whether the motor runs, and that is exactly what a listing photo
   // cannot show. Not a judgement about the tools - a judgement about what
@@ -903,6 +909,15 @@ export default function App() {
     !!touchedRef.current[l.lot_id] &&
     Date.now() - touchedRef.current[l.lot_id] < 15 * 60 * 1000
 
+  // Auctions past the drive limit. Ship-only sales are left out: a far
+  // auction that ships is not a drive at all, and hiding it would hide
+  // lots that can still be had by mail.
+  const tooFarIds = useMemo(() => {
+    if (!hideFar || !driveFrom) return new Set()
+    const byId = { ...Object.fromEntries(auctions.map((a) => [a.id, a])), ...importedRows }
+    return farAuctionIds(Object.values(byId), maxDriveMinutes)
+  }, [hideFar, driveFrom, auctions, importedRows, maxDriveMinutes])
+
   // Staged, so each box can say how many IT removes. Counting against the
   // whole inventory instead was misleading: the over-max box read 4,574
   // while only 1,385 of those were still on screen for it to remove - the
@@ -923,6 +938,7 @@ export default function App() {
         if (hideHardShip && l.logistics_ease === 'HARD') return false
         if (hideNoUsShip && l.auction_no_us_ship) return false
         if (hideClosed && isClosedItem(l)) return false
+        if (tooFarIds.has(l.auction_id)) return false
         // A lot whose title never says how many pieces it holds has no
         // per-item price, so it can never satisfy this box.
         if (cheapMediaOnly && !(l.media_per_item != null
@@ -936,7 +952,7 @@ export default function App() {
                      auction_name: l.auction_name ?? auctionNames[l.auction_id] ?? '—',
                      item_closed: isClosedItem(l) }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lots, auctions, auctionIndex, showHiddenLots, hideLowValue, lowValueCutoff, hideHardShip, hideNoUsShip, hideClosed, cheapMediaOnly, maxPerItem, pricedOnly])
+  }, [lots, auctions, auctionIndex, showHiddenLots, hideLowValue, lowValueCutoff, hideHardShip, hideNoUsShip, hideClosed, cheapMediaOnly, maxPerItem, pricedOnly, tooFarIds])
   // What each of these two boxes removes from what the other boxes leave -
   // counted before either of them runs, so the number holds whether the box
   // is ticked or not. Counted independently of each other: a lot that is
@@ -992,7 +1008,7 @@ export default function App() {
   // Rules narrowing the view right now, for the Filters button's label.
   // Show-hidden is left out: switching it on shows MORE, not less.
   const activeRuleCount = [hideLowValue, hideOverMax, hidePowered, hideNever,
-                           hideHardShip, hideNoUsShip, hideClosed,
+                           hideHardShip, hideNoUsShip, hideClosed, hideFar && !!driveFrom,
                            filters.flaggedOnly, cheapMediaOnly].filter(Boolean).length
 
 
@@ -1693,6 +1709,33 @@ export default function App() {
                   checked={hideClosed}
                   onChange={(ev) => setHideClosed(ev.target.checked)}
                 /> Hide closed
+              </label>
+              <label style={{ ...panelRow, opacity: driveFrom ? 1 : 0.6 }}
+                     title={driveFrom
+                       ? `Pickup auctions more than this many minutes' drive from ${driveFrom.label || driveFrom.address}, one way. Auctions that ship are never hidden by this, and one with no drive time yet is kept.`
+                       : 'Set where you drive from first: Inventory, By auction view, "Set where you drive from".'}>
+                <input
+                  type="checkbox"
+                  checked={hideFar}
+                  disabled={!driveFrom}
+                  onChange={(ev) => setHideFar(ev.target.checked)}
+                  data-track="Hide far auctions"
+                /> Hide auctions more than
+                <input
+                  type="number"
+                  min="5"
+                  step="5"
+                  value={maxDriveMinutes}
+                  disabled={!driveFrom}
+                  aria-label="Longest drive to show, in minutes"
+                  onChange={(ev) => setMaxDriveMinutes(Number(ev.target.value) || 0)}
+                  style={{ width: 48 }}
+                /> min away
+                <span style={{ color: 'var(--muted)' }}>
+                  {driveFrom
+                    ? `(${tooFarIds.size} ${tooFarIds.size === 1 ? 'auction' : 'auctions'})`
+                    : '(set your address first)'}
+                </span>
               </label>
             </fieldset>
 
