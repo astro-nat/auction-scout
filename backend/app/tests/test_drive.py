@@ -126,3 +126,24 @@ def test_the_origin_key_changes_when_the_address_does():
     a = drive.origin_key({"lat": 29.55, "lng": -95.09})
     b = drive.origin_key({"lat": 29.56, "lng": -95.09})
     assert a != b and a == drive.origin_key({"lat": 29.550001, "lng": -95.090001})
+
+
+def test_hibid_locations_are_read_and_a_failed_batch_is_skipped(monkeypatch):
+    import asyncio
+    from app.services import hibid
+    monkeypatch.setattr(hibid, "META_CHUNK", 2)
+    calls = []
+
+    async def fake_graphql(client, op, query, variables):
+        calls.append(variables["eventIds"])
+        if variables["eventIds"] == [3, 4]:
+            raise RuntimeError("HiBid hiccup")
+        return {"auctionMap": {"mapMarkers": [
+            {"auction": {"id": i, "geoLat": 29.5, "geoLong": -95.1, "eventAddress": f"{i} Main St"}}
+            for i in variables["eventIds"]]}}
+
+    monkeypatch.setattr(hibid, "_graphql", fake_graphql)
+    out = asyncio.run(hibid.fetch_locations([1, 2, 3, 4, 5]))
+    assert calls == [[1, 2], [3, 4], [5]]
+    assert sorted(out) == [1, 2, 5]
+    assert out[1] == {"geo_lat": 29.5, "geo_lng": -95.1, "address": "1 Main St"}

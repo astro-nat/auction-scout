@@ -17,8 +17,10 @@ Nothing here raises into a scan: a missing key, a quota wall or an outage
 leaves drive times blank and says why in the log.
 """
 
+import asyncio
 import logging
 import os
+import threading
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -129,6 +131,48 @@ def usable_coords(lat, lng) -> bool:
         return False
 
 
+# One refresh at a time: page loads kick one off in the background, and a
+# burst of them must not fire the same HiBid and ORS calls side by side.
+_refresh_lock = threading.Lock()
+
+
+def backfill_locations(db) -> int:
+    """Give coordinates to open HiBid auctions that have none.
+
+    Auctions imported before locations were kept (or by link, never seen in
+    a scan) have nothing to measure a drive to. HiBid answers by event id.
+    One it can't place gets 0,0 - usable_coords rejects that, and it keeps
+    the auction from being asked about on every load.
+    """
+    from .. import models
+    from . import hibid
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=2)
+    rows = (db.query(models.Auction)
+              .filter(models.Auction.hibid_id.isnot(None),
+                      models.Auction.geo_lat.is_(None),
+                      (models.Auction.closing_date.is_(None))
+                      | (models.Auction.closing_date >= cutoff))
+              .all())
+    if not rows:
+        return 0
+    try:
+        found = asyncio.run(hibid.fetch_locations([a.hibid_id for a in rows]))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Auction locations not fetched: %s", exc)
+        return 0
+    placed = 0
+    for a in rows:
+        loc = found.get(a.hibid_id) or {}
+        if usable_coords(loc.get("geo_lat"), loc.get("geo_lng")):
+            a.geo_lat, a.geo_lng = float(loc["geo_lat"]), float(loc["geo_lng"])
+            a.address = a.address or loc.get("address")
+            placed += 1
+        else:
+            a.geo_lat, a.geo_lng = 0.0, 0.0
+    db.commit()
+    return placed
+
+
 def refresh(db, *, raise_errors: bool = False) -> int:
     """Fill in drive times for auctions not yet measured from the saved
     origin. Returns how many were updated.
@@ -141,6 +185,17 @@ def refresh(db, *, raise_errors: bool = False) -> int:
     o = origin()
     if not o or not ORS_API_KEY:
         return 0
+    if not _refresh_lock.acquire(blocking=raise_errors):
+        return 0      # one is already running; its results land for everyone
+    try:
+        return _refresh(db, o, raise_errors)
+    finally:
+        _refresh_lock.release()
+
+
+def _refresh(db, o: dict, raise_errors: bool) -> int:
+    from .. import models
+    backfill_locations(db)
     key = origin_key(o)
     cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=2)
     rows = (db.query(models.Auction)

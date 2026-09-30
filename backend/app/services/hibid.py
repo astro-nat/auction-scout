@@ -95,6 +95,14 @@ query AuctionMeta($eventIds: [Int!]) {
 }
 """
 
+AUCTION_LOCATION_QUERY = """
+query AuctionLocation($eventIds: [Int!]) {
+  auctionMap(input: {zip: "", miles: 0, searchText: "", category: -1, filter: ALL, status: ALL, eventIds: $eventIds}) {
+    mapMarkers { auction { id geoLat geoLong eventAddress } }
+  }
+}
+"""
+
 EVENT_EXISTS_QUERY = """
 query EventExists($eventIds: [Int!]) {
   auctionMap(input: {zip: "", miles: 0, searchText: "", category: -1, filter: ALL, status: ALL, eventIds: $eventIds}) {
@@ -312,6 +320,31 @@ async def fetch_auction_meta(client: httpx.AsyncClient, hibid_ids: list[int]) ->
                 "ship_text": ship_text,
                 "terms_text": a.get("termsAndConditions") or "",
             }
+    return out
+
+
+async def fetch_locations(hibid_ids: list[int]) -> dict[int, dict]:
+    """Where each auction is: {hibid_id: {geo_lat, geo_lng, address}}.
+
+    For auctions the app already holds but never saw in a scan (imported
+    by link, or imported before locations were kept) - the scan is the only
+    other place coordinates arrive. Failures degrade to a partial result.
+    """
+    out: dict[int, dict] = {}
+    async with httpx.AsyncClient() as client:
+        for i in range(0, len(hibid_ids), META_CHUNK):
+            chunk = hibid_ids[i:i + META_CHUNK]
+            try:
+                data = await _graphql(client, "AuctionLocation", AUCTION_LOCATION_QUERY,
+                                      {"eventIds": chunk})
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("AuctionLocation failed for chunk %s: %s", chunk[:3], exc)
+                continue
+            for marker in (data.get("auctionMap") or {}).get("mapMarkers") or []:
+                a = marker.get("auction") or {}
+                if a.get("id") is not None:
+                    out[a["id"]] = {"geo_lat": a.get("geoLat"), "geo_lng": a.get("geoLong"),
+                                    "address": a.get("eventAddress")}
     return out
 
 

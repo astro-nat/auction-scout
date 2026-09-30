@@ -9,7 +9,7 @@ GET  /auctions               — list what we know about
 from datetime import datetime, timezone  # noqa: F401 — datetime used in filters
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 
 from .. import models, schemas
 from ..database import get_db
@@ -21,9 +21,21 @@ from sqlalchemy.orm import Session
 router = APIRouter(prefix="/auctions", tags=["auctions"])
 
 
+def _refresh_drive_times():
+    """Background: a fresh session, since the request's is closed by now."""
+    from ..database import SessionLocal
+    db = SessionLocal()
+    try:
+        drive.refresh(db)
+    except Exception as exc:  # noqa: BLE001
+        print(f"Drive times skipped: {exc}")
+    finally:
+        db.close()
+
+
 @router.get("", response_model=List[schemas.AuctionOut])
-def list_auctions(include_closed: bool = False, include_hidden: bool = False,
-                  db: Session = Depends(get_db)):
+def list_auctions(background: BackgroundTasks, include_closed: bool = False,
+                  include_hidden: bool = False, db: Session = Depends(get_db)):
     """Open auctions (closed ones stay in the DB but drop off the list),
     each annotated with its gold-mine tally: how many enriched lots are
     GOLD MINEs and their summed potential profit."""
@@ -63,6 +75,11 @@ def list_auctions(include_closed: bool = False, include_hidden: bool = False,
         a.auctioneer_id not in starred,
         a.closing_date or datetime.max,
     ))
+    # Drive times for auctions not yet measured - after the response, so
+    # the list never waits on HiBid or OpenRouteService. The next load
+    # shows them. Nothing to do when no drive-from address is saved.
+    if drive.origin():
+        background.add_task(_refresh_drive_times)
     return _attach_stats(db, auctions)
 
 
