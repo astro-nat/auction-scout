@@ -15,6 +15,7 @@ import StatusBar from './components/StatusBar'
 import useMediaQuery from './useMediaQuery'
 import NeverListEditor from './components/NeverListEditor'
 import { farAuctionIds } from './lib/drive'
+import { CarIcon, formatDrive } from './components/DriveFrom'
 
 // The Filters panel's three groups. Module-level so they are not rebuilt
 // on every render of a component that re-renders on every bid.
@@ -1304,6 +1305,11 @@ export default function App() {
                   </button>
                 </div>
                 <div style={{ fontSize: 13, color: 'var(--muted)', margin: '4px 0' }}>
+                  {a.drive_minutes != null && (
+                    <span className="group-drive" style={{ color: 'var(--text)' }}>
+                      <CarIcon /> {formatDrive(a.drive_minutes)} ·{' '}
+                    </span>
+                  )}
                   {isClosed(a) ? 'CLOSED · ' : ''}{a.city}, {a.state} · {a.lot_count ?? '—'} lots
                   · closes {a.closing_date ? parseUtc(a.closing_date).toLocaleDateString() : '—'}
                   {a.buyer_premium_mult ? ` · ${Math.round((a.buyer_premium_mult - 1) * 100)}% premium` : ''}
@@ -1405,6 +1411,11 @@ export default function App() {
                   <td style={{ paddingRight: 12 }}>
                     {isClosed(a) && <strong>CLOSED<br /></strong>}
                     {a.city}, {a.state}{fulfillment(a) ? ` (${fulfillment(a)})` : ''}
+                    {a.drive_minutes != null && (
+                      <div className="group-drive" title="One way from your drive-from address, typical traffic">
+                        <CarIcon /> {formatDrive(a.drive_minutes)}
+                      </div>
+                    )}
                     {shipBadge(a) && (
                       <div style={{ fontSize: 11, color: 'var(--muted)' }}
                            title={shipBadge(a).tip}>{shipBadge(a).text}</div>
@@ -1524,6 +1535,7 @@ export default function App() {
                       {a.name}
                       <div style={{ color: 'var(--muted)', fontSize: 12 }}>
                         {[a.city, a.state].filter(Boolean).join(', ') || '—'}
+                        {a.drive_minutes != null ? ` · ${formatDrive(a.drive_minutes)}` : ''}
                         {a.lot_count != null ? ` · ${a.lots_imported} of ${a.lot_count} imported` : ''}
                         {a.gold_count ? ` · ${a.gold_count} gold` : ''}
                       </div>
