@@ -926,6 +926,31 @@ export default function App() {
   // Forgetting is permanent and scan-proof, so it asks first — but only when
   // there are imported lots at stake, since the card carries your enrichment
   // work. A plain scan result goes on one click, as before.
+  // Auctions ticked for forgetting together - separate from the inventory's
+  // selected auctions, so ticking here never changes what the inventory
+  // shows. The usage log had "Forget auction" pressed seven times in a row.
+  const [forgetPicks, setForgetPicks] = useState(() => new Set())
+  const toggleForgetPick = (id) => setForgetPicks((prev) => {
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    return next
+  })
+
+  async function forgetSelected() {
+    const rows = auctionRowsForDisplay.filter((a) => !a.header && forgetPicks.has(a.id))
+    if (!rows.length) return
+    const withLots = rows.filter((a) => a.lots_imported > 0)
+    const lotsKept = withLots.reduce((n, a) => n + a.lots_imported, 0)
+    const msg = `Forget ${rows.length} ${rows.length === 1 ? 'auction' : 'auctions'}?\n\n`
+      + `${rows.length === 1 ? 'It' : 'They'} won't appear in future scans.`
+      + (lotsKept ? ` Your ${lotsKept.toLocaleString()} imported lots from ${withLots.length === 1 ? 'one of them' : `${withLots.length} of them`} stay in My inventory - only the auction cards go away.` : '')
+      + `\n\nUndo any of them from "Forgotten" under the scan button.`
+    if (!window.confirm(msg)) return
+    setForgetPicks(new Set())
+    await Promise.all(rows.map((a) => hideAuction(a)))
+  }
+
   function confirmForget(auction) {
     if (auction.lots_imported > 0) {
       const msg = `Forget "${auction.name}"?\n\n`
@@ -1724,6 +1749,18 @@ export default function App() {
             </button>
           </div>
         )}
+        {forgetPicks.size > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10,
+                        margin: '0.75rem 0 0', fontSize: 13 }}>
+            <strong>{forgetPicks.size} selected</strong>
+            <button type="button" className="danger" data-track="Forget selected auctions"
+                    onClick={forgetSelected}>
+              Forget {forgetPicks.size} selected
+            </button>
+            <button type="button" data-track="Clear auction ticks"
+                    onClick={() => setForgetPicks(new Set())}>Clear</button>
+          </div>
+        )}
         {listedAuctions > 0 && (isMobile ? (
           <details style={{ marginTop: '0.75rem' }} open={!selectedAuctions.length}>
             <summary style={{ fontWeight: 600, padding: '4px 0' }}>
@@ -1746,6 +1783,10 @@ export default function App() {
                             background: selectedAuctions.includes(a.id)
                               ? 'var(--highlight)' : undefined }}>
                 <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <input type="checkbox" checked={forgetPicks.has(a.id)}
+                         onChange={() => toggleForgetPick(a.id)}
+                         data-track="Tick auction (forget selected)"
+                         aria-label={`Select ${a.name} to forget it with others`} />
                   <button
                     data-track={a.favorite ? 'Unwatch auction house' : 'Watch auction house'}
                     className="bare"
@@ -1837,6 +1878,18 @@ export default function App() {
               background: 'var(--card-bg)',
             }}>
               <tr>
+                <th style={{ width: 28 }}>
+                  <input type="checkbox" data-track="Tick all auctions (forget selected)"
+                         aria-label="Select every auction on screen"
+                         checked={(() => {
+                           const shown = auctionRowsForDisplay.slice(0, auctionLimit).filter((a) => !a.header)
+                           return shown.length > 0 && shown.every((a) => forgetPicks.has(a.id))
+                         })()}
+                         onChange={(ev) => setForgetPicks(ev.target.checked
+                           ? new Set(auctionRowsForDisplay.slice(0, auctionLimit)
+                               .filter((a) => !a.header).map((a) => a.id))
+                           : new Set())} />
+                </th>
                 <th>Auction</th>
                 <th>Where</th>
                 <th className="num">Lots</th><th>Closes</th>
@@ -1861,7 +1914,7 @@ export default function App() {
             <tbody>
               {auctionRowsForDisplay.slice(0, auctionLimit).map((a) => a.header ? (
                 <tr key={`hdr-${a.header}`}>
-                  <td colSpan={7} style={{ paddingTop: 12, background: 'var(--bg)' }}>
+                  <td colSpan={8} style={{ paddingTop: 12, background: 'var(--bg)' }}>
                     <button className="bare"
                             onClick={() => toggleSection(a.sectionKey)}
                             aria-expanded={!a.collapsed}
@@ -1874,9 +1927,15 @@ export default function App() {
               ) : (
                 <tr key={a.id}
                     style={{
-                      background: selectedAuctions.includes(a.id)
+                      background: selectedAuctions.includes(a.id) || forgetPicks.has(a.id)
                         ? 'var(--highlight)' : undefined,
                     }}>
+                  <td>
+                    <input type="checkbox" checked={forgetPicks.has(a.id)}
+                           onChange={() => toggleForgetPick(a.id)}
+                           data-track="Tick auction (forget selected)"
+                           aria-label={`Select ${a.name} to forget it with others`} />
+                  </td>
                   <td style={{ paddingRight: 12 }}>
                     <a href={a.source_url} target="_blank" rel="noreferrer">{a.name}</a>
                     <div style={{ fontSize: 11, color: 'var(--muted)' }}>{auctionState(a).text}</div>
