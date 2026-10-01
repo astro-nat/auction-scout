@@ -830,3 +830,23 @@ details.peek > summary:hover { color: var(--hover-ink); }
 .d-card .row-menu > summary:hover { color: var(--hover-ink); background: var(--hover-soft); }
 .group-toggle:hover:not(:disabled), .group-filtered:hover:not(:disabled) { color: var(--hover-ink); }
 .group-import:hover:not(:disabled) { border-color: var(--hover-ink); color: var(--hover-ink); background: var(--hover-soft); }
+
+/* ===================== Usage-driven fixes ============================= */
+/* Click-to-correct values: a real button (keyboard reachable), drawn as
+   the dashed-underlined text it always was. */
+.edit-cell {
+  background: none; border: none; padding: 0; font: inherit; color: inherit; text-align: inherit;
+  border-bottom: 1px dashed var(--muted); border-radius: 0; cursor: pointer;
+}
+.edit-cell:hover:not(:disabled) { background: none; transform: none; color: var(--hover-ink); border-bottom-color: var(--hover-ink); }
+
+/* The per-auction pricing buttons were missed as grey outlines: filled,
+   in the action blue, so they read as the one-click way to price a sale. */
+.group-import.group-act {
+  background: var(--hover-soft); border-color: var(--hover-ink); color: var(--hover-ink); font-weight: 600;
+}
+.group-import.group-act:hover:not(:disabled) { background: var(--hover-ink); color: var(--bg); border-color: var(--hover-ink); }
+
+/* Auction names: ink, not link green - green says gold mine. */
+a.auction-name { color: var(--text); font-weight: 600; }
+a.auction-name:hover { color: var(--hover-ink); }

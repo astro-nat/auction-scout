@@ -30,6 +30,12 @@ const panelRow = { display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wra
 // set: tightening My Watched Items no longer tightens My Inventory. Module
 // level so a default is the same object every render - a fresh [] or {}
 // each time would re-run every effect that depends on it.
+// "Houston, TX", "TX" or "—": a sale with no city printed ", TX".
+const placeOf = (a) => [a.city, a.state].filter(Boolean).join(', ') || '—'
+// When an auction closes, to the minute: you sort and plan by it.
+const CLOSE_FMT = new Intl.DateTimeFormat(undefined, { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+const closeTime = (d) => CLOSE_FMT.format(parseUtc(d))
+
 const FILTER_DEFAULTS = {
   selectedAuctions: [],
   categoryFilter: '',
@@ -509,6 +515,17 @@ export default function App() {
   const hasCategoryCount = (a) =>
     scanCategoryId !== -1 &&
     matchCountFor(a, scanCategoryId, '') != null
+
+  // On an auction already imported, "Import" read as a mystery beside View:
+  // it fetches the lots still missing, so it says that - and goes away
+  // once nothing is missing.
+  function importButtonLabel(a) {
+    if (!a.lots_imported) return importLabel(a)
+    if (a.lot_count != null && a.lots_imported < a.lot_count) {
+      return `Import ${(a.lot_count - a.lots_imported).toLocaleString()} missing`
+    }
+    return null
+  }
 
   function importLabel(a) {
     return matchLabel(a, {
@@ -1210,6 +1227,15 @@ export default function App() {
                     title="For the items comps couldn't price: AI reads each photo, identifies what is in it and prices it (asks first, shows cost)">
               AI-price what comps missed
             </button>
+            {/* Used 21 times in two weeks, so it lives with the other
+                actions rather than inside Filters - last in the menu and
+                set apart, because it deletes. */}
+            <button className="danger" style={{ textAlign: 'left', marginTop: 6 }}
+                    onClick={runBusy('flush', 'Counting closed items…', handleFlushClosed)}
+                    disabled={!!busy.flush}
+                    title="Permanently delete all items whose auction has closed (asks first)">
+              Flush closed items
+            </button>
             </>)}
             </div>
           </details>
@@ -1431,17 +1457,6 @@ export default function App() {
                 />% ROI
                 <button style={{ fontSize: 12, padding: '3px 9px' }} onClick={handleSaveRoi}>Apply</button>
               </span>
-              <span style={{ ...panelLegend, marginTop: 14 }}>Clean up</span>
-              {/* In red beside the most-used button, a permanent delete was
-                  one slip away. It asks first either way, but it belongs
-                  down here. */}
-              <button className="danger"
-                      onClick={runBusy('flush', 'Counting closed items…', handleFlushClosed)}
-                      disabled={!!busy.flush}
-                      title="Permanently delete all items whose auction has closed (asks first)"
-                      style={{ alignSelf: 'flex-start', fontSize: 13 }}>
-                Flush closed items
-              </button>
             </fieldset>
           </div>
         )}
@@ -1749,7 +1764,7 @@ export default function App() {
                     }}>
                     {a.favorite ? '★' : '☆'}
                   </button>
-                  <a href={a.source_url} target="_blank" rel="noreferrer">{a.name}</a>
+                  <a className="auction-name" href={a.source_url} target="_blank" rel="noreferrer">{a.name}</a>
                   <button
                     className="bare"
                     onClick={() => confirmForget(a)}
@@ -1768,8 +1783,8 @@ export default function App() {
                       <CarIcon /> {formatDrive(a.drive_minutes)} ·{' '}
                     </span>
                   )}
-                  {isClosed(a) ? 'CLOSED · ' : ''}{a.city}, {a.state} · {a.lot_count ?? '—'} lots
-                  · closes {a.closing_date ? parseUtc(a.closing_date).toLocaleDateString() : '—'}
+                  {isClosed(a) ? 'CLOSED · ' : ''}{placeOf(a)} · {a.lot_count ?? '—'} lots
+                  · closes {a.closing_date ? closeTime(a.closing_date) : '—'}
                   {a.buyer_premium_mult ? ` · ${Math.round((a.buyer_premium_mult - 1) * 100)}% premium` : ''}
                   {houseRatioLabel(a.estimate_ratio, a.estimate_ratio_n) && (
                     <span title={houseRatioTitle(a.estimate_ratio, a.estimate_ratio_n)}
@@ -1791,10 +1806,12 @@ export default function App() {
                   </div>
                 )}
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {importButtonLabel(a) && (
                   <button style={{ flex: '1 1 90px', minWidth: 90, padding: 8 }}
                           onClick={() => handleImport(a.id)}>
-                    {importLabel(a)}
+                    {importButtonLabel(a)}
                   </button>
+                  )}
                   {a.imported_at && (
                     <>
                       <button style={{ flex: '1 1 70px', minWidth: 70, padding: 8 }}
@@ -1881,12 +1898,12 @@ export default function App() {
                            aria-label={`Select ${a.name} to forget it with others`} />
                   </td>
                   <td style={{ paddingRight: 12 }}>
-                    <a href={a.source_url} target="_blank" rel="noreferrer">{a.name}</a>
+                    <a className="auction-name" href={a.source_url} target="_blank" rel="noreferrer">{a.name}</a>
                     <div style={{ fontSize: 11, color: 'var(--muted)' }}>{auctionState(a).text}</div>
                   </td>
                   <td style={{ paddingRight: 12 }}>
                     {isClosed(a) && <strong>CLOSED<br /></strong>}
-                    {a.city}, {a.state}{fulfillment(a) ? ` (${fulfillment(a)})` : ''}
+                    {placeOf(a)}{fulfillment(a) ? ` (${fulfillment(a)})` : ''}
                     {a.drive_minutes != null && (
                       <div className="group-drive" title="One way from your drive-from address, typical traffic">
                         <CarIcon /> {formatDrive(a.drive_minutes)}
@@ -1915,13 +1932,13 @@ export default function App() {
                     )}
                   </td>
                   <td style={{ whiteSpace: 'nowrap' }}>
-                    {a.closing_date ? parseUtc(a.closing_date).toLocaleDateString() : '—'}
+                    {a.closing_date ? closeTime(a.closing_date) : '—'}
                   </td>
                   <td className="num">
                     {a.buyer_premium_mult ? `${Math.round((a.buyer_premium_mult - 1) * 100)}%` : '—'}
                   </td>
                   <td style={{ whiteSpace: 'nowrap' }}>
-                    <button onClick={() => handleImport(a.id)}>{importLabel(a)}</button>{' '}
+                    {importButtonLabel(a) && <button onClick={() => handleImport(a.id)}>{importButtonLabel(a)}</button>}{' '}
                     <button className="bare"
                             onClick={() => confirmForget(a)}
                             data-track="Forget auction"

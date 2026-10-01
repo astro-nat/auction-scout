@@ -122,9 +122,10 @@ const VERDICTS = [
   'normal wear and tear',
 ]
 const SHIP_TIERS = ['EASY', 'NEUTRAL', 'HARD']
+const USD = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
 function money(v) {
   if (v === null || v === undefined) return '—'
-  return `$${Number(v).toFixed(2)}`
+  return USD.format(Number(v))
 }
 
 // The auction house's own estimate range, compact ("$850–1,500").
@@ -275,13 +276,26 @@ function roiTooltip(lot, e) {
 function EditableCell({ display, rawValue, onSave, options, inputType = 'text', edited }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
+  // Set once an edit is saved or cancelled, so the blur that follows
+  // Enter or Escape doesn't save a second time.
+  const done = useRef(false)
 
   function start() {
+    done.current = false
     setDraft(rawValue ?? '')
     setEditing(true)
   }
 
+  function cancel() {
+    done.current = true
+    setEditing(false)
+  }
+
+  // Clicking or tabbing away keeps what was typed - it used to throw it
+  // away, which lost corrections without a word.
   async function save(value) {
+    if (done.current) return
+    done.current = true
     setEditing(false)
     if (String(value) === String(rawValue ?? '')) return
     await onSave(value)
@@ -294,7 +308,8 @@ function EditableCell({ display, rawValue, onSave, options, inputType = 'text', 
           autoFocus
           value={draft}
           onChange={(ev) => save(ev.target.value)}
-          onBlur={() => setEditing(false)}
+          onKeyDown={(ev) => { if (ev.key === 'Escape') cancel() }}
+          onBlur={cancel}
         >
           <option value="">—</option>
           {options.map((o) => <option key={o} value={o}>{o}</option>)}
@@ -309,21 +324,23 @@ function EditableCell({ display, rawValue, onSave, options, inputType = 'text', 
         onChange={(ev) => setDraft(ev.target.value)}
         onKeyDown={(ev) => {
           if (ev.key === 'Enter') save(draft)
-          if (ev.key === 'Escape') setEditing(false)
+          if (ev.key === 'Escape') cancel()
         }}
-        onBlur={() => setEditing(false)}
+        onBlur={() => save(draft)}
         style={{ width: inputType === 'number' ? 70 : 160, fontSize: 13 }}
       />
     )
   }
   return (
-    <span
+    <button
+      type="button"
+      className="edit-cell"
       onClick={start}
+      data-track="Edit a value (click to correct)"
       title="Click to correct — your value is remembered and won't be overwritten"
-      style={{ cursor: 'pointer', borderBottom: '1px dashed var(--muted)' }}
     >
       {display}{edited ? ' ✎' : ''}
-    </span>
+    </button>
   )
 }
 
@@ -331,6 +348,20 @@ function EditableCell({ display, rawValue, onSave, options, inputType = 'text', 
 // Each view's search, column filters and sort, kept while the app is open:
 // the table remounts when the view changes, and picks its own back up.
 const VIEW_TABLE_STATE = new Map()
+const SORT_KEY = 'auctionscout.sort'
+const FLIPPED_KEY = 'auctionscout.flippedGroups'
+function savedSort(viewKey) {
+  try {
+    const v = JSON.parse(window.localStorage.getItem(`${SORT_KEY}.${viewKey}`))
+    return v && typeof v.key === 'string' && (v.dir === 1 || v.dir === -1) ? v : null
+  } catch { return null }
+}
+function savedFlipped(storage, viewKey) {
+  try {
+    const v = JSON.parse(storage?.getItem(`${FLIPPED_KEY}.${viewKey}`))
+    return new Set(Array.isArray(v) ? v : [])
+  } catch { return new Set() }
+}
 
 const MOBILE_SORTS = [
   { label: 'ROI % (high first)', key: 'roi', dir: -1 },
@@ -360,9 +391,9 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
   // Row menus (the ⋯ at the end of a row) are <details>: close any open one
   // on a click outside it or on Escape, the way a menu is expected to.
   useEffect(() => {
-    const closeOpen = (except) => document.querySelectorAll('details.row-menu[open]')
+    const closeOpen = (except) => document.querySelectorAll('details.row-menu[open], details.picker[open]')
       .forEach((d) => { if (d !== except) d.open = false })
-    const onClick = (ev) => closeOpen(ev.target.closest?.('details.row-menu'))
+    const onClick = (ev) => closeOpen(ev.target.closest?.('details.row-menu, details.picker'))
     const onKey = (ev) => { if (ev.key === 'Escape') closeOpen(null) }
     document.addEventListener('click', onClick)
     document.addEventListener('keydown', onKey)
@@ -380,8 +411,11 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
   // Best return first is the default view — that's the question the app
   // exists to answer. Click any header (or the mobile Sort menu) to change it.
   // The Live view reads in the order the auction closes its lots.
-  const [sort, setSort] = useState(remembered.sort
-    ?? (liveView ? { key: 'lot_number', dir: 1 } : { key: 'roi', dir: -1 }))
+  // The usage log had Watched re-sorted by Closes after nearly every load:
+  // it starts there now, and every view keeps its sort across reloads.
+  const [sort, setSort] = useState(() => remembered.sort ?? savedSort(viewKey)
+    ?? (liveView ? { key: 'lot_number', dir: 1 }
+      : viewKey === 'watched' ? { key: 'closes', dir: 1 } : { key: 'roi', dir: -1 }))
   const [colFilters, setColFilters] = useState(remembered.colFilters ?? {})
   // Phone layout: the filters live behind a toggle. Twelve selects at the
   // top of a 375px screen pushed the first card below the fold; the label
@@ -413,6 +447,9 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
   useEffect(() => {
     VIEW_TABLE_STATE.set(viewKey, { sort, colFilters, search })
   }, [viewKey, sort, colFilters, search])
+  useEffect(() => {
+    savePref(storage, `${SORT_KEY}.${viewKey}`, JSON.stringify(sort))
+  }, [viewKey, sort])
   // "By auction" groups lots under their sale, because a pickup trip is a
   // fixed cost: once you're going for a gold mine, a weaker lot at the same
   // auction is worth adding. Both the view and the add-on bar are
@@ -429,7 +466,13 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
   // Auctions the user has opened or closed by clicking the header, flipped
   // from their default: one with a gold mine starts open, one without starts
   // closed.
-  const [flippedGroups, setFlippedGroups] = useState(() => new Set())
+  // Remembered across reloads, per view: the log had 39 one-at-a-time
+  // opens and closes in a day and a half, many of them redoing the last
+  // session's.
+  const [flippedGroups, setFlippedGroups] = useState(() => savedFlipped(storage, viewKey))
+  useEffect(() => {
+    savePref(storage, `${FLIPPED_KEY}.${viewKey}`, JSON.stringify([...flippedGroups]))
+  }, [storage, viewKey, flippedGroups])
   // True while the enrich-batch request is in flight.
   const [queuing, setQueuing] = useState(false)
   // Multi-select: lot_ids the user has ticked. Kept as a Set of ids rather
@@ -1329,7 +1372,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
   })
   const foldGroup = (key) => setOpenGroups((prev) => {
     const next = new Map(prev)
-    next.delete(key)
+    next.set(key, 0)
     return next
   })
   const groupKey = (g) => g.auctionId ?? 'none'
@@ -1449,7 +1492,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
             )}
             {liveControl(g)}
             {auctionUnpriced(g).length > 0 && (
-              <button type="button" className="group-import" data-track="Price this auction (comps)"
+              <button type="button" className="group-import group-act" data-track="Price this auction (comps)"
                       disabled={queuing}
                       title={`Look up sold comps for every unpriced lot here (${auctionUnpriced(g).length}), soonest-closing first. No AI cost; asks first.`}
                       onClick={() => handlePriceAuction(g)}>
@@ -1457,7 +1500,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
               </button>
             )}
             {auctionAiTargets(g).length > 0 && (
-              <button type="button" className="group-import" data-track="AI-inspect this auction"
+              <button type="button" className="group-import group-act" data-track="AI-inspect this auction"
                       disabled={queuing}
                       title={`Further inspect with AI every priced lot here that hasn't had one (${auctionAiTargets(g).length}), most valuable first. Asks first and shows the cost.`}
                       onClick={() => handleEnrichAuction(g)}>
@@ -1531,7 +1574,9 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     const key = groupKey(g)
     const open = isGroupOpen(g)
     const rest = g.hasGold ? g.others : g.lots
-    const shown = Math.min(openGroups.get(key) || 0, rest.length)
+    // An auction remembered open from last time, with nothing featured,
+    // opens onto its first lots - as a click to open it does.
+    const shown = Math.min(openGroups.get(key) ?? (open && !g.hasGold ? OTHERS_STEP : 0), rest.length)
     // The Live view lists every lot, in the sort order, gold and add-ons
     // highlighted where they fall rather than pulled to the top.
     const rows = !open ? []
@@ -2370,16 +2415,17 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
             <th
               key={c.key}
               className={c.num ? 'num' : undefined}
-              style={{ cursor: 'pointer', userSelect: 'none',
-                       ...(c.key === 'title' ? { width: '28%', minWidth: 220 } : {}) }}
-              onClick={() => handleSort(c.key)}
-              title="Click to sort"
+              aria-sort={sort.key === c.key ? (sort.dir === 1 ? 'ascending' : 'descending') : undefined}
+              style={c.key === 'title' ? { width: '28%', minWidth: 220 } : undefined}
             >
+              <button type="button" className="th-sort" onClick={() => handleSort(c.key)}
+                      title="Sort by this" data-track={`Sort by ${c.label}`}>
               {c.label}
               <span className={`sort-arrows${sort.key === c.key ? (sort.dir === 1 ? ' asc' : ' desc') : ''}`}
                     aria-hidden="true">
                 <span>▲</span><span>▼</span>
               </span>
+              </button>
             </th>
           ))}
           {/* The set-level AI action, in the column its per-row twin lives
