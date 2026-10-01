@@ -352,7 +352,8 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                                   toolbarAllLots = null, onImportMissing,
                                   loadedByAuction = {}, onShowFilters,
                                   phoneFilters = null, phoneBehindFilters = null,
-                                  filtersOpen = false, viewKey = 'items', onSetLive }) {
+                                  filtersOpen = false, viewKey = 'items', onSetLive,
+                                  liveView = false }) {
   const remembered = VIEW_TABLE_STATE.get(viewKey) || {}
   const isMobile = useMediaQuery('(max-width: 768px)')
   const [pollingIds, setPollingIds] = useState(new Set())
@@ -415,7 +416,9 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
   // auction is worth adding. Both the view and the add-on bar are
   // per-browser preferences, like the page size.
   const storage = typeof window === 'undefined' ? null : window.localStorage
-  const [arrange, setArrangeState] = useState(() => savedArrange(storage))
+  const [arrangePref, setArrangeState] = useState(() => savedArrange(storage))
+  // The Live view is always by auction - it is a set of auctions.
+  const arrange = liveView ? 'auction' : arrangePref
   const setArrange = (v) => { setArrangeState(v); savePref(storage, ARRANGE_KEY, v) }
   const [addonFloor, setAddonFloorState] = useState(() => savedAddonFloor(storage))
   const setAddonFloor = (n) => { setAddonFloorState(n); savePref(storage, ADDON_FLOOR_KEY, n) }
@@ -807,6 +810,35 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     .filter((l) => rowAction(l.enrichment || {}, pollingIds.has(l.lot_id)).step === 'ai'
                    && !(l.item_closed ?? l.auction_closed))
     .sort((a, b) => Number(b.enrichment?.est_resale || 0) - Number(a.enrichment?.est_resale || 0))
+
+  // One auction's lots the free comps pricing would run on: no value yet,
+  // not queued, still open - what the row's "Price with comps" offers.
+  // The usage log's second-biggest click run was that row button, pressed
+  // up to eight times in a row through one auction.
+  const auctionUnpriced = (g) => g.lots
+    .filter((l) => rowAction(l.enrichment || {}, pollingIds.has(l.lot_id)).step === 'comps'
+                   && !(l.item_closed ?? l.auction_closed))
+
+  async function handlePriceAuction(g) {
+    const targets = auctionUnpriced(g)
+    if (!targets.length || queuing) return
+    const ok = window.confirm(
+      `Look up sold comps for the ${targets.length} unpriced `
+      + `${targets.length === 1 ? 'lot' : 'lots'} at ${g.name}?\n\n`
+      + `No AI cost - at most one SoldComps request per title, soonest-closing first. `
+      + `Progress appears in the bar at the top of the page.`)
+    if (!ok) return
+    setQueuing(true)
+    try {
+      const r = await repriceSelected(targets.map((l) => l.lot_id))
+      if (r.already_running) alert('A re-price is already running; let it finish first.')
+      onRefresh?.()
+    } catch (e) {
+      alertOnce(e.message)
+    } finally {
+      setQueuing(false)
+    }
+  }
 
   async function handleEnrichAuction(g) {
     const targets = auctionAiTargets(g)
@@ -1284,6 +1316,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
 
   const arrangeControl = (
     <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
+      {!liveView && (
       <div className="segmented" role="group" aria-label="Arrange lots">
         <button type="button" aria-pressed={arrange === 'auction'}
                 className={arrange === 'auction' ? 'on' : undefined}
@@ -1292,6 +1325,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                 className={arrange === 'all' ? 'on' : undefined}
                 onClick={() => setArrange('all')}>All lots</button>
       </div>
+      )}
       {!isMobile && driveControl}
     </div>
   )
@@ -1308,7 +1342,8 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     return next
   })
   const groupKey = (g) => g.auctionId ?? 'none'
-  const isGroupOpen = (g) => g.hasGold !== flippedGroups.has(groupKey(g))
+  // Open by default when it has a gold mine - or always, in the Live view.
+  const isGroupOpen = (g) => (liveView || g.hasGold) !== flippedGroups.has(groupKey(g))
   function toggleGroup(g) {
     const key = groupKey(g)
     const opening = !isGroupOpen(g)
@@ -1336,12 +1371,14 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
       && Number(l.current_bid) > Number(l.enrichment.max_bid)).length : 0
     return (
       <span className="live-control">
-        <button type="button" className={`live-toggle${a.live ? ' on' : ''}`} aria-pressed={!!a.live}
+        <button type="button" role="switch" aria-checked={!!a.live}
+                className={`live-switch${a.live ? ' on' : ''}`}
                 data-track={a.live ? 'Live auction off' : 'Live auction on'}
-                title={a.live ? 'Stop the minute-by-minute bid refresh for this auction'
-                              : 'Refresh this auction\'s bids every minute while it runs, and alert when a watched lot passes your max bid'}
+                title={a.live ? 'Live: bids refresh every minute. Click to stop.'
+                              : 'Switch on to refresh this auction\'s bids every minute while it runs, and get an alert when a watched lot passes your max bid'}
                 onClick={() => onSetLive(a.id, !a.live)}>
-          {a.live ? <><span className="live-dot" aria-hidden="true" />Live</> : 'Go live'}
+          <span className="live-track" aria-hidden="true"><span className="live-knob" /></span>
+          {a.live ? 'Live' : 'Live off'}
         </button>
         {a.live && (
           <span className="group-meta">
@@ -1398,6 +1435,14 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
               <span className="group-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
               <strong>{g.name}</strong>
             </button>
+            {auctionUnpriced(g).length > 0 && (
+              <button type="button" className="group-import" data-track="Price this auction (comps)"
+                      disabled={queuing}
+                      title={`Look up sold comps for every unpriced lot here (${auctionUnpriced(g).length}), soonest-closing first. No AI cost; asks first.`}
+                      onClick={() => handlePriceAuction(g)}>
+                Price {auctionUnpriced(g).length.toLocaleString()} unpriced
+              </button>
+            )}
             {auctionAiTargets(g).length > 0 && (
               <button type="button" className="group-import" data-track="AI-inspect this auction"
                       disabled={queuing}

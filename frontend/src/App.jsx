@@ -50,6 +50,11 @@ const FILTER_DEFAULTS = {
   showHiddenLots: false,
 }
 
+// Where a view's defaults differ from the inventory's. Live: a lot past
+// your max is exactly what you need to see while bidding, and you are going
+// to these auctions, so the drive rule doesn't apply.
+const VIEW_FILTER_DEFAULTS = { live: { hideOverMax: false, hideFar: false } }
+
 export default function App() {
   const isMobile = useMediaQuery('(max-width: 768px)')
   // Two jobs, two screens: finding auctions vs working through what you've
@@ -69,18 +74,19 @@ export default function App() {
   // another. The Auctions tab writes into the inventory's set, so its
   // "View this auction" buttons still land on what they chose.
   const [viewFilters, setViewFilters] = useState({})
-  const filterView = view === 'watched' ? 'watched' : 'items'
+  const filterView = view === 'watched' || view === 'live' ? view : 'items'
   const filterViewRef = useRef(filterView)
   filterViewRef.current = filterView
   const filterSetters = useRef({})
   function viewFilter(name) {
-    const value = viewFilters[filterView]?.[name] ?? FILTER_DEFAULTS[name]
+    const value = viewFilters[filterView]?.[name]
+      ?? VIEW_FILTER_DEFAULTS[filterView]?.[name] ?? FILTER_DEFAULTS[name]
     if (!filterSetters.current[name]) {
       // One setter per filter for the life of the app, like useState's:
       // it writes to whichever view is open when it is called.
       filterSetters.current[name] = (next) => setViewFilters((prev) => {
         const key = filterViewRef.current
-        const cur = prev[key]?.[name] ?? FILTER_DEFAULTS[name]
+        const cur = prev[key]?.[name] ?? VIEW_FILTER_DEFAULTS[key]?.[name] ?? FILTER_DEFAULTS[name]
         const val = typeof next === 'function' ? next(cur) : next
         return { ...prev, [key]: { ...prev[key], [name]: val } }
       })
@@ -103,7 +109,7 @@ export default function App() {
   // pricing - so it belongs to neither Auctions nor Inventory.
   const TABS = [
     { key: 'auctions', label: 'Auctions', views: ['auctions', 'saved'] },
-    { key: 'inventory', label: 'Inventory', views: ['items', 'watched'] },
+    { key: 'inventory', label: 'Inventory', views: ['items', 'watched', 'live'] },
     { key: 'queue', label: 'Queue', views: ['queue'] },
   ]
   const lastViewIn = useRef({ auctions: 'auctions', inventory: 'items', queue: 'queue' })
@@ -287,9 +293,28 @@ export default function App() {
     touchedRef.current[lotId] = Date.now()
   }, [])
 
+  // The auctions switched live (Live Auction mode).
+  const liveIds = useMemo(
+    () => Object.values(importedRows).filter((a) => a.live).map((a) => a.id),
+    [importedRows])
+  const liveKey = liveIds.join(',')
+
   const loadLots = useCallback(() => {
+    // The Live view loads only the live auctions - and nothing at all when
+    // none is live, since no auction ids would otherwise mean every lot.
+    const liveView = view === 'live'
+    const scope = liveView
+      ? (selectedAuctions.length ? liveIds.filter((id) => selectedAuctions.includes(id)) : liveIds)
+      : selectedAuctions
+    if (liveView && !scope.length) {
+      ++loadGen.current
+      setLots([])
+      setLotTotal(0)
+      setLotsLoadState('ok')
+      return
+    }
     const args = {
-      auctionIds: selectedAuctions,
+      auctionIds: scope,
       category: categoryFilter || undefined,
       boloOnly: filters.boloOnly,
       // roiStatus is deliberately NOT sent: it is applied in the browser
@@ -344,18 +369,14 @@ export default function App() {
       console.error(e)
       setLotsLoadState('error')
     })
-  }, [selectedAuctions, categoryFilter, filters, watchedOnly])
+  }, [selectedAuctions, categoryFilter, filters, watchedOnly, view, liveKey])  // eslint-disable-line react-hooks/exhaustive-deps
 
   // Live Auction mode: every minute, the live auctions' lots (only theirs,
   // within the current view and filters) are fetched again and swapped in,
   // and the auction rows too, for "updated Ns ago". The worker does the
   // HiBid reading on the same minute; this just picks up what it wrote.
-  const liveIds = useMemo(
-    () => Object.values(importedRows).filter((a) => a.live).map((a) => a.id),
-    [importedRows])
-  const liveKey = liveIds.join(',')
   useEffect(() => {
-    if (!liveIds.length || !['items', 'watched'].includes(view)) return undefined
+    if (!liveIds.length || !['items', 'watched', 'live'].includes(view)) return undefined
     const inScope = selectedAuctions.length
       ? liveIds.filter((id) => selectedAuctions.includes(id)) : liveIds
     const tick = async () => {
@@ -1474,6 +1495,7 @@ export default function App() {
               saved: `Imported Auctions (${importedAuctions.length})`,
               items: `My Inventory (${(tabCounts.items ?? lotTotal).toLocaleString()})`,
               watched: `My Watched Items (${(tabCounts.watched ?? 0).toLocaleString()})`,
+              live: liveIds.length ? `● Live (${liveIds.length})` : 'Live',
               queue: queueN ? `Queue (${queueN.toLocaleString()})` : 'Queue',
             }[v]}
           </button>
@@ -1933,7 +1955,7 @@ export default function App() {
       {/* The watched list is the same table over a different set, so it
           renders through the same panel - leaving it out was why the
           view came up blank rather than empty. */}
-      {(view === 'items' || view === 'watched') && (<>
+      {(view === 'items' || view === 'watched' || view === 'live') && (<>
       <section style={{ marginBottom: 6, display: 'flex',
                         flexDirection: 'column', gap: 6 }}>
         {/* Row 1: scope (auctions + category) on the left, bulk actions on
@@ -2002,6 +2024,19 @@ export default function App() {
             </div>
             <button onClick={loadLots} style={{ marginTop: 10 }}>Try again</button>
           </div>
+        ) : view === 'live' ? (
+          <div className="empty-state">
+            <div><strong>No auction is live.</strong></div>
+            <div style={{ marginTop: 4 }}>
+              In <strong>My Inventory</strong>, switch <strong>Live</strong> on in an open
+              auction's header. Its bids then refresh every minute, it shows up here, and a
+              watched lot passing your max bid sends an alert. Several can be live at once.
+            </div>
+            <button className="primary" style={{ marginTop: 12 }}
+                    onClick={() => setView('items')}>
+              My Inventory
+            </button>
+          </div>
         ) : (
           <div className="empty-state">
             <div><strong>Nothing imported yet.</strong></div>
@@ -2016,7 +2051,7 @@ export default function App() {
           </div>
         )
       ) : (
-        <LotTable key={filterView} viewKey={filterView}
+        <LotTable key={filterView} viewKey={filterView} liveView={view === 'live'}
                   lots={visibleLots} onLotUpdated={handleLotUpdated} onRefresh={loadLots}
                   toolbar={<>{invScope}{invLenses}</>}
                   toolbarEnd={invActions}

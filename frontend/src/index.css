@@ -746,3 +746,30 @@ details.peek > summary::-webkit-details-marker { display: none; }
 }
 @keyframes live-pulse { 50% { opacity: 0.35; } }
 .live-past-max { font-size: 13px; font-weight: 700; color: var(--danger); }
+
+/* The Live switch: a real toggle, so it reads as a setting, not a link. */
+.live-switch {
+  display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600;
+  padding: 3px 10px 3px 4px; border-radius: 999px; background: var(--surface);
+  color: var(--muted);
+}
+.live-switch:hover:not(:disabled) { color: var(--text); }
+.live-track {
+  position: relative; display: inline-block; width: 30px; height: 16px; border-radius: 999px;
+  background: var(--border-strong); transition: background 0.15s ease;
+}
+.live-knob {
+  position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%;
+  background: var(--surface); transition: transform 0.15s ease;
+}
+.live-switch.on, .live-switch.on:hover:not(:disabled) {
+  color: var(--danger); border-color: var(--danger); background: var(--surface);
+}
+.live-switch.on .live-track { background: var(--danger); }
+.live-switch.on .live-knob { transform: translateX(14px); }
+@media (prefers-reduced-motion: no-preference) {
+  .live-switch.on .live-track { animation: live-pulse 1.6s ease-in-out infinite; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-track, .live-knob { transition: none; }
+}

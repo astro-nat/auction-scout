@@ -10,8 +10,9 @@
 
 export const VIEW_KEY = 'auctionscout.view'
 // Find auctions, the auctions you have imported from, your inventory, the
-// lots you are watching, and the work still to do.
-export const VIEWS = ['auctions', 'saved', 'items', 'watched', 'queue']
+// lots you are watching, the auctions you have switched live, and the work
+// still to do.
+export const VIEWS = ['auctions', 'saved', 'items', 'watched', 'live', 'queue']
 export const DEFAULT_VIEW = 'auctions'
 
 // Views that no longer exist, and where their links and saved preferences
