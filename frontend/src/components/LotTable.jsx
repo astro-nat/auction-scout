@@ -642,10 +642,38 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     try {
       await enrichLot(lotId)
       poll(lotId)
+      nudgeBulk('ai', lotId)
     } catch (e) {
       releaseRow(lotId)
       alertOnce(e.message)
     }
+  }
+
+  // The usage log: runs of up to 17 row-by-row AI-inspect presses in one
+  // auction, with the auction's own "AI-inspect N" button unnoticed. On the
+  // third row press in an auction inside ten minutes, offer the rest in one
+  // go - once per auction per visit, so it never nags.
+  const rowPresses = useRef(new Map())
+  const nudged = useRef(new Set())
+  function nudgeBulk(kind, lotId) {
+    const lot = lots.find((l) => l.lot_id === lotId)
+    const g = lot && groups.find((x) => x.auctionId === lot.auction_id)
+    if (!g) return
+    const key = `${kind}:${g.auctionId}`
+    const now = Date.now()
+    const recent = (rowPresses.current.get(key) || []).filter((t) => now - t < 10 * 60 * 1000)
+    recent.push(now)
+    rowPresses.current.set(key, recent)
+    if (recent.length < 3 || nudged.current.has(key)) return
+    const rest = (kind === 'ai' ? auctionAiTargets(g) : auctionUnpriced(g))
+      .filter((l) => l.lot_id !== lotId)
+    if (rest.length < 2) return
+    nudged.current.add(key)
+    notify(kind === 'ai'
+      ? `${rest.length.toLocaleString()} more lots at ${g.name} could be AI-inspected.`
+      : `${rest.length.toLocaleString()} more lots at ${g.name} have no price yet.`,
+    { label: kind === 'ai' ? `AI-inspect all ${rest.length.toLocaleString()}` : `Price all ${rest.length.toLocaleString()}`,
+      onClick: () => (kind === 'ai' ? handleEnrichAuction(g) : handlePriceAuction(g)) })
   }
 
   async function handleComps(lotId) {
@@ -653,6 +681,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     try {
       await compsLot(lotId)
       poll(lotId)
+      nudgeBulk('comps', lotId)
     } catch (e) {
       releaseRow(lotId)
       alertOnce(e.message)

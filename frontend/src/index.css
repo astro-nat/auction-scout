@@ -938,3 +938,4 @@ details.roi-peek > summary::-webkit-details-marker { display: none; }
    box's minimum, which pushed the toolbar onto a second line at 1280px. */
 .inv-search { min-width: 120px; }
 .inv-search input { width: 100%; }
+.notice > button { flex-shrink: 0; white-space: nowrap; }

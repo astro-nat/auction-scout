@@ -37,6 +37,11 @@ const panelRow = { display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wra
 // level so a default is the same object every render - a fresh [] or {}
 // each time would re-run every effect that depends on it.
 // "Houston, TX", "TX" or "—": a sale with no city printed ", TX".
+// A drive time worth printing: only for sales you'd actually drive to - 45
+// minutes, the same reach as the pickup info (services/pickup.py). "22 h
+// drive" on a ship-only sale is noise. The sort still uses every time.
+const MAX_DRIVE_MINUTES = 45
+const nearEnough = (a) => a.drive_minutes != null && a.drive_minutes <= MAX_DRIVE_MINUTES
 const placeOf = (a) => [a.city, a.state].filter(Boolean).join(', ') || '—'
 // When an auction closes, to the minute: you sort and plan by it.
 const CLOSE_FMT = new Intl.DateTimeFormat(undefined, { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' })
@@ -54,7 +59,7 @@ const FILTER_DEFAULTS = {
   hideClosed: true,
   hideOverMax: true,
   hideFar: true,
-  maxDriveMinutes: 30,
+  maxDriveMinutes: 45,
   hidePowered: true,
   hideNever: true,
   cheapMediaOnly: false,
@@ -195,7 +200,7 @@ export default function App() {
   // box rather than a silent rule because it removes 4 lots in every 5, and
   // an inventory that shrinks by 82% with no way back reads as a fault.
   const [hideOverMax, setHideOverMax] = viewFilter('hideOverMax')
-  // Pickup auctions too far to drive to. On at 30 minutes; does nothing
+  // Pickup auctions too far to drive to. On at 45 minutes; does nothing
   // until a drive-from address is saved (the times come from it). Lots of
   // an auction with no drive time yet are kept - unknown is not far.
   const [hideFar, setHideFar] = viewFilter('hideFar')
@@ -1799,7 +1804,7 @@ export default function App() {
                   </button>
                 </div>
                 <div style={{ fontSize: 13, color: 'var(--muted)', margin: '4px 0' }}>
-                  {a.drive_minutes != null && (
+                  {nearEnough(a) && (
                     <span className="group-drive" style={{ color: 'var(--text)' }}>
                       <CarIcon /> {formatDrive(a.drive_minutes)} ·{' '}
                     </span>
@@ -1925,7 +1930,7 @@ export default function App() {
                   <td style={{ paddingRight: 12 }}>
                     {isClosed(a) && <strong>CLOSED<br /></strong>}
                     {placeOf(a)}{fulfillment(a) ? ` (${fulfillment(a)})` : ''}
-                    {a.drive_minutes != null && (
+                    {nearEnough(a) && (
                       <div className="group-drive" title="One way from your drive-from address, typical traffic">
                         <CarIcon /> {formatDrive(a.drive_minutes)}
                       </div>
