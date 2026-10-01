@@ -315,12 +315,14 @@ export default function App() {
     }
     const args = {
       auctionIds: scope,
-      category: categoryFilter || undefined,
-      boloOnly: filters.boloOnly,
+      // The Live view shows every lot of its auctions: no category, BOLO or
+      // flagged narrowing.
+      category: liveView ? undefined : (categoryFilter || undefined),
+      boloOnly: liveView ? false : filters.boloOnly,
       // roiStatus is deliberately NOT sent: it is applied in the browser
       // (lib/filters.isGoldMine), so toggling it costs no round trip.
       // Every lot is fetched either way; this only chooses what is shown.
-      flaggedOnly: filters.flaggedOnly,
+      flaggedOnly: liveView ? false : filters.flaggedOnly,
       watchedOnly,
     }
     // Pages of 2000, fetched AT ONCE rather than one after another. One
@@ -383,8 +385,10 @@ export default function App() {
       try {
         if (inScope.length) {
           const fresh = await fetchLots({
-            auctionIds: inScope, category: categoryFilter || undefined,
-            boloOnly: filters.boloOnly, flaggedOnly: filters.flaggedOnly, watchedOnly,
+            ...(view === 'live'
+              ? { auctionIds: inScope }
+              : { auctionIds: inScope, category: categoryFilter || undefined,
+                  boloOnly: filters.boloOnly, flaggedOnly: filters.flaggedOnly, watchedOnly }),
           })
           const ids = new Set(inScope)
           setLots((prev) => [...prev.filter((l) => !ids.has(l.auction_id)), ...fresh])
@@ -747,7 +751,7 @@ export default function App() {
   // What's actually in the database for this auction, in plain words.
   function auctionState(a) {
     if (!a.lots_imported) {
-      return { text: 'Not imported yet', pct: null }
+      return { text: '', pct: null }
     }
     const pct = Math.round((a.lots_enriched / a.lots_imported) * 100)
     // "X of Y imported" whenever HiBid's catalog size is known — a partial
@@ -1059,10 +1063,15 @@ export default function App() {
   // also not be counted against a list its own filter has already emptied,
   // or it reads (0) exactly when it is doing something - which is why the
   // two kind-of-thing hides below come after this stage, not inside it.
+  // The Live view shows every lot of its live auctions, in lot order: no
+  // hide rule, no lens, hidden lots included - while bidding, a lot you
+  // can't see is a lot you can't react to.
+  const unfiltered = view === 'live'
   const lotsBeforeKinds = useMemo(() => {
     const auctionNames = { ...auctionIndex, ...Object.fromEntries(auctions.map((a) => [a.id, a.name])) }
     return lots
       .filter((l) => {
+        if (unfiltered) return true
         if (!showHiddenLots && l.hidden) return false
         // A pickup-only lot in an auction outside the scan radius: HiBid
         // says it doesn't ship, and it's too far to collect. Never shown.
@@ -1088,7 +1097,7 @@ export default function App() {
                      auction_name: l.auction_name ?? auctionNames[l.auction_id] ?? '—',
                      item_closed: isClosedItem(l) }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lots, auctions, auctionIndex, showHiddenLots, hideLowValue, lowValueCutoff, hideHardShip, hideNoUsShip, hideClosed, cheapMediaOnly, maxPerItem, tooFarIds])
+  }, [lots, auctions, auctionIndex, showHiddenLots, hideLowValue, lowValueCutoff, hideHardShip, hideNoUsShip, hideClosed, cheapMediaOnly, maxPerItem, tooFarIds, unfiltered])
   // What each of these two boxes removes from what the other boxes leave -
   // counted before either of them runs, so the number holds whether the box
   // is ticked or not. Counted independently of each other: a lot that is
@@ -1113,13 +1122,13 @@ export default function App() {
   // result that vanishes the moment it arrives cannot be read.
   const lotsBeforeOverMax = useMemo(
     () => lotsBeforeKinds.filter((l) => {
-      if (isJustTouched(l)) return true
+      if (unfiltered || isJustTouched(l)) return true
       if (hidePowered && l.powered_tool) return false
       if (hideNever && l.never_label) return false
       return true
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [lotsBeforeKinds, hidePowered, hideNever])
+    [lotsBeforeKinds, hidePowered, hideNever, unfiltered])
   // What the over-max box would remove from what is otherwise on screen -
   // which is what its number should say. Exempt lots are not counted,
   // because they are not removed either.
@@ -1129,17 +1138,17 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [lotsBeforeOverMax])
   const lotsBeforeGold = useMemo(
-    () => (hideOverMax
+    () => (hideOverMax && !unfiltered
       ? lotsBeforeOverMax.filter((l) => isJustTouched(l) || !isOverMaxBid(l))
       : lotsBeforeOverMax),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [lotsBeforeOverMax, hideOverMax])
+    [lotsBeforeOverMax, hideOverMax, unfiltered])
   const goldCount = useMemo(
     () => lotsBeforeGold.reduce((n, l) => n + (isGoldMine(l) ? 1 : 0), 0),
     [lotsBeforeGold])
   const visibleLots = useMemo(
-    () => (goldOnly ? lotsBeforeGold.filter(isGoldMine) : lotsBeforeGold),
-    [lotsBeforeGold, goldOnly])
+    () => (goldOnly && !unfiltered ? lotsBeforeGold.filter(isGoldMine) : lotsBeforeGold),
+    [lotsBeforeGold, goldOnly, unfiltered])
   const hiddenCount = lots.length - lotsBeforeGold.length
   // Loaded lots per auction, before any filter - so each auction's header
   // can say how many of its lots the filters are keeping out of view.
@@ -1289,7 +1298,9 @@ export default function App() {
                   data-track="Filters panel"
                   title="Every hide rule, the gold-mine ROI target, the never list, and clean-up"
                   style={{ fontSize: 13, padding: '4px 10px' }}>
-            Filters{activeRuleCount ? ` · ${activeRuleCount} on` : ''}{categoryFilter ? ` · ${categoryFilter}` : ''} {filtersOpen ? '▴' : '▾'}
+            Filters{activeRuleCount ? ` · ${activeRuleCount} on` : ''}{categoryFilter ? ` · ${categoryFilter}` : ''}
+            {hiddenCount > 0 && <span style={{ color: 'var(--muted)', fontWeight: 400 }}> · {hiddenCount.toLocaleString()} hidden</span>}
+            {' '}{filtersOpen ? '▴' : '▾'}
           </button>
   </>)
   const invHidden = (<>
@@ -1300,7 +1311,7 @@ export default function App() {
             </span>
           )}
   </>)
-  const invLenses = (<>{invGold}{invFiltersButton}{invHidden}</>)
+  const invLenses = (<>{invGold}{invFiltersButton}</>)
   const invPanel = (<>
         {filtersOpen && (
           <div style={{ marginTop: 8, padding: 12, borderRadius: 8,
@@ -2113,11 +2124,11 @@ export default function App() {
       ) : (
         <LotTable key={filterView} viewKey={filterView} liveView={view === 'live'}
                   lots={visibleLots} onLotUpdated={handleLotUpdated} onRefresh={loadLots}
-                  toolbar={<>{invScope}{invLenses}</>}
+                  toolbar={view === 'live' ? null : <>{invScope}{invLenses}</>}
                   toolbarEnd={invActions}
                   toolbarAllLots={invImportMissing}
-                  phoneFilters={invFiltersButton}
-                  phoneBehindFilters={<>{invScope}{invGold}{invHidden}</>}
+                  phoneFilters={view === 'live' ? null : invFiltersButton}
+                  phoneBehindFilters={view === 'live' ? null : <>{invScope}{invGold}</>}
                   filtersOpen={filtersOpen}
                   loadedByAuction={loadedByAuction}
                   onSetLive={async (id, on) => {
@@ -2130,7 +2141,7 @@ export default function App() {
                     window.scrollTo?.({ top: 0, behavior: 'smooth' })
                   }}
                   onImportMissing={(id) => handleImport(id, -1, '')}
-                  panel={invPanel}
+                  panel={view === 'live' ? null : invPanel}
                   auctions={importedRows}
                   driveFrom={driveFrom}
                   driveAvailable={driveAvailable}

@@ -23,7 +23,7 @@ describe('rowAction', () => {
 
   it('offers AI once comps have priced it', () => {
     expect(rowAction({ status: 'pending', est_resale: 40 })).toMatchObject(
-      { step: 'ai', label: 'Further inspect with AI', disabled: false })
+      { step: 'ai', label: 'AI-inspect', disabled: false })
   })
 
   it('locks a lot AI has priced', () => {

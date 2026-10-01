@@ -777,3 +777,32 @@ details.peek > summary::-webkit-details-marker { display: none; }
 /* Open all · Close all, beside the view switch. */
 .group-all { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
 .group-all .link-like { color: var(--link); text-decoration: none; font-weight: 600; }
+
+/* ===================== Calmer inventory =============================== */
+/* Green means "act" or "good": the price sticker and the verdicts carry the
+   row, so lot titles read in ink and turn green only under the pointer. */
+.d-title a, a.d-card-title { color: var(--text); }
+.d-title a:hover, a.d-card-title:hover { color: var(--link); }
+
+/* An auction's bulk actions are tools, not headlines: neutral until hovered. */
+.group-import {
+  color: var(--text); border-color: var(--border-strong); background: transparent;
+  font-weight: 500;
+}
+.group-import:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); background: transparent; }
+
+/* Open all / Close all: quiet links beside the view switch. */
+.group-all .link-like { color: var(--muted); font-weight: 500; }
+.group-all .link-like:hover { color: var(--text); }
+
+/* A lot's AI-inspect button: a ghost, so a column of them doesn't shout. */
+.d-actions > button:not(.icon-btn) {
+  background: transparent; border-color: var(--border); color: var(--muted); font-weight: 500;
+}
+.d-actions > button:not(.icon-btn):hover:not(:disabled) { color: var(--text); border-color: var(--border-strong); }
+
+/* "identity unsure": a caution, with the detail in its tooltip. */
+.d-flag {
+  display: inline-block; margin-top: 3px; font-size: 11.5px; font-weight: 600;
+  color: var(--warn); cursor: help; text-decoration: underline dotted; text-underline-offset: 2px;
+}

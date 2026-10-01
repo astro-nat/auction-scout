@@ -379,7 +379,9 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
   }, [])
   // Best return first is the default view — that's the question the app
   // exists to answer. Click any header (or the mobile Sort menu) to change it.
-  const [sort, setSort] = useState(remembered.sort ?? { key: 'roi', dir: -1 })
+  // The Live view reads in the order the auction closes its lots.
+  const [sort, setSort] = useState(remembered.sort
+    ?? (liveView ? { key: 'lot_number', dir: 1 } : { key: 'roi', dir: -1 }))
   const [colFilters, setColFilters] = useState(remembered.colFilters ?? {})
   // Phone layout: the filters live behind a toggle. Twelve selects at the
   // top of a 375px screen pushed the first card below the fold; the label
@@ -1405,20 +1407,15 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                 className={`live-switch${a.live ? ' on' : ''}`}
                 data-track={a.live ? 'Live auction off' : 'Live auction on'}
                 title={a.live
-                  ? (a.live_auto
+                  ? `${a.live_auto
                     ? 'Live by itself: lots here close within the hour. Bids refresh every minute. Click to stop - it stays off.'
-                    : 'Live: bids refresh every minute. Click to stop.')
+                    : 'Live: bids refresh every minute. Click to stop.'} ${ago == null ? 'First refresh within a minute.'
+                    : ago < 90 ? `Updated ${ago}s ago.` : `Updated ${Math.round(ago / 60)} min ago.`}`
                   : 'Switch on to refresh this auction\'s bids every minute while it runs, and get an alert when a watched lot passes your max bid. Auctions go live by themselves an hour before lots close.'}
                 onClick={() => onSetLive(a.id, !a.live)}>
           <span className="live-track" aria-hidden="true"><span className="live-knob" /></span>
           {a.live ? (a.live_auto ? 'Live · auto' : 'Live') : 'Live off'}
         </button>
-        {a.live && (
-          <span className="group-meta">
-            {ago == null ? 'first refresh within a minute'
-              : ago < 90 ? `updated ${ago}s ago` : `updated ${Math.round(ago / 60)} min ago`}
-          </span>
-        )}
         {pastMax > 0 && (
           <span className="live-past-max">{pastMax} watched past your max</span>
         )}
@@ -1438,10 +1435,6 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     // on screen and no word about the other two hundred.
     const key = groupKey(g)
     const open = isGroupOpen(g)
-    const rest = g.hasGold ? g.others : g.lots
-    const unfolded = open ? Math.min(openGroups.get(key) || 0, rest.length) : 0
-    const onScreen = open ? g.featured.length + unfolded : 0
-    const folded = open ? rest.length - unfolded : 0
     const closedCount = open ? 0 : g.lots.length
     const filteredOut = Math.max(0, (loadedByAuction[g.auctionId] ?? g.lots.length) - g.lots.length)
     const unwatched = g.featured.filter((l) => !l.watched)
@@ -1468,6 +1461,13 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
               <span className="group-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
               <strong>{g.name}</strong>
             </button>
+            {g.auction?.drive_minutes != null && (
+              <span className="group-drive"
+                    title={`One way from ${driveFrom?.label || driveFrom?.address || 'your address'}, typical traffic`}>
+                <CarIcon /> {formatDrive(g.auction.drive_minutes)}
+              </span>
+            )}
+            {liveControl(g)}
             {auctionUnpriced(g).length > 0 && (
               <button type="button" className="group-import" data-track="Price this auction (comps)"
                       disabled={queuing}
@@ -1491,22 +1491,13 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                 Import {missing.toLocaleString()} missing
               </button>
             )}
-            {liveControl(g)}
-            {g.auction?.drive_minutes != null && (
-              <span className="group-drive"
-                    title={`One way from ${driveFrom?.label || driveFrom?.address || 'your address'}, typical traffic`}>
-                <CarIcon /> {formatDrive(g.auction.drive_minutes)}
-              </span>
-            )}
           </div>
           <span className="group-meta">
             {[meta,
               closedCount > 0 ? `${closedCount.toLocaleString()} ${closedCount === 1 ? 'lot' : 'lots'}` : '',
-              onScreen > 0 ? `${onScreen.toLocaleString()} shown` : '',
-              folded > 0 ? `${folded.toLocaleString()} folded below` : '',
             ].filter(Boolean).join(' · ')}
             {filteredOut > 0 && (
-              <>{meta || closedCount > 0 || onScreen > 0 || folded > 0 ? ' · ' : ''}
+              <>{meta || closedCount > 0 ? ' · ' : ''}
                 {onShowFilters ? (
                   <button type="button" className="link-like group-filtered"
                           data-track="Filtered-out count (open filters)"
@@ -1561,10 +1552,12 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     const open = isGroupOpen(g)
     const rest = g.hasGold ? g.others : g.lots
     const shown = Math.min(openGroups.get(key) || 0, rest.length)
-    const rows = open
-      ? [...g.featured, ...rest.slice(0, shown)].map((l) => renderOne(l, g.kinds.get(l.lot_id)))
-      : []
-    const more = open && rest.length > 0 && (
+    // The Live view lists every lot, in the sort order, gold and add-ons
+    // highlighted where they fall rather than pulled to the top.
+    const rows = !open ? []
+      : liveView ? g.lots.map((l) => renderOne(l, g.kinds.get(l.lot_id)))
+      : [...g.featured, ...rest.slice(0, shown)].map((l) => renderOne(l, g.kinds.get(l.lot_id)))
+    const more = open && !liveView && rest.length > 0 && (
       <div className="group-more">
         {shown < rest.length && (
           <button type="button" className="link-like" data-track="Show more lots in this auction"
@@ -1780,9 +1773,9 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
           </div>
         )}
         {e.identity_note && (
-          <div style={{ color: 'var(--danger)', fontSize: 12 }}
-               title="The AI's title asserts something the listing never said, so the value came from the listing's own title and the gold badge is withheld. Correct the title to confirm what it is.">
-            identity uncertain: AI added {e.identity_note} - not in the listing
+          <div className="d-flag"
+               title={`AI added "${e.identity_note}", which the listing never says - so the value came from the listing's own title and the gold badge is withheld. Correct the title to confirm what it is.`}>
+            identity unsure
           </div>
         )}
         {e.notes && e.ai_source === 'vision-itemized' && (

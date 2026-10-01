@@ -20,7 +20,7 @@ export function rowAction(e, working) {
     return { step: 'comps', label: 'Price with comps', disabled: false,
              title: 'Look up sold comps on this lot\'s own title. No AI cost.' }
   }
-  return { step: 'ai', label: 'Further inspect with AI', disabled: false,
+  return { step: 'ai', label: 'AI-inspect', disabled: false,
            title: 'AI reads the photo and listing for condition and a closer identification, '
                   + 'then prices it again. A box of many items is priced item by item. '
                   + 'After this the lot is locked.' }
