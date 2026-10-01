@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, scanVinted, importLots, importAllAuctions, importVintedSeller, flushClosed, refreshBids, reinspectNoComps, repriceUnpriced, fetchSettings, saveTargetRoi, saveDriveFrom, clearDriveFrom, setAuctionLive, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
+import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, importLots, importAllAuctions, flushClosed, refreshBids, reinspectNoComps, repriceUnpriced, fetchSettings, saveTargetRoi, saveDriveFrom, clearDriveFrom, setAuctionLive, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
 import { fetchNeverRules } from './api'
 import { auctionClosed } from './lib/pacing'
 import { houseRatioLabel, houseRatioTitle } from './lib/calibration'
@@ -50,10 +50,15 @@ const FILTER_DEFAULTS = {
   showHiddenLots: false,
 }
 
-// Where a view's defaults differ from the inventory's. Live: a lot past
-// your max is exactly what you need to see while bidding, and you are going
-// to these auctions, so the drive rule doesn't apply.
-const VIEW_FILTER_DEFAULTS = { live: { hideOverMax: false, hideFar: false } }
+// Where a view's defaults differ from the inventory's. Live starts with
+// every box unchecked: while bidding, a lot you can't see is a lot you
+// can't react to. The filters are all still there to switch on.
+const VIEW_FILTER_DEFAULTS = {
+  live: {
+    hideLowValue: false, hideHardShip: false, hideNoUsShip: false, hideClosed: false,
+    hideOverMax: false, hideFar: false, hidePowered: false, hideNever: false,
+  },
+}
 
 export default function App() {
   const isMobile = useMediaQuery('(max-width: 768px)')
@@ -315,14 +320,12 @@ export default function App() {
     }
     const args = {
       auctionIds: scope,
-      // The Live view shows every lot of its auctions: no category, BOLO or
-      // flagged narrowing.
-      category: liveView ? undefined : (categoryFilter || undefined),
-      boloOnly: liveView ? false : filters.boloOnly,
+      category: categoryFilter || undefined,
+      boloOnly: filters.boloOnly,
       // roiStatus is deliberately NOT sent: it is applied in the browser
       // (lib/filters.isGoldMine), so toggling it costs no round trip.
       // Every lot is fetched either way; this only chooses what is shown.
-      flaggedOnly: liveView ? false : filters.flaggedOnly,
+      flaggedOnly: filters.flaggedOnly,
       watchedOnly,
     }
     // Pages of 2000, fetched AT ONCE rather than one after another. One
@@ -385,10 +388,8 @@ export default function App() {
       try {
         if (inScope.length) {
           const fresh = await fetchLots({
-            ...(view === 'live'
-              ? { auctionIds: inScope }
-              : { auctionIds: inScope, category: categoryFilter || undefined,
-                  boloOnly: filters.boloOnly, flaggedOnly: filters.flaggedOnly, watchedOnly }),
+            auctionIds: inScope, category: categoryFilter || undefined,
+            boloOnly: filters.boloOnly, flaggedOnly: filters.flaggedOnly, watchedOnly,
           })
           const ids = new Set(inScope)
           setLots((prev) => [...prev.filter((l) => !ids.has(l.auction_id)), ...fresh])
@@ -467,26 +468,6 @@ export default function App() {
     } catch (e) { alertOnce(e.message) }
   })
 
-  // Not built with runBusy: the label names the query, which isn't known
-  // until the empty-input check below has already run.
-  async function handleScanVinted() {
-    const query = scan.search_text.trim()
-    if (!query) {
-      alert('Type what to watch in the keyword box first — Vinted scans a '
-            + 'search ("pyrex", "coach bag"), not an area.')
-      return
-    }
-    const key = 'scan-vinted'
-    if (busyRef.current[key]) return
-    beginBusy(key, `Scanning Vinted for "${query}"…`)
-    try {
-      const found = await scanVinted(query)
-      rememberAuctions(found)
-      setAuctions(found)
-      setAuctionLimit(50)
-    } catch (e) { alertOnce(e.message) } finally { endBusy(key) }
-  }
-
   // Called when the status bar sees the server go idle — pull fresh data so
   // finished imports/enrichments appear without a manual refresh.
   // Pull fresh auction stats and merge them into whatever is on screen, so
@@ -560,25 +541,6 @@ export default function App() {
     if (target?.ships_to_us === false
         && !window.confirm(`${target.name} has said it doesn't ship to the US — anything `
                            + 'won there can\'t be received. Import anyway?')) return
-    // A Vinted card's "import" is just its scan run again: same query,
-    // fresh prices, sold items closed out.
-    const platformImport = target?.external_id?.startsWith('vt-')
-        ? () => scanVinted(target.name.replace(/^Vinted: /, '')).then((cards) => {
-            const c = cards.find((x) => x.id === auctionId)
-            return { created: 0, updated: c?.lot_count ?? 0 }
-          })
-      : null
-    if (platformImport) {
-      try {
-        const r = await platformImport(auctionId)
-        setSelectedAuctions([auctionId])
-        setView('items')
-        alert(`Imported ${r.created + r.updated} lots `
-              + `(${r.created} new). Price them from the inventory view.`)
-        refreshAll()
-      } catch (e) { alertOnce(e.message) }
-      return
-    }
     try {
       await importLots(auctionId, categoryId, searchText)
       setSelectedAuctions([auctionId])
@@ -687,28 +649,6 @@ export default function App() {
             + '.')
       refreshAll()
     } catch (e) { alertOnce(e.message) }
-  }
-
-  // A Vinted seller's whole closet: import everything they have listed
-  // (the search only ever showed the slice that matched a keyword), then
-  // show it like any other auction.
-  async function handleOpenCloset(sellerId, sellerName) {
-    const key = 'vinted-closet'
-    if (!sellerId || busyRef.current[key]) return
-    beginBusy(key, `Fetching ${sellerName || 'the seller'}'s closet…`)
-    try {
-      const [auction] = await importVintedSeller(sellerId)
-      rememberAuctions([auction])
-      setSelectedAuctions([auction.id])
-      setView('items')
-      window.scrollTo?.({ top: 0, behavior: 'smooth' })
-      loadLots()
-      syncAuctionStats().catch(console.error)
-    } catch (e) {
-      alertOnce(e.message)
-    } finally {
-      endBusy(key)
-    }
   }
 
   function openAuctionItems(auctionId) {
@@ -822,8 +762,7 @@ export default function App() {
     && !(hasCategoryCount(a) && a.category_lot_count === 0)
     // A house that won't ship into the US: nothing there can be received.
     && a.ships_to_us !== false
-    // A Vinted watch refreshes through its own scan, not the HiBid bulk
-    // job, which would silently skip it anyway.
+    // Only HiBid sales have a catalogue the bulk import can read.
     && !a.external_id)
 
   async function handleImportAll(boloOnly = false) {
@@ -988,7 +927,12 @@ export default function App() {
   // exactly the rows the panel is showing and the count cannot drift.
   const pickerRows = Object.values(importedRows)
     .sort((a, b) => ((b.gold_count ?? 0) - (a.gold_count ?? 0)) || a.name.localeCompare(b.name))
-  const notImported = visibleAuctions.filter((a) => !importedIds.has(a.id))
+  // Search results: nearest first, then soonest-closing. An auction with no
+  // drive time yet (not located) goes after every one that has one.
+  const byDriveThenClose = (a, b) =>
+    ((a.drive_minutes ?? Infinity) - (b.drive_minutes ?? Infinity) || 0)
+    || (parseUtc(a.closing_date) ?? new Date('9999-01-01')) - (parseUtc(b.closing_date) ?? new Date('9999-01-01'))
+  const notImported = visibleAuctions.filter((a) => !importedIds.has(a.id)).sort(byDriveThenClose)
   // Watched auction houses sit above the rest of the discovered list: a house
   // you've starred is one you already trust, so its sales are worth seeing
   // before a stranger's that happens to close sooner.
@@ -1063,15 +1007,10 @@ export default function App() {
   // also not be counted against a list its own filter has already emptied,
   // or it reads (0) exactly when it is doing something - which is why the
   // two kind-of-thing hides below come after this stage, not inside it.
-  // The Live view shows every lot of its live auctions, in lot order: no
-  // hide rule, no lens, hidden lots included - while bidding, a lot you
-  // can't see is a lot you can't react to.
-  const unfiltered = view === 'live'
   const lotsBeforeKinds = useMemo(() => {
     const auctionNames = { ...auctionIndex, ...Object.fromEntries(auctions.map((a) => [a.id, a.name])) }
     return lots
       .filter((l) => {
-        if (unfiltered) return true
         if (!showHiddenLots && l.hidden) return false
         // A pickup-only lot in an auction outside the scan radius: HiBid
         // says it doesn't ship, and it's too far to collect. Never shown.
@@ -1097,7 +1036,7 @@ export default function App() {
                      auction_name: l.auction_name ?? auctionNames[l.auction_id] ?? '—',
                      item_closed: isClosedItem(l) }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lots, auctions, auctionIndex, showHiddenLots, hideLowValue, lowValueCutoff, hideHardShip, hideNoUsShip, hideClosed, cheapMediaOnly, maxPerItem, tooFarIds, unfiltered])
+  }, [lots, auctions, auctionIndex, showHiddenLots, hideLowValue, lowValueCutoff, hideHardShip, hideNoUsShip, hideClosed, cheapMediaOnly, maxPerItem, tooFarIds])
   // What each of these two boxes removes from what the other boxes leave -
   // counted before either of them runs, so the number holds whether the box
   // is ticked or not. Counted independently of each other: a lot that is
@@ -1122,13 +1061,13 @@ export default function App() {
   // result that vanishes the moment it arrives cannot be read.
   const lotsBeforeOverMax = useMemo(
     () => lotsBeforeKinds.filter((l) => {
-      if (unfiltered || isJustTouched(l)) return true
+      if (isJustTouched(l)) return true
       if (hidePowered && l.powered_tool) return false
       if (hideNever && l.never_label) return false
       return true
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [lotsBeforeKinds, hidePowered, hideNever, unfiltered])
+    [lotsBeforeKinds, hidePowered, hideNever])
   // What the over-max box would remove from what is otherwise on screen -
   // which is what its number should say. Exempt lots are not counted,
   // because they are not removed either.
@@ -1138,17 +1077,17 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [lotsBeforeOverMax])
   const lotsBeforeGold = useMemo(
-    () => (hideOverMax && !unfiltered
+    () => (hideOverMax
       ? lotsBeforeOverMax.filter((l) => isJustTouched(l) || !isOverMaxBid(l))
       : lotsBeforeOverMax),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [lotsBeforeOverMax, hideOverMax, unfiltered])
+    [lotsBeforeOverMax, hideOverMax])
   const goldCount = useMemo(
     () => lotsBeforeGold.reduce((n, l) => n + (isGoldMine(l) ? 1 : 0), 0),
     [lotsBeforeGold])
   const visibleLots = useMemo(
-    () => (goldOnly && !unfiltered ? lotsBeforeGold.filter(isGoldMine) : lotsBeforeGold),
-    [lotsBeforeGold, goldOnly, unfiltered])
+    () => (goldOnly ? lotsBeforeGold.filter(isGoldMine) : lotsBeforeGold),
+    [lotsBeforeGold, goldOnly])
   const hiddenCount = lots.length - lotsBeforeGold.length
   // Loaded lots per auction, before any filter - so each auction's header
   // can say how many of its lots the filters are keeping out of view.
@@ -1643,12 +1582,6 @@ export default function App() {
                                   : { padding: '8px 18px' }}>
             Scan auctions
           </button>
-          <button type="button" onClick={handleScanVinted} disabled={!!busy['scan-vinted']}
-                  title="Watch a Vinted search (uses the keyword box) — newest listings graded at their asking price; rescan to refresh"
-                  style={isMobile ? { flex: '1 1 100%', padding: 10, fontSize: 15 }
-                                  : { padding: '8px 18px' }}>
-            Scan Vinted
-          </button>
           {importAllCandidates.length > 1 && (
             <button type="button" onClick={handleImportAll}
                     data-track="Import all"
@@ -2124,11 +2057,11 @@ export default function App() {
       ) : (
         <LotTable key={filterView} viewKey={filterView} liveView={view === 'live'}
                   lots={visibleLots} onLotUpdated={handleLotUpdated} onRefresh={loadLots}
-                  toolbar={view === 'live' ? null : <>{invScope}{invLenses}</>}
+                  toolbar={<>{invScope}{invLenses}</>}
                   toolbarEnd={invActions}
                   toolbarAllLots={invImportMissing}
-                  phoneFilters={view === 'live' ? null : invFiltersButton}
-                  phoneBehindFilters={view === 'live' ? null : <>{invScope}{invGold}</>}
+                  phoneFilters={invFiltersButton}
+                  phoneBehindFilters={<>{invScope}{invGold}</>}
                   filtersOpen={filtersOpen}
                   loadedByAuction={loadedByAuction}
                   onSetLive={async (id, on) => {
@@ -2141,7 +2074,7 @@ export default function App() {
                     window.scrollTo?.({ top: 0, behavior: 'smooth' })
                   }}
                   onImportMissing={(id) => handleImport(id, -1, '')}
-                  panel={view === 'live' ? null : invPanel}
+                  panel={invPanel}
                   auctions={importedRows}
                   driveFrom={driveFrom}
                   driveAvailable={driveAvailable}
@@ -2157,7 +2090,6 @@ export default function App() {
                     setDriveFrom(null)
                     rememberAuctions(await fetchAuctions(), { full: true })
                   }}
-                  onOpenCloset={handleOpenCloset}
                   onSelectAuction={(id) => {
                     // Jump back to the top: the change happens above the
                     // rows, and from halfway down a list it looked like

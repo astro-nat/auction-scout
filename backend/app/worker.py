@@ -55,7 +55,6 @@ def _runner_for(kind: str):
     from .workers.enrich import (run_audit_sweep, run_regrade, run_reprice,
                                  run_ship_analysis)
     from .workers.import_all import run_import_all, run_photo_backfill
-    from .workers.sellers import run_seller_backfill
     from .workers.refresh import run_bid_refresh
     return {
         "reprice": run_reprice,
@@ -65,7 +64,6 @@ def _runner_for(kind: str):
         "audit-golds": run_audit_sweep,
         "import-all": run_import_all,
         "backfill-photos": run_photo_backfill,
-        "backfill-sellers": run_seller_backfill,
     }.get(kind)
 
 

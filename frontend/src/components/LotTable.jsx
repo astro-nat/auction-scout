@@ -345,7 +345,7 @@ const MOBILE_SORTS = [
 ]
 
 export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
-                                  onSelectAuction, onOpenCloset, auctions = {},
+                                  onSelectAuction, auctions = {},
                                   driveFrom = null, driveAvailable = false,
                                   onSaveDriveFrom, onClearDriveFrom,
                                   toolbar = null, toolbarEnd = null, panel = null,
@@ -616,24 +616,6 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
 
   // The row's one button: comps if unpriced, AI if comps-priced, locked
   // once AI has priced it.
-  // Vinted lots have a seller rather than an auction house. Their name
-  // opens the whole closet - every item they have listed, not just the
-  // ones a keyword search happened to surface.
-  function sellerLine(lot) {
-    if (!lot.seller_id) return null
-    return (
-      <div style={{ color: 'var(--muted)', fontSize: 12 }}>
-        seller{' '}
-        <button type="button" className="link-like"
-                onClick={() => onOpenCloset?.(lot.seller_id, lot.seller_name)}
-                data-track="Seller name (open closet)"
-                title="Import and show this seller's whole closet">
-          {lot.seller_name || `#${lot.seller_id}`}
-        </button>
-      </div>
-    )
-  }
-
   function rowButton(lot, style) {
     const a = rowAction(lot.enrichment || {}, pollingIds.has(lot.lot_id))
     const onClick = a.step === 'comps' ? () => handleComps(lot.lot_id)
@@ -962,8 +944,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
       const plan = await call(ids, { dryRun: true })
       if (!plan.auctions) {
         alert('None of the selected lots are in an open HiBid sale.\n\n'
-              + 'A Vinted watch has no bid feed or '
-              + 'terms page here, and a sale that has already closed is left alone.')
+              + 'A sale that has already closed is left alone.')
         return
       }
       const sales = `${plan.auctions} sale${plan.auctions === 1 ? '' : 's'}`
@@ -1212,7 +1193,6 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                   {lot.auction_name}
                 </button>
               </div>
-              {sellerLine(lot)}
               {e.enriched_title && e.enriched_title !== lot.title && (
                 <div style={{ color: 'var(--muted)', fontSize: 13 }}>→ {e.enriched_title}</div>
               )}
@@ -2232,7 +2212,6 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                         title="Show only this auction's items">
                   {lot.auction_name}
                 </button>
-                {sellerLine(lot)}
               </td>
               <td style={{ ...cell, whiteSpace: 'nowrap' }}>{lot.category}</td>
               <td style={{ ...cell, whiteSpace: 'nowrap',

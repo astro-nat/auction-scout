@@ -72,7 +72,6 @@ def _start_reaper() -> None:
     from ..services import jobs
     from .enrich import run_reprice, run_ship_analysis
     from .import_all import run_import_all, run_photo_backfill
-    from .sellers import run_seller_backfill
     from .refresh import run_bid_refresh
 
     def loop():
@@ -80,8 +79,7 @@ def _start_reaper() -> None:
                    "ship-analysis": run_ship_analysis,
                    "bid-refresh": run_bid_refresh,
                    "import-all": run_import_all,
-                   "backfill-photos": run_photo_backfill,
-                   "backfill-sellers": run_seller_backfill}
+                   "backfill-photos": run_photo_backfill}
         time.sleep(STARTUP_DELAY_SECONDS)
         while True:
             try:

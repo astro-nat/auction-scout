@@ -65,6 +65,11 @@ def list_auctions(background: BackgroundTasks, include_closed: bool = False,
         if forgotten:
             q = q.filter(or_(models.Auction.hibid_id.is_(None),
                              models.Auction.hibid_id.notin_(forgotten)))
+    # Retired Vinted watches and closets never list, imported lots or not.
+    q = q.filter(or_(models.Auction.external_id.is_(None),
+                     ~models.Auction.external_id.like("vt-%")),
+                 or_(models.Auction.auctioneer.is_(None),
+                     models.Auction.auctioneer != "Vinted"))
     auctions = q.order_by(models.Auction.closing_date).all()
     # Watched auction houses first, each group still soonest-closing first.
     # A house you've starred is one you already trust, so its sales are worth

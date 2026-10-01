@@ -262,21 +262,6 @@ export function scanAuctions(filters = {}) {
   })
 }
 
-// Vinted: a fixed-price WATCH — scanning a query imports the newest
-// matching listings in the same call, and re-scanning refreshes prices
-// and closes out whatever sold.
-// Everything one Vinted seller has listed, as an auction of its own.
-export function importVintedSeller(sellerId) {
-  return request(`/vinted/seller/${sellerId}/import`, { method: 'POST' })
-}
-
-export function scanVinted(query, maxPrice) {
-  return request('/vinted/scan', {
-    method: 'POST',
-    body: JSON.stringify({ query, max_price: maxPrice || undefined }),
-  })
-}
-
 export function importLots(auctionId, categoryId = -1, searchText = '') {
   const params = new URLSearchParams()
   if (categoryId && categoryId !== -1) params.set('category_id', categoryId)

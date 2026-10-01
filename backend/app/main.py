@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .database import Base, engine
 from . import models  # noqa: F401 — import registers models on Base before create_all
 from .routers import (lots, enrichment, auctions,
-                      status, vinted, events, queue, never)
+                      status, events, queue, never)
 
 # Dev convenience only — creates tables from models if they don't exist.
 # Once this is a real app with data you care about, replace this with Alembic
@@ -138,12 +138,16 @@ _MIGRATIONS = [
     r"(polic(y|ies)|options?|schedules?|updates?|changes?)"
     r"( *([&+]|and)? *(polic(y|ies)|options?|schedules?|updates?|changes?))*"
     r"( *[-:]* *please +read!*)?[\s.!*_-]*$'",
-    # Non-HiBid sources carry their identity here (a Vinted watch is
+    # Non-HiBid sources carry their identity here (a Vinted watch was
     # "vt-{query}"); hibid_id stays NULL, which is what keeps them out of
     # the HiBid-only workers.
     "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS external_id VARCHAR",
     "CREATE UNIQUE INDEX IF NOT EXISTS ix_auctions_external_id "
     "ON auctions (external_id)",
+    # Vinted is gone. Its watches and closets stay on file, hidden: their
+    # lots drop out of the views and out of every bulk pricing path.
+    "UPDATE auctions SET hidden = TRUE "
+    "WHERE (auctioneer = 'Vinted' OR external_id LIKE 'vt-%') AND hidden IS NOT TRUE",
     # Keyword-scoped import: "Import N of 'query'" alongside "Import all" —
     # the matching count needs to remember which SEARCH (not just which
     # category) it was counted under.
@@ -291,7 +295,6 @@ app.add_middleware(
 app.include_router(lots.router)
 app.include_router(enrichment.router)
 app.include_router(auctions.router)
-app.include_router(vinted.router)
 app.include_router(status.router)
 app.include_router(events.router)
 app.include_router(queue.router)

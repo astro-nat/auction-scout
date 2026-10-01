@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 # everything behind them. That limit lives inside the claim query rather
 # than in a check beside it, so two workers can't both decide they're clear.
 HEAVY_KINDS = ("reprice", "ship-analysis", "bid-refresh", "import", "scan",
-               "import-all", "backfill-photos", "backfill-sellers")
+               "import-all", "backfill-photos")
 
 
 # --- ownership -----------------------------------------------------------
@@ -59,8 +59,7 @@ RESUMABLE_KINDS = {"reprice": "lot_ids",
                    "ship-analysis": "auction_ids",
                    "bid-refresh": "auction_ids",
                    "import-all": "auction_ids",
-                   "backfill-photos": "auction_ids",
-                   "backfill-sellers": "seller_ids"}
+                   "backfill-photos": "auction_ids"}
 
 
 # How long a job of each kind may go quiet before it's presumed dead.

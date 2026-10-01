@@ -130,13 +130,12 @@ class Lot(Base):
     # catalogue shot, and condition judged from that is condition judged
     # from someone else's product. The deliberate AI look reads several.
     image_urls = Column(JSONB)
-    # Who is selling it, where the platform has a seller rather than a
-    # house (Vinted). Clicking the name pulls up their whole closet.
+    # Who sold it, where the platform had a seller rather than a house.
+    # Written only by the retired Vinted import; kept so its rows still load.
     seller_id = Column(String, index=True)
     seller_name = Column(String)
     # What the seller account has behind it. A fresh account with one
-    # underpriced listing prices as a gold mine, which is backwards;
-    # services/seller.py reads these three together.
+    # underpriced listing prices as a gold mine, which is backwards.
     seller_rating = Column(Float)
     seller_feedback_count = Column(Integer)
     seller_item_count = Column(Integer)
