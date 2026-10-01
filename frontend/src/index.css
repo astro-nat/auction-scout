@@ -878,3 +878,17 @@ button, summary, a, input, select, label { touch-action: manipulation; }
   background: var(--surface); color: var(--text); border: 1px solid var(--border-strong);
   border-radius: 6px; box-shadow: var(--shadow-pop); padding: 8px 8px 8px 14px; font-size: 14px;
 }
+
+/* The confirmation dialog (lib/ask.js). */
+dialog.confirm-dialog {
+  border: 1px solid var(--border-strong); border-radius: 8px; padding: 18px 20px 16px;
+  background: var(--card-bg); color: var(--text); box-shadow: var(--shadow-pop);
+  width: min(460px, calc(100vw - 32px)); box-sizing: border-box;
+}
+dialog.confirm-dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
+.confirm-q { margin: 0 0 8px; font-size: 16px; font-weight: 700; line-height: 1.35; }
+.confirm-body { margin: 0 0 16px; font-size: 14px; color: var(--muted); white-space: pre-line; line-height: 1.5; }
+.confirm-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+.confirm-actions button { min-height: 40px; padding: 0 16px; }
+button.danger-solid { background: var(--danger); border-color: var(--danger); color: var(--on-accent); font-weight: 600; }
+button.danger-solid:hover:not(:disabled) { background: var(--danger); border-color: var(--danger); filter: brightness(1.08); }

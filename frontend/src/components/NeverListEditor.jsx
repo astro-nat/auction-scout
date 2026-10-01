@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ask } from '../lib/ask'
 import { addNeverRule, deleteNeverRule, patchNeverRule, previewNeverRule, alertOnce } from '../api'
 
 // The never list: kinds of thing not worth seeing. The inverse of BOLO.
@@ -77,8 +78,8 @@ function Row({ rule, onChanged }) {
         <button
           disabled={busy}
           data-track="Delete never rule"
-          onClick={() => {
-            if (!window.confirm(`Remove "${rule.label}" from the never list?`)) return
+          onClick={async () => {
+            if (!(await ask(`Remove "${rule.label}" from the never list?`, { confirmLabel: 'Remove', danger: true }))) return
             run(() => deleteNeverRule(rule.id))
           }}
         >Remove</button>

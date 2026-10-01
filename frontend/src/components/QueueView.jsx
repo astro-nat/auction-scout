@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ask } from '../lib/ask'
 import { notify } from '../lib/notice'
 import { fetchQueue, cancelJob, cancelEnrichment, moveQueuedJob, moveQueuedLot, moveJobItem, alertOnce } from '../api'
 import { jobProgress, taskLabel } from '../lib/queue'
@@ -60,12 +61,12 @@ export default function QueueView({ isMobile }) {
   }, [])
 
   async function stopJob(job) {
-    if (!window.confirm(`Stop "${job.label}"? Work already done is kept.`)) return
+    if (!await ask(`Stop "${job.label}"? Work already done is kept.`)) return
     try { await cancelJob(job.id) } catch (e) { alertOnce(e.message) }
   }
 
   async function stopLots() {
-    if (!window.confirm(`Take all ${queue.lots.total} waiting items out of the queue? `
+    if (!await ask(`Take all ${queue.lots.total} waiting items out of the queue? `
                         + 'The one in progress will finish.')) return
     try {
       const r = await cancelEnrichment()

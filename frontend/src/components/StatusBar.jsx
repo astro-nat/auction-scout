@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { ask } from '../lib/ask'
 import { notify } from '../lib/notice'
 import { cancelEnrichment, cancelJob, fetchStatus } from '../api'
 import { etaLabel, sampleProgress } from '../lib/progress'
@@ -92,7 +93,9 @@ export default function StatusBar({ onQuiet, onStatus }) {
     lines.push({
       key: job.id, text, current: job.current, total: job.total,
       eta: etaLabel(progressRef.current, job),
-      onCancel: job.cancelled ? null : () => cancelJob(job.id),
+      onCancel: job.cancelled ? null : async () => {
+        if (await ask(`Stop "${job.label}"?\n\nWork already done is kept.`, { confirmLabel: 'Stop it' })) cancelJob(job.id)
+      },
     })
   }
 
@@ -115,6 +118,7 @@ export default function StatusBar({ onQuiet, onStatus }) {
       eta: rate.replace(/^\s*·\s*/, ''),
       text: `Queue: ${enrichment.queued}${mix}${lot}${stage}`,
       onCancel: async () => {
+        if (!(await ask(`Take all ${enrichment.queued.toLocaleString()} waiting items out of the queue?\n\nThe one in progress will finish.`, { confirmLabel: 'Empty the queue' }))) return
         const r = await cancelEnrichment()
         notify(`Stopped ${r.cancelled} queued lots. The one in progress will finish.`)
       },

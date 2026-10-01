@@ -1,4 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { ask } from '../lib/ask'
+import NumberField from './NumberField'
 import { notify } from '../lib/notice'
 import { enrichLot, compsLot, recheckLot, fetchLot, patchEnrichment, flagComp, enrichBatch, repriceSelected, setWatch, setHidden, hideLike, refreshBidsForLots, analyzeShippingForLots, alertOnce, parseUtc } from '../api'
 import { aiDone, rowAction } from '../lib/pricing'
@@ -646,9 +648,13 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
   // The lock is the point, so getting past it costs a confirmation and
   // works on exactly one lot.
   async function handleRecheck(lotId) {
-    if (!window.confirm('This lot was already priced by AI. Re-checking it '
-                        + 'spends another AI call on this one lot. Continue?')) return
+    // Claimed before the question, so a second press can't open a second one.
     if (!claimRow(lotId)) return
+    if (!(await ask('This lot was already priced by AI.\n\nRe-checking it '
+                    + 'spends another AI call on this one lot.', { confirmLabel: 'Re-check with AI' }))) {
+      releaseRow(lotId)
+      return
+    }
     try {
       await recheckLot(lotId)
       poll(lotId)
@@ -713,7 +719,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
       const verb = hidden ? 'Hide' : 'Bring back'
       const names = peek.titles.slice(0, 3).join('; ')
       const more = peek.changed > 3 ? ' and more' : ''
-      if (!window.confirm(
+      if (!await ask(
         `${verb} ${peek.changed} lot${peek.changed === 1 ? '' : 's'} matching `
         + `"${peek.key}"? ${names}${more}`)) return
       await hideLike(lotId, hidden, false)
@@ -817,7 +823,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
 
   async function handleCompsMatching() {
     if (!unpricedShown.length || queuing) return
-    const ok = window.confirm(
+    const ok = await ask(
       `Look up sold comps for the ${unpricedShown.length} unpriced lots matching your filters?\n\n` +
       `No AI cost - at most one SoldComps request per title (identical titles share one). ` +
       `Progress appears in the bar at the top of the page.`)
@@ -850,7 +856,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
   async function handlePriceAuction(g) {
     const targets = auctionUnpriced(g)
     if (!targets.length || queuing) return
-    const ok = window.confirm(
+    const ok = await ask(
       `Look up sold comps for the ${targets.length} unpriced `
       + `${targets.length === 1 ? 'lot' : 'lots'} at ${g.name}?\n\n`
       + `No AI cost - at most one SoldComps request per title, soonest-closing first. `
@@ -872,7 +878,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     const targets = auctionAiTargets(g)
     if (!targets.length || queuing) return
     const cost = (targets.length * 0.005).toFixed(2)
-    const ok = window.confirm(
+    const ok = await ask(
       `Further inspect with AI the ${targets.length} priced ${targets.length === 1 ? 'lot' : 'lots'} `
       + `at ${g.name} that haven't had one?\n\n`
       + `AI reads each one's photo and listing for condition and a closer identification, `
@@ -894,7 +900,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
   async function handleEnrichMatching() {
     if (!aiTargets.length || queuing) return
     const cost = (aiTargets.length * 0.005).toFixed(2)
-    const ok = window.confirm(
+    const ok = await ask(
       `AI-check the ${aiTargets.length} lots worth $${aiMin}+ that haven't had one?
 
 ` +
@@ -944,7 +950,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
       .map((l) => l.lot_id)
     if (!ids.length) { notify('Every selected lot is already priced or in progress.'); return }
     const cost = (ids.length * 0.005).toFixed(2)
-    if (!window.confirm(`Price ${ids.length} selected lots?\n\nEach runs an AI pass and a comp `
+    if (!await ask(`Price ${ids.length} selected lots?\n\nEach runs an AI pass and a comp `
                         + `lookup — roughly $${cost} of API usage, in the order shown.`)) return
     setQueuing(true)
     try { await enrichBatch(ids); onRefresh?.() } catch (e) { alertOnce(e.message) }
@@ -961,7 +967,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     const ids = selectedUnpriced.map((l) => l.lot_id)
     if (!ids.length) { notify('Every selected lot already has a value.'); return }
     const skipped = selectedInView.length - ids.length
-    if (!window.confirm(`Look up sold comps for the ${ids.length} selected lots with no value yet, `
+    if (!await ask(`Look up sold comps for the ${ids.length} selected lots with no value yet, `
                         + `using their titles as-is?\n\nNo AI cost. At most ${ids.length} SoldComps `
                         + `requests against your plan - identical titles share one.`
                         + (skipped ? `\n\n${skipped} selected lots already have a value and are left alone.` : ''))) return
@@ -1023,15 +1029,20 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
         plan.auction_names.length
           ? `Sales: ${plan.auction_names.join(', ')}` : '',
       ].filter(Boolean)
-      if (!window.confirm([what, ...notes].join('\n\n'))) return
+      if (!await ask([what, ...notes].join('\n\n'))) return
       await call(ids)
       onRefresh?.()
     } catch (e) { alertOnce(e.message) }
     finally { setQueuing(false) }
   }
 
-  const handleBulkHide = (hidden) =>
-    bulkEach(selectedInView.map((l) => l.lot_id), (id) => setHidden(id, hidden))
+  const handleBulkHide = async (hidden) => {
+    const ids = selectedInView.map((l) => l.lot_id)
+    if (hidden && ids.length > 1
+        && !(await ask(`Hide ${ids.length.toLocaleString()} selected lots?\n\nThey drop out of every view. "Show hidden" in Filters brings them back.`, { confirmLabel: `Hide ${ids.length.toLocaleString()} lots` }))) return
+    await bulkEach(ids, (id) => setHidden(id, hidden))
+    if (hidden && ids.length > 1) notify(`Hid ${ids.length.toLocaleString()} lots.`)
+  }
   const handleBulkWatch = (watched) =>
     bulkEach(selectedInView.map((l) => l.lot_id), (id) => setWatch(id, watched))
 
@@ -1973,13 +1984,9 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
       <label className="addon-bar"
              title="At an auction where you already have a gold mine, a lot with at least this ROI is worth adding - you're making the trip anyway">
         Add-on bar{' '}
-        <input type="number" min="0" step="10" value={addonFloor}
-               data-track="Add-on ROI bar"
-               onChange={(ev) => {
-                 const n = Number(ev.target.value)
-                 if (ev.target.value !== '' && Number.isFinite(n) && n >= 0) setAddonFloor(n)
-               }}
-               style={{ width: 56 }} />
+        <NumberField step="10" value={addonFloor} onCommit={setAddonFloor}
+                     data-track="Add-on ROI bar" aria-label="Add-on bar, % ROI"
+                     style={{ width: 56 }} />
         {' '}% ROI
       </label>
     </div>

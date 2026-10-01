@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ask } from './lib/ask'
+import NumberField from './components/NumberField'
 import { notify } from './lib/notice'
 import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, importLots, importAllAuctions, flushClosed, refreshBids, reinspectNoComps, repriceUnpriced, fetchSettings, saveTargetRoi, saveDriveFrom, clearDriveFrom, setAuctionLive, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
 import { fetchNeverRules } from './api'
@@ -16,6 +18,7 @@ import StatusBar from './components/StatusBar'
 import useMediaQuery from './useMediaQuery'
 import NeverListEditor from './components/NeverListEditor'
 import Notice from './components/Notice'
+import ConfirmDialog from './components/ConfirmDialog'
 import { farAuctionIds, keptForGold } from './lib/drive'
 import { CarIcon, formatDrive } from './components/DriveFrom'
 
@@ -558,7 +561,7 @@ export default function App() {
                               searchText = scanSearchText) {
     const target = auctions.find((a) => a.id === auctionId)
     if (target?.ships_to_us === false
-        && !window.confirm(`${target.name} has said it doesn't ship to the US — anything `
+        && !await ask(`${target.name} has said it doesn't ship to the US — anything `
                            + 'won there can\'t be received. Import anyway?')) return
     try {
       await importLots(auctionId, categoryId, searchText)
@@ -630,7 +633,7 @@ export default function App() {
         + `SoldComps requests against your plan - identical titles share one. `
         + `Afterwards, "AI check" can add a condition check to the ones worth it. `
         + `Progress shows in the bar at the top.`
-      if (!window.confirm(msg)) return
+      if (!await ask(msg, { confirmLabel: 'Price with comps' })) return
       const r = await repriceUnpriced(scope)
       notify(`Queued ${r.repricing} items.`)
       loadLots()
@@ -646,7 +649,7 @@ export default function App() {
         + `AI reads each one's full-size photo, identifies the items, and prices `
         + `them (real comps first, its own estimate as fallback). Roughly $${cost} `
         + `of API usage. Progress shows in the bar at the top.`
-      if (!window.confirm(msg)) return
+      if (!await ask(msg, { confirmLabel: 'Price with AI' })) return
       const r = await reinspectNoComps()
       notify(`Queued ${r.queued} items for inspection.`)
     } catch (e) { alertOnce(e.message) }
@@ -660,7 +663,7 @@ export default function App() {
         + `Their enrichment results (the AI calls you paid for) are deleted `
         + `with them. This can't be undone.\n\n`
         + `Lots marked watched are kept.`
-      if (!window.confirm(msg)) return
+      if (!(await ask(msg, { confirmLabel: `Delete ${peek.lots.toLocaleString()} items`, danger: true }))) return
       beginBusy('flush', 'Flushing closed items…')   // moves on from "Counting…"
       const r = await flushClosed()
       notify(`Flushed ${r.lots} items`
@@ -805,7 +808,7 @@ export default function App() {
       + `Free — no AI calls. Runs in the background: progress shows in the `
       + `bar at the top, and imported lots appear under "My inventory" as each `
       + `auction finishes.`
-    if (!window.confirm(msg)) return
+    if (!await ask(msg, { confirmLabel: 'Import' })) return
     try {
       const r = await importAllAuctions(ids, scanCategoryId, boloOnly)
       notify(`Queued ${r.auctions} auctions for import.`)
@@ -830,7 +833,7 @@ export default function App() {
       + `?\n\nEverything else in each auction stays out. Free — no AI calls. `
       + `Runs in the background: progress shows in the bar at the top, and `
       + `imported lots appear under "My inventory" as each auction finishes.`
-    if (!window.confirm(msg)) return
+    if (!await ask(msg, { confirmLabel: 'Import' })) return
     try {
       const r = await importAllAuctions(ids, scanCategoryId, false, scanSearchText)
       notify(`Queued ${r.auctions} auctions for import.`)
@@ -908,18 +911,18 @@ export default function App() {
       + `${rows.length === 1 ? 'It' : 'They'} won't appear in future scans.`
       + (lotsKept ? ` Your ${lotsKept.toLocaleString()} imported lots from ${withLots.length === 1 ? 'one of them' : `${withLots.length} of them`} stay in My inventory - only the auction cards go away.` : '')
       + `\n\nUndo any of them from "Forgotten" under the scan button.`
-    if (!window.confirm(msg)) return
+    if (!await ask(msg, { confirmLabel: 'Forget them' })) return
     setForgetPicks(new Set())
     await Promise.all(rows.map((a) => hideAuction(a)))
   }
 
-  function confirmForget(auction) {
+  async function confirmForget(auction) {
     if (auction.lots_imported > 0) {
       const msg = `Forget "${auction.name}"?\n\n`
         + `It won't appear in future scans. Your ${auction.lots_imported} `
         + `imported lots stay in My inventory — only the auction card goes away.\n\n`
         + `Undo it any time from "Forgotten" under the scan button.`
-      if (!window.confirm(msg)) return
+      if (!await ask(msg, { confirmLabel: 'Forget it' })) return
     }
     hideAuction(auction)
   }
@@ -1209,7 +1212,8 @@ export default function App() {
           <details className="picker" style={{ position: 'relative', marginLeft: isMobile ? 0 : 'auto' }}>
             <summary>More actions ▾</summary>
             <div className="panel" style={{ display: 'flex', flexDirection: 'column', gap: 6,
-                                            left: isMobile ? 0 : 'auto', right: isMobile ? 'auto' : 0 }}>
+                                            left: isMobile ? 0 : 'auto', right: isMobile ? 'auto' : 0 }}
+                 onClick={(ev) => { if (ev.target.closest('button')) ev.currentTarget.closest('details').open = false }}>
             <button style={{ textAlign: 'left' }}
                     onClick={runBusy('bid-refresh', 'Starting the bid refresh…', handleRefreshBids)}
                     disabled={!!busy['bid-refresh']}
@@ -1295,10 +1299,10 @@ export default function App() {
                   checked={hideLowValue}
                   onChange={(ev) => setHideLowValue(ev.target.checked)}
                 /> Hide low-value (&lt; $
-                <input
-                  type="number"
+                <NumberField
                   value={lowValueCutoff}
-                  onChange={(ev) => setLowValueCutoff(Number(ev.target.value) || 0)}
+                  onCommit={setLowValueCutoff}
+                  aria-label="Low-value cutoff, dollars"
                   style={{ width: 44 }}
                 />)
               </label>
@@ -1499,6 +1503,7 @@ export default function App() {
     <div>
       <StatusBar onQuiet={refreshAll} onStatus={onStatus} />
       <Notice />
+      <ConfirmDialog />
       <div style={{ padding: isMobile ? '0.75rem' : '1.5rem 2rem',
                     maxWidth: 1500, margin: '0 auto' }}>
       <div style={isMobile ? undefined : { display: 'flex', alignItems: 'flex-end', gap: 28,

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ask } from '../lib/ask'
 
 // Where drive times are measured from. A pickup trip is the fixed cost the
 // "By auction" view is built around, so each auction header says how long
@@ -83,6 +84,8 @@ export default function DriveFrom({ driveFrom, available, onSave, onClear }) {
           {driveFrom && (
             <button type="button" className="danger" data-track="Forget drive-from address"
                     onClick={async () => {
+                      if (!(await ask('Forget your drive-from address?\n\nDrive times disappear until you set one again.',
+                                      { confirmLabel: 'Forget it', danger: true }))) return
                       await onClear()
                       setAddress(''); setLabel(''); setSaved('')
                     }}>
