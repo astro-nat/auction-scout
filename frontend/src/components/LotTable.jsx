@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import { ask } from '../lib/ask'
+import { ask, askText } from '../lib/ask'
 import { missingLots } from '../lib/missing'
 import NumberField from './NumberField'
 import { notify } from '../lib/notice'
@@ -38,8 +38,10 @@ function CompsPeek({ lot, e, onLotUpdated, label, labelStyle }) {
     try {
       let note
       if (!e.comp_flagged) {
-        note = window.prompt(
-          "What's wrong with these comps? (optional — Cancel still flags it)") || undefined
+        const typed = await askText("Flag these comps as wrong?\n\nWhat's wrong with them? Optional - it helps the next pricing pass.",
+          { confirmLabel: 'Flag as wrong', placeholder: 'e.g. different model, sold as a set…' })
+        if (typed === null) return
+        note = typed.trim() || undefined
       }
       const updated = await flagComp(lot.lot_id, { flagged: !e.comp_flagged, note })
       onLotUpdated(updated)
@@ -257,6 +259,17 @@ const EVIDENCE_NOTE = {
 const isPaleEvidence = (ev) =>
   ev === 'asking' || ev === 'estimate' || ev === 'thin'
 
+// The ROI and, on a tap or click, how it was worked out. The breakdown
+// used to live only in a hover tooltip, out of reach on a phone.
+function RoiPeek({ text, children }) {
+  return (
+    <details className="roi-peek">
+      <summary title="How this ROI is worked out" data-track="ROI breakdown">{children}</summary>
+      <div className="roi-peek-panel" role="note">{text}</div>
+    </details>
+  )
+}
+
 function roiTooltip(lot, e) {
   if (e.est_roi == null) return undefined
   const lines = [`Return on the all-in cost, not the hammer price.`]
@@ -395,9 +408,9 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
   // Row menus (the ⋯ at the end of a row) are <details>: close any open one
   // on a click outside it or on Escape, the way a menu is expected to.
   useEffect(() => {
-    const closeOpen = (except) => document.querySelectorAll('details.row-menu[open], details.picker[open]')
+    const closeOpen = (except) => document.querySelectorAll('details.row-menu[open], details.picker[open], details.roi-peek[open]')
       .forEach((d) => { if (d !== except) d.open = false })
-    const onClick = (ev) => closeOpen(ev.target.closest?.('details.row-menu, details.picker'))
+    const onClick = (ev) => closeOpen(ev.target.closest?.('details.row-menu, details.picker, details.roi-peek'))
     const onKey = (ev) => { if (ev.key === 'Escape') closeOpen(null) }
     document.addEventListener('click', onClick)
     document.addEventListener('keydown', onKey)
@@ -1925,9 +1938,12 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
         </td>
         <td>{bidAgainstMax(lot, e, kind)}</td>
         <td className="num">{resaleCell(lot, e, edited)}</td>
-        <td className="num" title={roiTooltip(lot, e)}
-            style={{ cursor: roi != null ? 'help' : undefined }}>
-          <span className={`d-roi d-roi-${kind}`}>{roi == null ? '—' : `${roi}%`}</span>
+        <td className="num">
+          {roi == null ? <span className={`d-roi d-roi-${kind}`}>—</span> : (
+            <RoiPeek text={roiTooltip(lot, e)}>
+              <span className={`d-roi d-roi-${kind}`}>{roi}%</span>
+            </RoiPeek>
+          )}
         </td>
         <td>
           {verdictChip(lot, e, kind)}
@@ -1987,7 +2003,11 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
             {e.est_resale != null && <> · resale {money(e.est_resale)}</>}
             {ev && isPaleEvidence(ev) && <span style={{ color: 'var(--warn)' }}> ({EVIDENCE_LABEL[ev] || ev})</span>}
           </span>
-          {roi != null && <span className={`d-roi d-roi-${kind}`}>ROI {roi}%</span>}
+          {roi != null && (
+            <RoiPeek text={roiTooltip(lot, e)}>
+              <span className={`d-roi d-roi-${kind}`}>ROI {roi}%</span>
+            </RoiPeek>
+          )}
         </div>
         {max != null && (
           <div className={`d-bar d-bar-${kind}`} aria-hidden="true">

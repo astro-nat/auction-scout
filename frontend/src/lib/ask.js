@@ -10,6 +10,16 @@ export function ask(message, { confirmLabel = 'Continue', danger = false } = {})
   })
 }
 
+// The same dialog with a text field: resolves the text typed (possibly
+// empty) on confirm, or null on cancel.
+export function askText(message, { confirmLabel = 'Continue', placeholder = '' } = {}) {
+  return new Promise((resolve) => {
+    if (!open) { resolve(window.prompt(message)); return }
+    open({ message: String(message), confirmLabel, danger: false, input: true, placeholder,
+           resolve: (ok, text) => resolve(ok ? (text ?? '') : null) })
+  })
+}
+
 export function registerAsk(fn) {
   open = fn
   return () => { if (open === fn) open = null }

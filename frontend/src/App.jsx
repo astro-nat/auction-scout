@@ -1804,7 +1804,7 @@ export default function App() {
                       <CarIcon /> {formatDrive(a.drive_minutes)} ·{' '}
                     </span>
                   )}
-                  {isClosed(a) ? 'CLOSED · ' : ''}{placeOf(a)} · {a.lot_count ?? '—'} lots
+                  {isClosed(a) ? 'CLOSED · ' : ''}{placeOf(a)} · {a.lot_count?.toLocaleString() ?? '—'} lots
                   · closes {a.closing_date ? closeTime(a.closing_date) : '—'}
                   {a.buyer_premium_mult ? ` · ${Math.round((a.buyer_premium_mult - 1) * 100)}% premium` : ''}
                   {houseRatioLabel(a.estimate_ratio, a.estimate_ratio_n) && (
@@ -1942,9 +1942,9 @@ export default function App() {
                     )}
                   </td>
                   <td className="num">
-                    {a.lot_count ?? '—'}
+                    {a.lot_count?.toLocaleString() ?? '—'}
                     {a.lots_imported > 0 && (
-                      <div style={{ fontSize: 11, color: 'var(--muted)' }}>{a.lots_imported} imported</div>
+                      <div style={{ fontSize: 11, color: 'var(--muted)' }}>{a.lots_imported.toLocaleString()} imported</div>
                     )}
                     {matchCountFor(a, scanCategoryId, scanSearchText) != null && (
                       <div style={{ fontSize: 11, color: 'var(--muted)' }}>

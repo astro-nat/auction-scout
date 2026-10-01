@@ -916,3 +916,18 @@ button.danger-solid:hover:not(:disabled) { background: var(--danger); border-col
      on a phone every menu spans the screen, just below its button. */
   .picker > .panel { position: fixed; top: auto !important; left: 12px !important; right: 12px !important; width: auto; max-width: none; }
 }
+
+/* A text field inside the confirmation dialog. */
+.confirm-input { width: 100%; box-sizing: border-box; margin: 0 0 14px; padding: 8px 10px; }
+
+/* ROI with its breakdown on a tap. */
+details.roi-peek { position: relative; display: inline-block; }
+details.roi-peek > summary { list-style: none; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+details.roi-peek > summary::-webkit-details-marker { display: none; }
+.roi-peek-panel {
+  position: absolute; right: 0; top: calc(100% + 4px); z-index: 60; width: 300px; max-width: 80vw;
+  background: var(--surface); border: 1px solid var(--border-strong); border-radius: 6px;
+  box-shadow: var(--shadow-pop); padding: 10px 12px; font-size: 12.5px; line-height: 1.5;
+  text-align: left; white-space: pre-line; color: var(--text); font-weight: 400;
+}
+.d-card .roi-peek-panel { right: 0; }

@@ -29,11 +29,12 @@ export default function QueueView({ isMobile }) {
     finally { setMoving(false) }
   }
 
-  const moveButtons = (fn, { first, last, bottom = false }) => (
+  const moveButtons = (fn, { first, last, bottom = false, name = '' }) => (
     <span style={{ display: 'inline-flex', gap: 4 }}>
       {[['top', 'Top', first], ['up', 'Up', first], ['down', 'Down', last],
         ...(bottom ? [['bottom', 'Bottom', last]] : [])].map(([to, label, off]) => (
         <button key={to} onClick={() => move(fn, to)} disabled={moving || off}
+                aria-label={name ? `${label}: ${name}` : undefined}
                 style={{ fontSize: 12, padding: '2px 7px' }}
                 data-track={`Queue: move ${to}`}>
           {label}
@@ -114,6 +115,7 @@ export default function QueueView({ isMobile }) {
                     {job.state === 'pending' && !job.cancelled && waitingJobs.length > 1 && (
                       <span style={{ marginLeft: 'auto' }}>
                         {moveButtons((to) => moveQueuedJob(job.id, to), {
+                          name: job.label,
                           first: waitingJobs[0].id === job.id,
                           last: waitingJobs[waitingJobs.length - 1].id === job.id,
                         })}
@@ -128,7 +130,9 @@ export default function QueueView({ isMobile }) {
                     )}
                   </div>
                   {pct !== null && (
-                    <div style={{ height: 6, borderRadius: 3, background: 'var(--badge-bg)',
+                    <div role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}
+                         aria-label={job.label}
+                         style={{ height: 6, borderRadius: 3, background: 'var(--badge-bg)',
                                   overflow: 'hidden', margin: '8px 0 4px' }}>
                       <div style={{ height: '100%', width: `${pct}%`, background: 'var(--link)' }} />
                     </div>
@@ -151,6 +155,7 @@ export default function QueueView({ isMobile }) {
                                 rare pending job. */}
                             {job.next_up_movable && job.next_up.length > 1 && (
                               moveButtons((to) => moveJobItem(job.id, it.id, to), {
+                                name: it.name,
                                 first: i === 0,
                                 last: i === job.next_up.length - 1 && !job.next_up_more,
                                 bottom: false,
@@ -201,6 +206,7 @@ export default function QueueView({ isMobile }) {
                   {!l.stage && waitingLots.length > 1 && (
                     <div style={{ marginTop: 6 }}>
                       {moveButtons((to) => moveQueuedLot(l.lot_db_id, to), {
+                        name: l.title,
                         first: waitingLots[0].lot_db_id === l.lot_db_id,
                         last: lastShownIsLast && waitingLots[waitingLots.length - 1].lot_db_id === l.lot_db_id,
                         bottom: true,
@@ -233,6 +239,7 @@ export default function QueueView({ isMobile }) {
                     <td style={{ whiteSpace: 'nowrap' }}>
                       {!l.stage && waitingLots.length > 1 && moveButtons(
                         (to) => moveQueuedLot(l.lot_db_id, to), {
+                          name: l.title,
                           first: waitingLots[0].lot_db_id === l.lot_db_id,
                           last: lastShownIsLast && waitingLots[waitingLots.length - 1].lot_db_id === l.lot_db_id,
                           bottom: true,
