@@ -155,6 +155,7 @@ class AuctionOut(BaseModel):
     drive_minutes: Optional[float] = None     # from the saved drive-from address
     live: bool = False                        # Live Auction mode on
     live_refreshed_at: Optional[datetime] = None
+    live_auto: bool = False                   # live because lots close within the hour
     imported_at: Optional[datetime] = None
     gold_count: int = 0                       # GOLD MINE lots found so far
     gold_profit: Optional[Decimal] = None     # summed potential profit of those lots

@@ -479,6 +479,11 @@ def set_auction_live(auction_id: int, live: bool = True,
         if not still:
             raise HTTPException(status_code=422, detail="This auction has closed.")
     auction.live = live
+    # A hand switch is the user's say: on clears any opt-out; off opts this
+    # auction out of the hour-to-close rule, or it would flip back on within
+    # a minute (workers/live.auto_start).
+    auction.live_auto = False
+    auction.live_opt_out = not live
     db.commit()
     db.refresh(auction)
     return _attach_stats(db, [auction])[0]

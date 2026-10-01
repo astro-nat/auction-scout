@@ -37,6 +37,10 @@ class Auction(Base):
     # it switches itself off once the last lot has closed.
     live = Column(Boolean, default=False)
     live_refreshed_at = Column(DateTime)
+    # Switched on by the hour-to-close rule rather than by hand, and the
+    # opt-out a hand switch-off leaves so that rule doesn't flip it back on.
+    live_auto = Column(Boolean, default=False)
+    live_opt_out = Column(Boolean, default=False)
     source = Column(String)          # Local Pickup | Ship
     source_url = Column(String)
     closing_date = Column(DateTime)

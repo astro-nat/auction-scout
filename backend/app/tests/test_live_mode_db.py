@@ -72,3 +72,39 @@ def test_a_live_sale_switches_itself_off_once_over(db, monkeypatch):
     db.expire_all()
     assert db.query(models.Auction).get(a.id).live is False
     assert called == [], "refreshed a sale that was already over"
+
+
+def _lot(db, auction, lot_id, closes_in_minutes):
+    lot = models.Lot(lot_id=lot_id, auction_id=auction.id, title=lot_id, status="OPEN",
+                     closes_at=datetime.utcnow() + timedelta(minutes=closes_in_minutes))
+    db.add(lot)
+    db.flush()
+    db.add(models.Enrichment(lot_id=lot.id, status="pending"))
+    db.commit()
+
+
+def test_a_lot_closing_within_the_hour_turns_the_auction_live(db):
+    soon = _sale(db, OPEN_SALE, 2)
+    later = _sale(db, OVER_SALE, 6)
+    _lot(db, soon, "auto-soon", 30)
+    _lot(db, later, "auto-later", 180)
+    live.auto_start(db, datetime.utcnow())
+    db.expire_all()
+    assert (db.get(models.Auction, soon.id).live, db.get(models.Auction, soon.id).live_auto) == (True, True)
+    assert db.get(models.Auction, later.id).live is not True
+
+
+def test_switching_off_by_hand_keeps_it_off(db):
+    a = _sale(db, OPEN_SALE, 2)
+    _lot(db, a, "auto-optout", 30)
+    live.auto_start(db, datetime.utcnow())
+    r = client.post(f"/auctions/{a.id}/live", params={"live": False})
+    assert r.status_code == 200 and r.json()["live"] is False
+    live.auto_start(db, datetime.utcnow())
+    db.expire_all()
+    assert db.get(models.Auction, a.id).live is False, "the hour rule switched it back on"
+    # Switching it on by hand again clears the opt-out.
+    client.post(f"/auctions/{a.id}/live", params={"live": True})
+    db.expire_all()
+    got = db.get(models.Auction, a.id)
+    assert (got.live, got.live_auto, got.live_opt_out) == (True, False, False)

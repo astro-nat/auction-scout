@@ -165,6 +165,8 @@ _MIGRATIONS = [
     # Live Auction mode (workers/live).
     "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS live BOOLEAN DEFAULT FALSE",
     "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS live_refreshed_at TIMESTAMP",
+    "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS live_auto BOOLEAN DEFAULT FALSE",
+    "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS live_opt_out BOOLEAN DEFAULT FALSE",
     "ALTER TABLE lots ADD COLUMN IF NOT EXISTS max_passed_alert_at TIMESTAMP",
 ]
 

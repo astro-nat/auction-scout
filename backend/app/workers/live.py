@@ -8,6 +8,11 @@ you. So a switched-on auction is read from HiBid every LIVE_INTERVAL
 seconds (about ten catalogue pages for a 900-lot sale), re-graded at its
 new bids, and switched off by itself once its last lot has closed.
 
+An auction goes live by itself once any of its lots closes within the
+hour (auto_start), if you have imported lots from it - a sale with nothing
+of yours in it isn't worth the HiBid reads. Switching one off by hand opts
+it out of that, so the rule doesn't switch it straight back on.
+
 The alert is for watched lots only: they are the ones you are bidding on,
 and a 900-lot sale would otherwise alert on hundreds of lots nobody meant
 to buy. It fires on the crossing - at or under max before this refresh,
@@ -18,7 +23,7 @@ push the closing digest uses, and never if NTFY_TOPIC is unset.
 import logging
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Iterable
 
 from ..database import SessionLocal
@@ -28,6 +33,8 @@ from ..services import open_state
 logger = logging.getLogger(__name__)
 
 LIVE_INTERVAL = 60
+# An auction with a lot closing within this window goes live by itself.
+AUTO_LIVE_WINDOW = timedelta(hours=1)
 
 
 def _utcnow() -> datetime:
@@ -61,6 +68,32 @@ def _alert(auction, lot) -> None:
         _push(title, body, lot.lot_link)
 
 
+def auto_start(db, now) -> int:
+    """Switch on every auction with an open lot closing within the hour -
+    HiBid sales you have imported lots from, not opted out by hand.
+    Returns how many went live."""
+    from sqlalchemy import exists
+    from sqlalchemy.orm import aliased
+    lot = aliased(models.Lot)
+    soon = exists().where(lot.auction_id == models.Auction.id,
+                          lot.closes_at.isnot(None),
+                          lot.closes_at >= now,
+                          lot.closes_at <= now + AUTO_LIVE_WINDOW)
+    rows = (db.query(models.Auction)
+              .filter(models.Auction.hibid_id.isnot(None),
+                      models.Auction.live.isnot(True),
+                      models.Auction.live_opt_out.isnot(True),
+                      soon)
+              .all())
+    for a in rows:
+        a.live = True
+        a.live_auto = True
+        logger.info("Live mode on for %s: lots close within the hour", a.name)
+    if rows:
+        db.commit()
+    return len(rows)
+
+
 def run_once() -> int:
     """One pass over every live auction. Returns how many alerts went out."""
     from .refresh import run_bid_refresh
@@ -68,6 +101,7 @@ def run_once() -> int:
     sent = 0
     try:
         now = _utcnow()
+        auto_start(db, now)
         live = db.query(models.Auction).filter(models.Auction.live.is_(True)).all()
         for auction in live:
             over = (db.query(models.Auction)

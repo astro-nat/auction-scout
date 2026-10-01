@@ -1374,11 +1374,14 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
         <button type="button" role="switch" aria-checked={!!a.live}
                 className={`live-switch${a.live ? ' on' : ''}`}
                 data-track={a.live ? 'Live auction off' : 'Live auction on'}
-                title={a.live ? 'Live: bids refresh every minute. Click to stop.'
-                              : 'Switch on to refresh this auction\'s bids every minute while it runs, and get an alert when a watched lot passes your max bid'}
+                title={a.live
+                  ? (a.live_auto
+                    ? 'Live by itself: lots here close within the hour. Bids refresh every minute. Click to stop - it stays off.'
+                    : 'Live: bids refresh every minute. Click to stop.')
+                  : 'Switch on to refresh this auction\'s bids every minute while it runs, and get an alert when a watched lot passes your max bid. Auctions go live by themselves an hour before lots close.'}
                 onClick={() => onSetLive(a.id, !a.live)}>
           <span className="live-track" aria-hidden="true"><span className="live-knob" /></span>
-          {a.live ? 'Live' : 'Live off'}
+          {a.live ? (a.live_auto ? 'Live · auto' : 'Live') : 'Live off'}
         </button>
         {a.live && (
           <span className="group-meta">

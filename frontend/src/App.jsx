@@ -2028,9 +2028,10 @@ export default function App() {
           <div className="empty-state">
             <div><strong>No auction is live.</strong></div>
             <div style={{ marginTop: 4 }}>
-              In <strong>My Inventory</strong>, switch <strong>Live</strong> on in an open
-              auction's header. Its bids then refresh every minute, it shows up here, and a
-              watched lot passing your max bid sends an alert. Several can be live at once.
+              An auction goes live by itself an hour before any of its lots closes. To go
+              live sooner, switch <strong>Live</strong> on in its header in{' '}
+              <strong>My Inventory</strong>. Live auctions refresh their bids every minute and
+              show up here, and a watched lot passing your max bid sends an alert.
             </div>
             <button className="primary" style={{ marginTop: 12 }}
                     onClick={() => setView('items')}>
