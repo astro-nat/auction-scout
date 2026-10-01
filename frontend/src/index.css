@@ -773,3 +773,7 @@ details.peek > summary::-webkit-details-marker { display: none; }
 @media (prefers-reduced-motion: reduce) {
   .live-track, .live-knob { transition: none; }
 }
+
+/* Open all · Close all, beside the view switch. */
+.group-all { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.group-all .link-like { color: var(--link); text-decoration: none; font-weight: 600; }

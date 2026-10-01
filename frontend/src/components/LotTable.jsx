@@ -1326,6 +1326,15 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                 onClick={() => setArrange('all')}>All lots</button>
       </div>
       )}
+      {arrange === 'auction' && groups.length > 1 && (
+        <span className="group-all">
+          <button type="button" className="link-like" data-track="Open all auctions"
+                  onClick={() => setAllGroups(true)}>Open all</button>
+          <span aria-hidden="true">·</span>
+          <button type="button" className="link-like" data-track="Close all auctions"
+                  onClick={() => setAllGroups(false)}>Close all</button>
+        </span>
+      )}
       {!isMobile && driveControl}
     </div>
   )
@@ -1344,6 +1353,27 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
   const groupKey = (g) => g.auctionId ?? 'none'
   // Open by default when it has a gold mine - or always, in the Live view.
   const isGroupOpen = (g) => (liveView || g.hasGold) !== flippedGroups.has(groupKey(g))
+  // Open or close every auction at once. The usage log showed auctions being
+  // closed one after another, up to five in a row, to clear the way to one.
+  function setAllGroups(open) {
+    setFlippedGroups(new Set(groups
+      .filter((g) => (liveView || g.hasGold) !== open)
+      .map(groupKey)))
+    if (open) {
+      // An auction with nothing featured opens onto its first lots, as a
+      // single open does - not onto an empty space.
+      setOpenGroups((prev) => {
+        const next = new Map(prev)
+        for (const g of groups) {
+          if (!g.hasGold && !next.get(groupKey(g))) {
+            next.set(groupKey(g), Math.min(g.lots.length, OTHERS_STEP))
+          }
+        }
+        return next
+      })
+    }
+  }
+
   function toggleGroup(g) {
     const key = groupKey(g)
     const opening = !isGroupOpen(g)
