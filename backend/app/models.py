@@ -20,10 +20,20 @@ class Auction(Base):
     auctioneer = Column(String)
     auctioneer_id = Column(Integer, index=True)   # HiBid company id
     lot_count = Column(Integer)
+    # Open lots HiBid lists for this sale that aren't on file, as of the last
+    # full read of its catalogue (an import or a bid refresh). lot_count
+    # counts closed lots too, which an import never brings in, so
+    # "lot_count - imported" grew all through a staggered close.
+    lots_missing_open = Column(Integer)
     city = Column(String)
     state = Column(String)
     zip = Column(String)
     address = Column(String)         # street address, as HiBid gives it
+    # The house's pickup (checkout) instructions - days, hours, appointment
+    # rules - as HiBid shows them. Fetched only for auctions within
+    # services/pickup.MAX_DRIVE_MINUTES: the ones you'd actually drive to.
+    pickup_info = Column(Text)
+    pickup_checked_at = Column(DateTime)
     # Where the sale is, from the scan. HiBid sends 0,0 when it can't place
     # an auction; drive.usable_coords screens that out.
     geo_lat = Column(Float)

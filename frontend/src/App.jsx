@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ask } from './lib/ask'
+import { missingLots } from './lib/missing'
 import NumberField from './components/NumberField'
 import { notify } from './lib/notice'
 import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, importLots, importAllAuctions, flushClosed, refreshBids, reinspectNoComps, repriceUnpriced, fetchSettings, saveTargetRoi, saveDriveFrom, clearDriveFrom, setAuctionLive, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
@@ -526,8 +527,8 @@ export default function App() {
   // once nothing is missing.
   function importButtonLabel(a) {
     if (!a.lots_imported) return importLabel(a)
-    if (a.lot_count != null && a.lots_imported < a.lot_count) {
-      return `Import ${(a.lot_count - a.lots_imported).toLocaleString()} missing`
+    if (missingLots(a) > 0) {
+      return `Import ${missingLots(a).toLocaleString()} missing`
     }
     return null
   }
@@ -1192,15 +1193,14 @@ export default function App() {
               View button or a lot's auction tag, where the gap is invisible. */}
           {selectedAuctions
             .map((id) => importedRows[id])
-            .filter((a) => a && a.lot_count != null && a.lots_imported < a.lot_count
-                           && !(a.closing_date && parseUtc(a.closing_date) < new Date()))
+            .filter((a) => missingLots(a) > 0)
             .map((a) => (
               <button key={`partial-${a.id}`}
                       data-track="Import N missing"
                       onClick={() => handleImport(a.id, -1, '')}
-                      title={`"${a.name}" has ${a.lot_count} lots on HiBid but only ${a.lots_imported} in the database — import the rest (free, no AI calls)`}
+                      title={`${missingLots(a).toLocaleString()} open lots of "${a.name}" aren't imported yet - import them (free, no AI calls)`}
                       style={{ padding: 8, fontSize: 14 }}>
-                Import {a.lot_count - a.lots_imported} missing
+                Import {missingLots(a).toLocaleString()} missing
                 {selectedAuctions.length > 1 ? ` · ${a.name.length > 22 ? `${a.name.slice(0, 22)}…` : a.name}` : ''}
               </button>
             ))}
@@ -1338,6 +1338,7 @@ export default function App() {
                   <span style={{ color: 'var(--muted)' }}>({neverCount.toLocaleString()})</span>
                 </label>
                 <button onClick={() => setNeverOpen((v) => !v)}
+                        aria-expanded={neverOpen}
                         data-track="Edit never list"
                         style={{ fontSize: 12, padding: '1px 6px' }}>
                   {neverOpen ? 'Done' : 'Edit list'}
@@ -1461,7 +1462,7 @@ export default function App() {
                   onChange={(ev) => setTargetRoi(ev.target.value)}
                   style={{ width: 58 }}
                 />% ROI
-                <button style={{ fontSize: 12, padding: '3px 9px' }} onClick={handleSaveRoi}>Apply</button>
+                <button style={{ fontSize: 12, padding: '3px 9px' }} onClick={handleSaveRoi} data-track="Save ROI target">Save target</button>
               </span>
             </fieldset>
           </div>
@@ -1482,6 +1483,7 @@ export default function App() {
         {(TABS.find((t) => t.views.includes(view)) ?? TABS[0]).views.map((v) => (
           <button
             key={v}
+            aria-current={view === v ? 'page' : undefined}
             className={`subtab${view === v ? ' active' : ''}`}
             onClick={() => setView(v)}
             style={isMobile ? { fontSize: 14, padding: '7px 14px', flexShrink: 0, whiteSpace: 'nowrap' } : undefined}
@@ -1504,7 +1506,7 @@ export default function App() {
       <StatusBar onQuiet={refreshAll} onStatus={onStatus} />
       <Notice />
       <ConfirmDialog />
-      <div style={{ padding: isMobile ? '0.75rem' : '1.5rem 2rem',
+      <main style={{ padding: isMobile ? '0.75rem' : '1.5rem 2rem',
                     maxWidth: 1500, margin: '0 auto' }}>
       <div style={isMobile ? undefined : { display: 'flex', alignItems: 'flex-end', gap: 28,
                                            borderBottom: '1px solid var(--border)' }}>
@@ -1514,11 +1516,12 @@ export default function App() {
         AuctionScout
       </h1>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4,
+      <nav aria-label="Sections" style={{ display: 'flex', flexWrap: 'wrap', gap: 4,
                     borderBottom: isMobile ? '1px solid var(--border)' : 'none' }}>
         {TABS.map((t) => (
           <button
             key={t.key}
+            aria-current={t.views.includes(view) ? 'page' : undefined}
             className={`tab${t.views.includes(view) ? ' active' : ''}`}
             onClick={() => setView(lastViewIn.current[t.key])}
             style={isMobile ? { fontSize: 15, padding: '10px 12px' } : undefined}
@@ -1526,7 +1529,7 @@ export default function App() {
             {t.key === 'queue' && queueN ? `Queue (${queueN.toLocaleString()})` : t.label}
           </button>
         ))}
-      </div>
+      </nav>
       {!isMobile && viewSwitch}
       </div>
       {/* Every in-flight action shows here — several can run at once, since
@@ -1606,7 +1609,7 @@ export default function App() {
           <button type="submit" disabled={!!busy['scan-hibid']} className="primary"
                   style={isMobile ? { flex: '1 1 100%', padding: 10, fontSize: 15 }
                                   : { padding: '8px 18px' }}>
-            Scan auctions
+            {busy['scan-hibid'] ? <><span className="spinner" />Scanning…</> : 'Scan auctions'}
           </button>
           {importAllCandidates.length > 1 && (
             <button type="button" onClick={handleImportAll}
@@ -2132,7 +2135,7 @@ export default function App() {
                   onLotTouched={markTouched} />
       )}
       </>)}
-      </div>
+      </main>
     </div>
   )
 }

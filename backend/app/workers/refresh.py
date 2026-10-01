@@ -145,6 +145,10 @@ def run_bid_refresh(auction_ids: list[int], resume_job_id: str | None = None,
                 continue
 
             by_lot_id = {str(f["lot_id"]): f for f in fresh}
+            if targeted is None:
+                # The whole open catalogue: what "Import N missing" should say.
+                from .import_all import open_missing
+                auction.lots_missing_open = open_missing(db, auction, fresh)
             # Where the catalog has got to only reads correctly off the whole
             # catalogue. A targeted fetch holds a few lots, so the furthest
             # hammered one among them says nothing about the rest.

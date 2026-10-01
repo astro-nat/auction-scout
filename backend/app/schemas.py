@@ -145,6 +145,8 @@ class AuctionOut(BaseModel):
     favorite: bool = False          # a watched auction house
     hidden: bool = False            # dismissed by the user
     lot_count: Optional[int] = None
+    lots_missing_open: Optional[int] = None   # open on HiBid, not on file (last full read)
+    pickup_info: Optional[str] = None         # pickup days/hours, for auctions you'd drive to
     city: Optional[str] = None
     state: Optional[str] = None
     source: Optional[str] = None

@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { ask } from '../lib/ask'
+import { missingLots } from '../lib/missing'
 import NumberField from './NumberField'
 import { notify } from '../lib/notice'
 import { enrichLot, compsLot, recheckLot, fetchLot, patchEnrichment, flagComp, enrichBatch, repriceSelected, setWatch, setHidden, hideLike, refreshBidsForLots, analyzeShippingForLots, alertOnce, parseUtc } from '../api'
@@ -1138,7 +1139,12 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
       <>
         {(toolbar || toolbarEnd) && <div className="inv-toolbar">{toolbar}<span className="inv-spacer" />{toolbarEnd}</div>}
         {panel}
-        <p>Nothing to show. The filters above may be hiding everything; loosen one, or scan auctions and import one.</p>
+        <div className="empty-state" style={{ padding: '24px 4px' }}>
+          <p style={{ margin: '0 0 10px' }}>Nothing to show. Your filters may be hiding everything, or nothing is imported yet.</p>
+          {onShowFilters && (
+            <button type="button" data-track="Empty state: open filters" onClick={onShowFilters}>Open Filters</button>
+          )}
+        </div>
       </>
     )
   }
@@ -1226,7 +1232,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                     ? 'Bring back every lot that is the same product as this one'
                     : 'Hide every lot that is the same product as this one — asks first'}
                   style={{ fontSize: 12, padding: '0 6px 0 0', opacity: 0.55 }}>
-                  {lot.hidden ? '+ all' : '+ all'}
+                  {lot.hidden ? 'show similar' : 'hide similar'}
                 </button>
                 {lot.lot_number && (
                   <span style={{ color: 'var(--muted)', fontSize: 13, marginRight: 4 }}>
@@ -1459,6 +1465,31 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     )
   }
 
+  // Where and when to collect, for a sale close enough to drive to: the
+  // house's own pickup text (fetched only within 45 minutes) and the
+  // address, opening directions in Maps.
+  function pickupLine(a) {
+    if (!a?.pickup_info || a.drive_minutes == null || a.drive_minutes >= 45) return null
+    const where = [a.address, a.city, a.state, a.zip].filter(Boolean).join(', ')
+    const first = a.pickup_info.split(/\r?\n/).find((l) => l.trim()) || a.pickup_info
+    return (
+      <details className="pickup-info">
+        <summary data-track="Pickup info (open)">
+          <strong>Pickup:</strong> {first.length > 90 ? `${first.slice(0, 90)}…` : first}
+        </summary>
+        <div className="pickup-body">
+          <p style={{ margin: '4px 0', whiteSpace: 'pre-line' }}>{a.pickup_info}</p>
+          {where && (
+            <a href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(where)}`}
+               target="_blank" rel="noreferrer" data-track="Pickup directions">
+              {where} · directions
+            </a>
+          )}
+        </div>
+      </details>
+    )
+  }
+
   function groupHeader(g) {
     const a = g.auction
     const meta = [
@@ -1474,10 +1505,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     const closedCount = open ? 0 : g.lots.length
     const filteredOut = Math.max(0, (loadedByAuction[g.auctionId] ?? g.lots.length) - g.lots.length)
     const unwatched = g.featured.filter((l) => !l.watched)
-    const missing = a && a.lot_count != null && a.lots_imported != null
-      && a.lots_imported < a.lot_count
-      && !(a.closing_date && parseUtc(a.closing_date) < new Date())
-      ? a.lot_count - a.lots_imported : 0
+    const missing = missingLots(a)
     return (
       // Clicking anywhere on the header that isn't one of its own controls
       // opens or closes the auction; the title button is the keyboard way.
@@ -1522,7 +1550,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
             )}
             {missing > 0 && onImportMissing && (
               <button type="button" className="group-import" data-track="Import N missing"
-                      title={`HiBid lists ${a.lot_count} lots for this sale; ${a.lots_imported} are imported. Import the rest (free, no AI calls).`}
+                      title={`${missing.toLocaleString()} lots still open on HiBid aren't imported. Import them (free, no AI calls).`}
                       onClick={() => onImportMissing(g.auctionId)}>
                 Import {missing.toLocaleString()} missing
               </button>
@@ -1555,6 +1583,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
               </>
             )}
           </span>
+          {pickupLine(a)}
         </div>
         {g.hasGold ? (
           <div className="group-basket">
@@ -1903,7 +1932,9 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
         <td>
           {verdictChip(lot, e, kind)}
           {e.status === 'failed' && e.error_message && (
-            <div style={{ color: 'var(--error)', fontSize: 12 }}>{e.error_message.slice(0, 80)}</div>
+            <div style={{ color: 'var(--error)', fontSize: 12 }} title={e.error_message}>
+              {e.error_message.length > 80 ? `${e.error_message.slice(0, 80)}…` : e.error_message}
+            </div>
           )}
         </td>
         <td className="d-actions">
@@ -2035,6 +2066,8 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
           <th style={{ width: 28 }}>
             <input type="checkbox" title="Select every lot in view"
                    checked={allSelected(selected, sorted)}
+                   ref={(el) => { if (el) el.indeterminate = selected.size > 0 && !allSelected(selected, sorted) }}
+                   aria-label="Select every lot in view"
                    onChange={(ev) => setSelected(ev.target.checked ? selectAll(sorted) : new Set())} />
           </th>
           {DECISION_HEADS.map((h) => (
@@ -2176,7 +2209,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                   : paleGold ? EVIDENCE_NOTE[ev] : undefined}
                 // Weak-evidence gold (asking prices, AI estimates) gets a
                 // paler wash: worth a look, not the same claim as real sales.
-                style={paleGold ? { opacity: 0.82 } : undefined}>
+                style={paleGold ? { background: 'var(--card-bg)' } : undefined}>
               <td style={cell}>
                 <input type="checkbox"
                        checked={selected.has(lot.lot_id)}
@@ -2217,7 +2250,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                     ? 'Bring back every lot that is the same product as this one'
                     : 'Hide every lot that is the same product as this one — asks first'}
                   style={{ fontSize: 12, padding: '0 6px 0 0', opacity: 0.55 }}>
-                  + all
+                  {lot.hidden ? 'show similar' : 'hide similar'}
                 </button>
                 {e.bolo_brand && (
                   <span className="badge bolo" style={{ cursor: 'help', marginRight: 4 }}
@@ -2368,7 +2401,9 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
               <td style={cell}>
                 {isWorking(lot) ? <><span className="spinner" />{e.progress || (e.status === 'queued' ? 'waiting in queue…' : 'working…')}</> : statusLabel(e)}
                 {e.status === 'failed' && e.error_message && (
-                  <div style={{ color: 'var(--error)', fontSize: 12 }}>{e.error_message.slice(0, 80)}</div>
+                  <div style={{ color: 'var(--error)', fontSize: 12 }} title={e.error_message}>
+              {e.error_message.length > 80 ? `${e.error_message.slice(0, 80)}…` : e.error_message}
+            </div>
                 )}
               </td>
               <td style={{ ...cell, whiteSpace: 'nowrap' }}>
@@ -2421,6 +2456,8 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
             <input type="checkbox"
                    title="Select every lot in view"
                    checked={allSelected(selected, sorted)}
+                   ref={(el) => { if (el) el.indeterminate = selected.size > 0 && !allSelected(selected, sorted) }}
+                   aria-label="Select every lot in view"
                    onChange={(ev) => setSelected(ev.target.checked ? selectAll(sorted) : new Set())} />
           </th>
           {COLUMNS.map((c) => (

@@ -892,3 +892,13 @@ dialog.confirm-dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
 .confirm-actions button { min-height: 40px; padding: 0 16px; }
 button.danger-solid { background: var(--danger); border-color: var(--danger); color: var(--on-accent); font-weight: 600; }
 button.danger-solid:hover:not(:disabled) { background: var(--danger); border-color: var(--danger); filter: brightness(1.08); }
+
+/* Pickup days and hours under a nearby auction's name. */
+.pickup-info { font-size: 13px; margin-top: 3px; max-width: 760px; }
+.pickup-info > summary { cursor: pointer; color: var(--text); list-style: none; }
+.pickup-info > summary::-webkit-details-marker { display: none; }
+.pickup-info > summary::before { content: '▸ '; color: var(--muted); }
+.pickup-info[open] > summary::before { content: '▾ '; }
+.pickup-body { padding: 2px 0 4px 14px; color: var(--muted); }
+.pickup-body a { color: var(--text); text-decoration: underline; }
+.pickup-body a:hover { color: var(--hover-ink); }

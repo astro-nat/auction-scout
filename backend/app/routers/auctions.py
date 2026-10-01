@@ -22,13 +22,20 @@ router = APIRouter(prefix="/auctions", tags=["auctions"])
 
 
 def _refresh_drive_times():
-    """Background: a fresh session, since the request's is closed by now."""
+    """Background: a fresh session, since the request's is closed by now.
+    Pickup instructions follow the drive times, because which sales are
+    close enough to pick up from is what decides who gets asked."""
     from ..database import SessionLocal
+    from ..services import pickup
     db = SessionLocal()
     try:
         drive.refresh(db)
     except Exception as exc:  # noqa: BLE001
         print(f"Drive times skipped: {exc}")
+    try:
+        pickup.refresh(db)
+    except Exception as exc:  # noqa: BLE001
+        print(f"Pickup info skipped: {exc}")
     finally:
         db.close()
 

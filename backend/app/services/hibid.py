@@ -95,6 +95,14 @@ query AuctionMeta($eventIds: [Int!]) {
 }
 """
 
+AUCTION_PICKUP_QUERY = """
+query AuctionPickup($eventIds: [Int!]) {
+  auctionMap(input: {zip: "", miles: 0, searchText: "", category: -1, filter: ALL, status: ALL, eventIds: $eventIds}) {
+    mapMarkers { auction { id checkoutDateInfo eventAddress eventCity eventState eventZip } }
+  }
+}
+"""
+
 AUCTION_LOCATION_QUERY = """
 query AuctionLocation($eventIds: [Int!]) {
   auctionMap(input: {zip: "", miles: 0, searchText: "", category: -1, filter: ALL, status: ALL, eventIds: $eventIds}) {
@@ -295,6 +303,31 @@ def _parse_buyer_premium(meta: dict) -> Optional[float]:
         if "premium" in window and 0 < float(m.group(1)) <= 50:
             return 1 + float(m.group(1)) / 100
     return None
+
+
+async def fetch_pickup(client: httpx.AsyncClient, hibid_ids: list[int]) -> dict[int, dict]:
+    """Pickup instructions and street address per auction. HiBid calls the
+    pickup text checkoutDateInfo ("Pick up by appointment on FRIDAY or
+    SATURDAY ..."). Failures degrade to {} for that chunk, never raise."""
+    out: dict[int, dict] = {}
+    for i in range(0, len(hibid_ids), META_CHUNK):
+        chunk = hibid_ids[i:i + META_CHUNK]
+        try:
+            data = await _graphql(client, "AuctionPickup", AUCTION_PICKUP_QUERY,
+                                  {"eventIds": chunk})
+        except Exception as exc:
+            logger.warning("AuctionPickup failed for chunk %s: %s", chunk[:3], exc)
+            continue
+        for marker in (data.get("auctionMap") or {}).get("mapMarkers") or []:
+            a = marker.get("auction") or {}
+            out[a["id"]] = {
+                "pickup_info": (a.get("checkoutDateInfo") or "").replace("\r\n", "\n").strip(),
+                "address": a.get("eventAddress"),
+                "city": a.get("eventCity"),
+                "state": a.get("eventState"),
+                "zip": a.get("eventZip"),
+            }
+    return out
 
 
 async def fetch_auction_meta(client: httpx.AsyncClient, hibid_ids: list[int]) -> dict[int, dict]:

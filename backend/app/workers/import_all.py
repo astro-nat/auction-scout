@@ -45,6 +45,16 @@ def _step(phase, name: str):
         yield
 
 
+def open_missing(db: Session, auction: models.Auction, fetched: list[dict]) -> int:
+    """Of a full catalogue read (fetch_lots returns open lots only), how
+    many are not on file. House notices don't count: an import drops them on
+    purpose, so they would read as missing forever."""
+    have = {str(r[0]) for r in db.query(models.Lot.lot_id)
+                                 .filter(models.Lot.auction_id == auction.id)}
+    return sum(1 for f in fetched
+               if str(f.get("lot_id")) not in have and not is_boilerplate(f.get("title")))
+
+
 def save_lots(db: Session, auction: models.Auction, lots: list[dict], *,
               on_progress=None, should_cancel=None,
               bolo_only: bool = False, phase=None) -> tuple[int, int, bool]:
@@ -386,6 +396,14 @@ def run_import_all(auction_ids: list[int], resume_job_id: str | None = None,
                 ph.add(len(lots))
                 ph.note(created=c, updated=u, fetched=len(lots),
                         bolo_only=bolo_only)
+            # A whole-catalogue import knows exactly what is still missing; a
+            # category, keyword or BOLO-only one saw part of it, so it can
+            # only take off what it brought in.
+            if category_id in (-1, None) and not search_text and not bolo_only:
+                auction.lots_missing_open = open_missing(db, auction, lots)
+            elif auction.lots_missing_open is not None:
+                auction.lots_missing_open = max(0, auction.lots_missing_open - c)
+            db.commit()
             created_total += c
             updated_total += u
             imported += 1
