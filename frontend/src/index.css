@@ -902,3 +902,17 @@ button.danger-solid:hover:not(:disabled) { background: var(--danger); border-col
 .pickup-body { padding: 2px 0 4px 14px; color: var(--muted); }
 .pickup-body a { color: var(--text); text-decoration: underline; }
 .pickup-body a:hover { color: var(--hover-ink); }
+
+/* Phone: an auction's header in fewer lines. Narrowing to one auction is
+   a tap on its name in the auction picker; the link is desktop-only. */
+@media (max-width: 768px) {
+  .group-only { display: none; }
+  .group-cards > .group-head-inner { padding: 10px 12px; gap: 6px 12px; }
+  .group-cards > .group-head-inner .group-meta { font-size: 12px; }
+  .d-card { padding-top: 10px; padding-bottom: 10px; }
+}
+@media (max-width: 768px) {
+  /* A dropdown opened from the middle of a row ran off the right edge:
+     on a phone every menu spans the screen, just below its button. */
+  .picker > .panel { position: fixed; top: auto !important; left: 12px !important; right: 12px !important; width: auto; max-width: none; }
+}

@@ -1508,23 +1508,27 @@ export default function App() {
       <ConfirmDialog />
       <main style={{ padding: isMobile ? '0.75rem' : '1.5rem 2rem',
                     maxWidth: 1500, margin: '0 auto' }}>
-      <div style={isMobile ? undefined : { display: 'flex', alignItems: 'flex-end', gap: 28,
-                                           borderBottom: '1px solid var(--border)' }}>
+      {/* On a phone the wordmark and the three sections share one row: two
+          stacked rows pushed the first lot most of the way down the screen. */}
+      <div style={isMobile
+        ? { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+            borderBottom: '1px solid var(--border)' }
+        : { display: 'flex', alignItems: 'flex-end', gap: 28,
+            borderBottom: '1px solid var(--border)' }}>
       <h1 className="wordmark"
-          style={{ fontSize: isMobile ? 22 : 28, margin: isMobile ? '0 0 2px' : '0 0 8px',
+          style={{ fontSize: isMobile ? 17 : 28, margin: isMobile ? 0 : '0 0 8px',
                    display: 'flex', alignItems: 'baseline', gap: 10 }}>
         AuctionScout
       </h1>
 
-      <nav aria-label="Sections" style={{ display: 'flex', flexWrap: 'wrap', gap: 4,
-                    borderBottom: isMobile ? '1px solid var(--border)' : 'none' }}>
+      <nav aria-label="Sections" style={{ display: 'flex', flexWrap: 'nowrap', gap: isMobile ? 0 : 4 }}>
         {TABS.map((t) => (
           <button
             key={t.key}
             aria-current={t.views.includes(view) ? 'page' : undefined}
             className={`tab${t.views.includes(view) ? ' active' : ''}`}
             onClick={() => setView(lastViewIn.current[t.key])}
-            style={isMobile ? { fontSize: 15, padding: '10px 12px' } : undefined}
+            style={isMobile ? { fontSize: 14, padding: '10px 6px' } : undefined}
           >
             {t.key === 'queue' && queueN ? `Queue (${queueN.toLocaleString()})` : t.label}
           </button>

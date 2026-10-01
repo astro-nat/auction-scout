@@ -1573,14 +1573,14 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
               </>
             )}
             {g.auctionId != null && onSelectAuction && (
-              <>{' · '}
+              <span className="group-only">{' · '}
                 <button type="button" className="link-like group-filtered"
                         data-track="Auction group name (show its items)"
                         title="Narrow the inventory to this auction alone"
                         onClick={() => onSelectAuction(g.auctionId)}>
                   show only this auction
                 </button>
-              </>
+              </span>
             )}
           </span>
           {pickupLine(a)}
@@ -1974,10 +1974,15 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
           <a href={lot.lot_link} target="_blank" rel="noreferrer" className="d-card-title"
              style={lot.hidden ? { opacity: 0.5, textDecoration: 'line-through' } : undefined}>{lot.title}</a>
         </div>
-        <div className="d-sub">#{lot.lot_number || '—'}{e.enriched_title && e.enriched_title !== lot.title ? ` · ${e.enriched_title}` : ''}</div>
+        {/* The lot number rides on the price line; this line only when the
+            AI's title says something the listing's doesn't. */}
+        {e.enriched_title && e.enriched_title !== lot.title && (
+          <div className="d-sub">{e.enriched_title}</div>
+        )}
         {lotNotes(e)}
         <div className="d-card-nums">
           <span>
+            <span style={{ color: 'var(--muted)' }}>#{lot.lot_number || '—'} · </span>
             Bid {money(lot.current_bid)}
             {e.est_resale != null && <> · resale {money(e.est_resale)}</>}
             {ev && isPaleEvidence(ev) && <span style={{ color: 'var(--warn)' }}> ({EVIDENCE_LABEL[ev] || ev})</span>}
