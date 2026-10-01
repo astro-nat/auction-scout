@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { notify } from './lib/notice'
 import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, importLots, importAllAuctions, flushClosed, refreshBids, reinspectNoComps, repriceUnpriced, fetchSettings, saveTargetRoi, saveDriveFrom, clearDriveFrom, setAuctionLive, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
 import { fetchNeverRules } from './api'
 import { auctionClosed } from './lib/pacing'
@@ -14,6 +15,7 @@ import LotTable from './components/LotTable'
 import StatusBar from './components/StatusBar'
 import useMediaQuery from './useMediaQuery'
 import NeverListEditor from './components/NeverListEditor'
+import Notice from './components/Notice'
 import { farAuctionIds, keptForGold } from './lib/drive'
 import { CarIcon, formatDrive } from './components/DriveFrom'
 
@@ -562,17 +564,17 @@ export default function App() {
       await importLots(auctionId, categoryId, searchText)
       setSelectedAuctions([auctionId])
       setView('items')
-      alert(`Importing in the background — progress shows in the top bar, `
+      notify(`Importing in the background — progress shows in the top bar, `
             + `and the items appear here when it finishes.`)
     } catch (e) { alertOnce(e.message) }
   }
 
   async function handleSaveRoi() {
     const pct = Number(targetRoi)
-    if (!pct || pct < 1) { alert('Enter a target ROI percent, e.g. 150.'); return }
+    if (!pct || pct < 1) { notify('Enter a target ROI percent, e.g. 150.'); return }
     try {
       const r = await saveTargetRoi(pct)
-      alert(`Target ROI set to ${r.target_roi_pct}%. Re-grading ${r.regrading} items — takes a few seconds.`)
+      notify(`Target ROI set to ${r.target_roi_pct}%. Re-grading ${r.regrading} items — takes a few seconds.`)
     } catch (e) { alertOnce(e.message) }
   }
 
@@ -607,7 +609,7 @@ export default function App() {
   // a list of auction ids, so one press does the run.
   function handleCompsAllSaved() {
     const { ids } = unpricedAcross(importedAuctions, isClosed)
-    if (!ids.length) { alert('Every saved auction is already priced.'); return }
+    if (!ids.length) { notify('Every saved auction is already priced.'); return }
     return compsFor({ auctionIds: ids },
                     `${ids.length} saved auction${ids.length === 1 ? '' : 's'}`)
   }
@@ -622,7 +624,7 @@ export default function App() {
   async function compsFor(scope, where) {
     try {
       const peek = await repriceUnpriced({ ...scope, dryRun: true })
-      if (!peek.repricing) { alert('Every item in view already has a value.'); return }
+      if (!peek.repricing) { notify('Every item in view already has a value.'); return }
       const msg = `Look up sold comps for ${peek.repricing} unpriced items (${where}), using their `
         + `auction titles as-is?\n\nNo AI cost. At most ${peek.requests_estimate ?? peek.repricing} `
         + `SoldComps requests against your plan - identical titles share one. `
@@ -630,7 +632,7 @@ export default function App() {
         + `Progress shows in the bar at the top.`
       if (!window.confirm(msg)) return
       const r = await repriceUnpriced(scope)
-      alert(`Queued ${r.repricing} items.`)
+      notify(`Queued ${r.repricing} items.`)
       loadLots()
     } catch (e) { alertOnce(e.message) }
   }
@@ -638,7 +640,7 @@ export default function App() {
   async function handleInspectNoValue() {
     try {
       const peek = await reinspectNoComps(true)
-      if (!peek.lots) { alert('Every enriched item in an open auction already has a value.'); return }
+      if (!peek.lots) { notify('Every enriched item in an open auction already has a value.'); return }
       const cost = (peek.lots * 0.01).toFixed(2)
       const msg = `Price ${peek.lots} items individually — the ones with no value yet?\n\n`
         + `AI reads each one's full-size photo, identifies the items, and prices `
@@ -646,14 +648,14 @@ export default function App() {
         + `of API usage. Progress shows in the bar at the top.`
       if (!window.confirm(msg)) return
       const r = await reinspectNoComps()
-      alert(`Queued ${r.queued} items for inspection.`)
+      notify(`Queued ${r.queued} items for inspection.`)
     } catch (e) { alertOnce(e.message) }
   }
 
   async function handleFlushClosed() {
     try {
       const peek = await flushClosed(true)
-      if (!peek.lots) { alert('No items from closed auctions to flush.'); return }
+      if (!peek.lots) { notify('No items from closed auctions to flush.'); return }
       const msg = `Permanently delete ${peek.lots} items from closed auctions?\n\n`
         + `Their enrichment results (the AI calls you paid for) are deleted `
         + `with them. This can't be undone.\n\n`
@@ -661,7 +663,7 @@ export default function App() {
       if (!window.confirm(msg)) return
       beginBusy('flush', 'Flushing closed items…')   // moves on from "Counting…"
       const r = await flushClosed()
-      alert(`Flushed ${r.lots} items`
+      notify(`Flushed ${r.lots} items`
             + (r.auctions ? ` and removed ${r.auctions} empty closed auctions` : '')
             + '.')
       refreshAll()
@@ -806,7 +808,7 @@ export default function App() {
     if (!window.confirm(msg)) return
     try {
       const r = await importAllAuctions(ids, scanCategoryId, boloOnly)
-      alert(`Queued ${r.auctions} auctions for import.`)
+      notify(`Queued ${r.auctions} auctions for import.`)
     } catch (e) { alertOnce(e.message) }
   }
 
@@ -831,7 +833,7 @@ export default function App() {
     if (!window.confirm(msg)) return
     try {
       const r = await importAllAuctions(ids, scanCategoryId, false, scanSearchText)
-      alert(`Queued ${r.auctions} auctions for import.`)
+      notify(`Queued ${r.auctions} auctions for import.`)
     } catch (e) { alertOnce(e.message) }
   }
 
@@ -1496,6 +1498,7 @@ export default function App() {
   return (
     <div>
       <StatusBar onQuiet={refreshAll} onStatus={onStatus} />
+      <Notice />
       <div style={{ padding: isMobile ? '0.75rem' : '1.5rem 2rem',
                     maxWidth: 1500, margin: '0 auto' }}>
       <div style={isMobile ? undefined : { display: 'flex', alignItems: 'flex-end', gap: 28,
@@ -1544,17 +1547,18 @@ export default function App() {
           value={scan.search_text}
           onChange={(ev) => setScanField('search_text', ev.target.value)}
           placeholder="Keyword (auction name/content)…"
+          aria-label="Keyword"
           style={{ padding: 8, fontSize: 14, width: '100%', maxWidth: isMobile ? '100%' : 480,
                    boxSizing: 'border-box' }}
         />
         {/* Row 2: narrowing filters, evenly gapped */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          <select value={scan.category_id} onChange={(ev) => setScanField('category_id', ev.target.value)}
+          <select aria-label="Category" value={scan.category_id} onChange={(ev) => setScanField('category_id', ev.target.value)}
                   style={{ flex: isMobile ? '1 1 45%' : '0 1 auto', padding: 6, fontSize: 14, minWidth: 140 }}>
             <option value={-1}>All categories</option>
             {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
-          <select value={scan.auction_type} onChange={(ev) => setScanField('auction_type', ev.target.value)}
+          <select aria-label="Auction type" value={scan.auction_type} onChange={(ev) => setScanField('auction_type', ev.target.value)}
                   style={{ flex: isMobile ? '1 1 45%' : '0 1 auto', padding: 6, fontSize: 14, minWidth: 130 }}>
             <option value="ALL">All auction types</option>
             <option value="ONLINE">Online Only</option>
@@ -1562,7 +1566,7 @@ export default function App() {
             <option value="ABSENTEE">Absentee</option>
             <option value="LISTING">Listing Only</option>
           </select>
-          <select value={scanIsAnywhere ? 'CLOSING' : scan.status}
+          <select aria-label="Auction status" value={scanIsAnywhere ? 'CLOSING' : scan.status}
                   onChange={(ev) => setScanField('status', ev.target.value)}
                   disabled={scanIsAnywhere}
                   title={scanIsAnywhere ? 'Anywhere is locked to "Closing soon" so it can\'t return every auction on HiBid' : undefined}
@@ -1575,11 +1579,13 @@ export default function App() {
           <input
             value={scan.zip}
             onChange={(ev) => setScanField('zip', ev.target.value)}
-            placeholder="Zip (77058)"
+            placeholder="Zip, e.g. 77058…"
+            aria-label="Zip code"
+            name="zip" inputMode="numeric" autoComplete="postal-code"
             style={{ flex: isMobile ? '1 1 45%' : '0 1 auto', padding: 6, fontSize: 14,
                      minWidth: 90, maxWidth: 130, boxSizing: 'border-box' }}
           />
-          <select value={scan.radius_miles} onChange={(ev) => setScanField('radius_miles', ev.target.value)}
+          <select aria-label="Radius" value={scan.radius_miles} onChange={(ev) => setScanField('radius_miles', ev.target.value)}
                   style={{ flex: isMobile ? '1 1 45%' : '0 1 auto', padding: 6, fontSize: 14, minWidth: 100 }}>
             <option value={5}>5 miles</option>
             <option value={25}>25 miles</option>
@@ -1748,6 +1754,8 @@ export default function App() {
                          aria-label={`Select ${a.name} to forget it with others`} />
                   <button
                     data-track={a.favorite ? 'Unwatch auction house' : 'Watch auction house'}
+                    aria-label={`Watch ${a.auctioneer || 'this auction house'}`}
+                    aria-pressed={!!a.favorite}
                     className="bare"
                     onClick={() => toggleFavorite(a)}
                     disabled={!a.auctioneer_id}
@@ -1769,6 +1777,7 @@ export default function App() {
                     className="bare"
                     onClick={() => confirmForget(a)}
                     data-track="Forget auction"
+                    aria-label={`Forget ${a.name}`}
                     title="Forget this auction — it won't come back in future scans"
                     style={{
                       marginLeft: 'auto', padding: '0 2px', fontSize: 14,
@@ -1942,6 +1951,7 @@ export default function App() {
                     <button className="bare"
                             onClick={() => confirmForget(a)}
                             data-track="Forget auction"
+                            aria-label={`Forget ${a.name}`}
                             title="Forget this auction — it won't come back in future scans"
                             style={{ color: 'var(--muted)', padding: '0 2px' }}>
                       ✕

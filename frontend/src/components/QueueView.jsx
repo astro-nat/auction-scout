@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { notify } from '../lib/notice'
 import { fetchQueue, cancelJob, cancelEnrichment, moveQueuedJob, moveQueuedLot, moveJobItem, alertOnce } from '../api'
 import { jobProgress, taskLabel } from '../lib/queue'
 
@@ -68,7 +69,7 @@ export default function QueueView({ isMobile }) {
                         + 'The one in progress will finish.')) return
     try {
       const r = await cancelEnrichment()
-      alert(`Removed ${r.cancelled} items from the queue.`)
+      notify(`Removed ${r.cancelled} items from the queue.`)
     } catch (e) { alertOnce(e.message) }
   }
 
@@ -118,7 +119,7 @@ export default function QueueView({ isMobile }) {
                       </span>
                     )}
                     {!job.cancelled && (
-                      <button onClick={() => stopJob(job)}
+                      <button onClick={() => stopJob(job)} data-track="Queue: cancel job"
                               style={{ marginLeft: job.state === 'pending' && waitingJobs.length > 1 ? 0 : 'auto',
                                        fontSize: 12, padding: '2px 8px' }}>
                         Cancel

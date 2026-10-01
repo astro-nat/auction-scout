@@ -850,3 +850,31 @@ details.peek > summary:hover { color: var(--hover-ink); }
 /* Auction names: ink, not link green - green says gold mine. */
 a.auction-name { color: var(--text); font-weight: 600; }
 a.auction-name:hover { color: var(--hover-ink); }
+
+/* ===================== Touch, motion, phones ========================== */
+/* iOS zooms the page into any focused field under 16px. */
+@media (pointer: coarse) {
+  input, select, textarea { font-size: 16px; }
+  /* The ⋯ row menu and the toolbar menus are <summary>s: the 44px rule
+     for buttons missed them. */
+  .row-menu > summary { min-width: 44px; min-height: 44px; }
+  .picker > summary { min-height: 44px; display: flex; align-items: center; }
+}
+button, summary, a, input, select, label { touch-action: manipulation; }
+.picker .panel, .row-menu-panel { overscroll-behavior: contain; }
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation-duration: 3s; }
+  *, *::before, *::after { transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+  button:active:not(:disabled) { transform: none; }
+}
+
+/* Non-blocking notices, bottom centre. */
+.notice-wrap {
+  position: fixed; left: 0; right: 0; bottom: 16px; z-index: 1100;
+  display: flex; justify-content: center; pointer-events: none; padding: 0 16px;
+}
+.notice {
+  pointer-events: auto; display: flex; align-items: center; gap: 10px; max-width: 560px;
+  background: var(--surface); color: var(--text); border: 1px solid var(--border-strong);
+  border-radius: 6px; box-shadow: var(--shadow-pop); padding: 8px 8px 8px 14px; font-size: 14px;
+}

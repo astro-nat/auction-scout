@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { notify } from '../lib/notice'
 import { cancelEnrichment, cancelJob, fetchStatus } from '../api'
 import { etaLabel, sampleProgress } from '../lib/progress'
 
@@ -115,7 +116,7 @@ export default function StatusBar({ onQuiet, onStatus }) {
       text: `Queue: ${enrichment.queued}${mix}${lot}${stage}`,
       onCancel: async () => {
         const r = await cancelEnrichment()
-        alert(`Stopped ${r.cancelled} queued lots. The one in progress will finish.`)
+        notify(`Stopped ${r.cancelled} queued lots. The one in progress will finish.`)
       },
     })
   }
@@ -150,7 +151,7 @@ export default function StatusBar({ onQuiet, onStatus }) {
     const first = work.find((l) => l.total > 0)
     const pct = first ? Math.min(100, Math.round((first.current / first.total) * 100)) : null
     return (
-      <div ref={barRef} style={{ ...barStyle, padding: '4px 10px' }}>
+      <div ref={barRef} role="status" aria-live="polite" style={{ ...barStyle, padding: '4px 10px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {work.length > 0 && <span className="spinner" />}
           <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
@@ -174,7 +175,7 @@ export default function StatusBar({ onQuiet, onStatus }) {
   }
 
   return (
-    <div ref={barRef} style={barStyle}>
+    <div ref={barRef} role="status" aria-live="polite" style={barStyle}>
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 2 }}>
         <button type="button" onClick={() => setFolded(true)}
                 data-track="Hide status bar" aria-expanded="true"
@@ -209,6 +210,7 @@ export default function StatusBar({ onQuiet, onStatus }) {
               )}
               {l.onCancel && (
                 <button onClick={l.onCancel} title="Stop this — work already done is kept"
+                        aria-label={`Cancel: ${l.text}`} data-track="Cancel job (status bar)"
                         style={{ flexShrink: 0, fontSize: 12, padding: '2px 8px' }}>
                   Cancel
                 </button>
@@ -217,7 +219,8 @@ export default function StatusBar({ onQuiet, onStatus }) {
             {pct !== null && (
               // Full-width track under the text — a 90px sliver at the far
               // right was easy to miss, especially on a phone.
-              <div style={{
+              <div role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}
+                   aria-label={l.text} style={{
                 height: 8, borderRadius: 4, background: 'var(--badge-bg)',
                 overflow: 'hidden', marginTop: 4,
               }}>

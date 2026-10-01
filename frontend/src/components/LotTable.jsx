@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { notify } from '../lib/notice'
 import { enrichLot, compsLot, recheckLot, fetchLot, patchEnrichment, flagComp, enrichBatch, repriceSelected, setWatch, setHidden, hideLike, refreshBidsForLots, analyzeShippingForLots, alertOnce, parseUtc } from '../api'
 import { aiDone, rowAction } from '../lib/pricing'
 import { PAGE_SIZES, pageButtons, pageWindow, savePageSize, savedPageSize, searchMatches, showingText } from '../lib/paging'
@@ -824,7 +825,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     setQueuing(true)
     try {
       const r = await repriceSelected(unpricedShown.map((l) => l.lot_id))
-      if (r.already_running) alert('A re-price is already running; let it finish first.')
+      if (r.already_running) notify('A re-price is already running; let it finish first.')
       onRefresh?.()
     } catch (e) { alertOnce(e.message) }
     finally { setQueuing(false) }
@@ -858,7 +859,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     setQueuing(true)
     try {
       const r = await repriceSelected(targets.map((l) => l.lot_id))
-      if (r.already_running) alert('A re-price is already running; let it finish first.')
+      if (r.already_running) notify('A re-price is already running; let it finish first.')
       onRefresh?.()
     } catch (e) {
       alertOnce(e.message)
@@ -882,7 +883,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     try {
       const r = await enrichBatch(targets.map((l) => l.lot_id))
       onRefresh?.()
-      if (!r.queued) alert('Nothing to queue - those lots are already inspected or in progress.')
+      if (!r.queued) notify('Nothing to queue - those lots are already inspected or in progress.')
     } catch (e) {
       alertOnce(e.message)
     } finally {
@@ -911,7 +912,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
       const r = await enrichBatch(aiTargets.map((l) => l.lot_id))
       onRefresh?.()
       if (!r.queued) {
-        alert('Nothing to queue — those lots are already enriched or in progress.')
+        notify('Nothing to queue — those lots are already enriched or in progress.')
       }
     } catch (e) {
       // This had NO error handling — a failed request showed nothing at all.
@@ -941,7 +942,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     const ids = selectedInView
       .filter((l) => !['success', 'queued'].includes(l.enrichment?.status))
       .map((l) => l.lot_id)
-    if (!ids.length) { alert('Every selected lot is already priced or in progress.'); return }
+    if (!ids.length) { notify('Every selected lot is already priced or in progress.'); return }
     const cost = (ids.length * 0.005).toFixed(2)
     if (!window.confirm(`Price ${ids.length} selected lots?\n\nEach runs an AI pass and a comp `
                         + `lookup — roughly $${cost} of API usage, in the order shown.`)) return
@@ -958,7 +959,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
 
   async function handleBulkComps() {
     const ids = selectedUnpriced.map((l) => l.lot_id)
-    if (!ids.length) { alert('Every selected lot already has a value.'); return }
+    if (!ids.length) { notify('Every selected lot already has a value.'); return }
     const skipped = selectedInView.length - ids.length
     if (!window.confirm(`Look up sold comps for the ${ids.length} selected lots with no value yet, `
                         + `using their titles as-is?\n\nNo AI cost. At most ${ids.length} SoldComps `
@@ -967,7 +968,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     setQueuing(true)
     try {
       const r = await repriceSelected(ids)
-      if (r.already_running) alert('A re-price is already running; let it finish first.')
+      if (r.already_running) notify('A re-price is already running; let it finish first.')
       onRefresh?.()
     } catch (e) { alertOnce(e.message) }
     finally { setQueuing(false) }
@@ -986,7 +987,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     try {
       const plan = await call(ids, { dryRun: true })
       if (!plan.auctions) {
-        alert('None of the selected lots are in an open HiBid sale.\n\n'
+        notify('None of the selected lots are in an open HiBid sale.\n\n'
               + 'A sale that has already closed is left alone.')
         return
       }
@@ -1049,7 +1050,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
       ) : (
         <span style={{ color: 'var(--muted)' }}>Nothing to AI check at</span>
       )}
-      $<input type="number" min="0" value={aiMin}
+      $<input type="number" min="0" value={aiMin} aria-label="Lowest resale worth an AI check, in dollars"
               onChange={(ev) => setAiMin(ev.target.value)}
               title="Only lots priced at or above this"
               style={{ width: 56 }} />+
@@ -1145,18 +1146,18 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
   const go = (n) => { setPage(n); window.scrollTo?.({ top: 0 }) }
   const pager = pg.pages > 1 && (
     <nav className="pager" aria-label="Pages">
-      <button onClick={() => go(1)} disabled={pg.page === 1} title="First page"
+      <button onClick={() => go(1)} disabled={pg.page === 1} title="First page" aria-label="First page"
               data-track="First page">«</button>
-      <button onClick={() => go(pg.page - 1)} disabled={pg.page === 1} title="Previous page"
+      <button onClick={() => go(pg.page - 1)} disabled={pg.page === 1} title="Previous page" aria-label="Previous page"
               data-track="Previous page">‹</button>
       {pageButtons(pg.page, pg.pages).map((b, i) => (b === '…'
         ? <span key={`gap-${i}`} className="gap">…</span>
         : <button key={b} onClick={() => go(b)} className={b === pg.page ? 'current' : undefined}
                   aria-current={b === pg.page ? 'page' : undefined}
                   data-track="Page number">{b}</button>))}
-      <button onClick={() => go(pg.page + 1)} disabled={pg.page === pg.pages} title="Next page"
+      <button onClick={() => go(pg.page + 1)} disabled={pg.page === pg.pages} title="Next page" aria-label="Next page"
               data-track="Next page">›</button>
-      <button onClick={() => go(pg.pages)} disabled={pg.page === pg.pages} title="Last page"
+      <button onClick={() => go(pg.pages)} disabled={pg.page === pg.pages} title="Last page" aria-label="Last page"
               data-track="Last page">»</button>
     </nav>
   )
@@ -1191,6 +1192,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                   className="bare"
                   onClick={() => handleWatch(lot.lot_id, !lot.watched)}
                   data-track={lot.watched ? 'Stop watching lot' : 'Watch lot'}
+                  aria-label="Watch lot" aria-pressed={!!lot.watched}
                   title={lot.watched ? 'Watching — phone alert when closing (tap to stop)'
                                      : 'Watch: phone alert when this closes within 2 hours'}
                   style={{ fontSize: 16, padding: '0 4px 0 0',
@@ -2076,6 +2078,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
           {panel && <div style={{ flexBasis: '100%' }}>{panel}</div>}
           {(arrange !== 'auction' || filtersOpen) && (
           <select
+            aria-label="Sort lots"
             value={MOBILE_SORTS.findIndex((s) => s.key === sort.key && s.dir === sort.dir)}
             onChange={(ev) => {
               const s = MOBILE_SORTS[Number(ev.target.value)] ?? MOBILE_SORTS[0]
@@ -2101,6 +2104,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
             <select
               key={c.key}
               value={colFilters[c.key] ?? ''}
+              aria-label={`Filter by ${c.label}`}
               onChange={(ev) => setFilter(c.key, ev.target.value)}
               style={{ flex: '1 1 47%', padding: 6, fontSize: 14, maxWidth: '48%' }}
             >
@@ -2180,6 +2184,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                   className="bare"
                   onClick={() => handleWatch(lot.lot_id, !lot.watched)}
                   data-track={lot.watched ? 'Stop watching lot' : 'Watch lot'}
+                  aria-label="Watch lot" aria-pressed={!!lot.watched}
                   title={lot.watched
                     ? 'Watching — you get a phone alert when this closes within 2 hours (click to stop)'
                     : 'Watch: get a phone alert when this lot closes within 2 hours'}
@@ -2448,13 +2453,16 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                 <input
                   value={colFilters[c.key] ?? ''}
                   onChange={(ev) => setFilter(c.key, ev.target.value)}
-                  placeholder="search"
+                  placeholder="Search…"
+                  aria-label={`Filter by ${c.label}`}
+                  autoComplete="off" spellCheck={false}
                   style={{ width: '90%', minWidth: 60 }}
                 />
               ) : (
                 <select
                   value={colFilters[c.key] ?? ''}
                   onChange={(ev) => setFilter(c.key, ev.target.value)}
+                  aria-label={`Filter by ${c.label}`}
                   style={{ maxWidth: 110 }}
                 >
                   <option value="">all</option>

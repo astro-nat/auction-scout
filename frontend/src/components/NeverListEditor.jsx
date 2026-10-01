@@ -19,7 +19,7 @@ const box = { padding: '2px 4px', width: '100%', boxSizing: 'border-box' }
 
 function Preview({ result }) {
   if (!result) return null
-  if (result.error) return <div style={{ color: 'var(--bad)' }}>{result.error}</div>
+  if (result.error) return <div style={{ color: 'var(--error)' }}>{result.error}</div>
   return (
     <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
       Would hide {result.matched.toLocaleString()} lot{result.matched === 1 ? '' : 's'}
