@@ -1369,7 +1369,7 @@ export default function App() {
               <label style={{ ...panelRow, opacity: driveFrom ? 1 : 0.6 }}
                      title={driveFrom
                        ? `Pickup auctions more than this many minutes' drive from ${driveFrom.label || driveFrom.address}, one way. Never hidden: an auction with an open gold mine (worth the drive), one that ships, or one with no drive time yet.`
-                       : 'Set where you drive from first: Inventory, By auction view, "Set where you drive from".'}>
+                       : 'Set your address first: Inventory, By auction view, "Set your address".'}>
                 <input
                   type="checkbox"
                   checked={hideFar}

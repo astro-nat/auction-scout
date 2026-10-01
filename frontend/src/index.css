@@ -676,7 +676,7 @@ tr.row-addon td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 /* ===================== the one Inventory toolbar ===================== */
 
 .inv-toolbar {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px;
   margin: 0 0 12px; font-size: 13.5px;
 }
 .inv-toolbar > * { flex-shrink: 0; }
@@ -691,7 +691,10 @@ tr.row-addon td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 .inv-toolbar .picker > summary { display: inline-flex; align-items: center; padding: 0 12px; }
 .inv-toolbar label { font-size: 13.5px; }
 .inv-search {
-  display: flex; align-items: center; gap: 8px; width: 200px; height: 34px;
+  display: flex; align-items: center; gap: 8px; width: auto; height: 34px;
+  /* Starts small so the row fits on one line at 1280px, and grows into
+     whatever room is left. */
+  flex: 1 1 120px; max-width: 280px;
   padding: 0 10px; box-sizing: border-box; color: var(--muted);
   background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius);
 }
@@ -931,3 +934,7 @@ details.roi-peek > summary::-webkit-details-marker { display: none; }
   text-align: left; white-space: pre-line; color: var(--text); font-weight: 400;
 }
 .d-card .roi-peek-panel { right: 0; }
+/* The input's own intrinsic width (about 20 characters) set the search
+   box's minimum, which pushed the toolbar onto a second line at 1280px. */
+.inv-search { min-width: 120px; }
+.inv-search input { width: 100%; }

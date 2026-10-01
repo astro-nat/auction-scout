@@ -1385,11 +1385,15 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
       )}
       {arrange === 'auction' && groups.length > 1 && (
         <span className="group-all">
-          <button type="button" className="link-like" data-track="Open all auctions"
-                  onClick={() => setAllGroups(true)}>Open all</button>
-          <span aria-hidden="true">·</span>
-          <button type="button" className="link-like" data-track="Close all auctions"
-                  onClick={() => setAllGroups(false)}>Close all</button>
+          {/* One switch, not two links: the log had Open all used 0 times and
+              Close all once, and the pair cost the toolbar its one line. */}
+          {groups.every((g) => (liveView || g.hasGold) !== flippedGroups.has(g.auctionId ?? 'none')) ? (
+            <button type="button" className="link-like" data-track="Close all auctions"
+                    onClick={() => setAllGroups(false)}>Close all</button>
+          ) : (
+            <button type="button" className="link-like" data-track="Open all auctions"
+                    onClick={() => setAllGroups(true)}>Open all</button>
+          )}
         </span>
       )}
       {!isMobile && driveControl}
@@ -2064,7 +2068,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
         <circle cx="11" cy="11" r="7" /><path d="M20 20l-4-4" />
       </svg>
       <input type="search" value={search} onChange={(ev) => handleSearch(ev.target.value)}
-             placeholder="Search title, auction or lot #" aria-label="Search inventory" />
+             placeholder="Search lots…" title="Search titles, auction names and lot numbers" aria-label="Search inventory" />
     </label>
   )
   const priceButton = (unpricedShown.length > 0 || queuing) && (
@@ -2073,7 +2077,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
             data-track="Price N with comps (no AI)"
             title="The default: sold comps for every unpriced lot matching the filters, on each lot's own title. No AI cost.">
       {queuing ? <><span className="spinner" />Queuing…</>
-               : `Price ${unpricedShown.length.toLocaleString()} unpriced ${unpricedShown.length === 1 ? 'lot' : 'lots'}`}
+               : `Price ${unpricedShown.length.toLocaleString()} unpriced`}
     </button>
   )
 
@@ -2192,7 +2196,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                     title="The default: sold comps for every unpriced lot matching the filters, on each lot's own title. No AI cost."
                     style={{ flex: '1 1 100%', padding: 10, fontSize: 15 }}>
               {queuing ? <><span className="spinner" />Queuing…</>
-                       : `Price ${unpricedShown.length.toLocaleString()} unpriced ${unpricedShown.length === 1 ? 'lot' : 'lots'}`}
+                       : `Price ${unpricedShown.length.toLocaleString()} unpriced`}
             </button>
           )}
           {arrange !== 'auction' && aiCheck}

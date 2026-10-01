@@ -34,7 +34,7 @@ export default function DriveFrom({ driveFrom, available, onSave, onClear }) {
 
   const summary = driveFrom
     ? `From ${driveFrom.label || driveFrom.address}`
-    : 'Set where you drive from'
+    : 'Set your address'
 
   async function submit(ev) {
     ev.preventDefault()
