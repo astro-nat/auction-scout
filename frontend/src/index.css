@@ -939,3 +939,19 @@ details.roi-peek > summary::-webkit-details-marker { display: none; }
 .inv-search { min-width: 120px; }
 .inv-search input { width: 100%; }
 .notice > button { flex-shrink: 0; white-space: nowrap; }
+
+/* ===================== Phone: one bar ================================= */
+@media (max-width: 768px) {
+  .phone-bar { flex-basis: 100%; display: flex; gap: 8px; align-items: center; }
+  .phone-bar > button, .phone-bar .picker > summary { height: 44px; flex-shrink: 0; }
+  .phone-bar .picker > summary { width: 44px; justify-content: center; padding: 0; }
+  .more-dots { font-size: 22px; line-height: 1; letter-spacing: 1px; }
+  /* View tabs: underlined, short names, one row that can scroll. */
+  .views-phone {
+    display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 0; scrollbar-width: none;
+    margin: 4px -12px 8px; padding: 0 12px; border-bottom: 1px solid var(--border);
+  }
+  .views-phone .subtab { font-size: 14px; padding: 10px 10px; flex-shrink: 0; white-space: nowrap; }
+  .gold-summary { font-size: 13px; padding: 8px 12px; margin-bottom: 8px; }
+}
+@media (max-width: 768px) { .phone-bar .filters-hidden { display: none; } }

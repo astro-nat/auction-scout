@@ -2064,7 +2064,22 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
 
   const goldGroups = groups.filter((g) => g.hasGold)
   const addonTotal = groups.reduce((n, g) => n + g.addonCount, 0)
-  const goldSummary = arrange === 'auction' && goldGroups.length > 0 && (
+  const addonBarControl = (
+      <label className="addon-bar"
+             title="At an auction where you already have a gold mine, a lot with at least this ROI is worth adding - you're making the trip anyway">
+        Add-on bar{' '}
+        <NumberField step="10" value={addonFloor} onCommit={setAddonFloor}
+                     data-track="Add-on ROI bar" aria-label="Add-on bar, % ROI"
+                     style={{ width: 56 }} />
+        {' '}% ROI
+      </label>
+  )
+  const goldSummary = arrange === 'auction' && goldGroups.length > 0 && (isMobile ? (
+    <div className="gold-summary">
+      <strong>Gold at {goldGroups.length} {goldGroups.length === 1 ? 'auction' : 'auctions'}</strong>
+      {addonTotal ? ` · ${addonTotal} ${addonTotal === 1 ? 'add-on' : 'add-ons'}` : ''}
+    </div>
+  ) : (
     <div className="gold-summary">
       <strong>Gold mines at {goldGroups.length} {goldGroups.length === 1 ? 'auction' : 'auctions'}.</strong>{' '}
       {addonTotal
@@ -2079,7 +2094,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
         {' '}% ROI
       </label>
     </div>
-  )
+  ))
   // Column filters are set in "All lots" and have no widgets here, so say
   // when one is quietly narrowing this view.
   const columnFilterNote = arrange === 'auction' && activeFilterCount > 0 && (
@@ -2149,27 +2164,29 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
   if (isMobile) {
     return (
       <>
-        {/* The phone's controls, as the design has them: search and Filters
-            on one row; the view, drive-from and More actions on the next;
-            the price button; everything else behind Filters. */}
+        {/* One bar, then the lots: search, Filters and a ⋯ menu share a
+            row; how lots are arranged, the drive-from address, scope, Gold
+            only and the add-on bar sit behind Filters. Two rows of controls
+            and a full-width button used to come before the first lot. */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
-          <input
-            type="search"
-            value={search}
-            onChange={(ev) => handleSearch(ev.target.value)}
-            placeholder="Search lots"
-            aria-label="Search inventory"
-            style={{ flex: '1 1 0', minWidth: 0, padding: 8, fontSize: 16 }}
-          />
-          {phoneFilters ?? toolbar}
-          <div style={{ flexBasis: '100%', display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-            {arrangeControl}
+          <div className="phone-bar">
+            <input
+              type="search"
+              value={search}
+              onChange={(ev) => handleSearch(ev.target.value)}
+              placeholder="Search lots…"
+              aria-label="Search inventory"
+              style={{ flex: '1 1 0', minWidth: 0, padding: 8, fontSize: 16 }}
+            />
+            {phoneFilters ?? toolbar}
             {toolbarEnd}
           </div>
-          {filtersOpen && phoneBehindFilters && (
+          {(filtersOpen || !phoneFilters) && (
             <div style={{ flexBasis: '100%', display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+              {arrangeControl}
               {driveControl}
               {phoneBehindFilters}
+              {arrange === 'auction' && goldGroups.length > 0 && addonBarControl}
               {arrange !== 'auction' && toolbarAllLots}
             </div>
           )}
@@ -2218,7 +2235,9 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
               Clear {activeFilterCount} filter{activeFilterCount === 1 ? '' : 's'}
             </button>
           )}
-          {(unpricedShown.length > 0 || queuing) && (
+          {/* By auction, each auction's header has its own Price button; the
+              full-width one would only push the lots down. */}
+          {arrange !== 'auction' && (unpricedShown.length > 0 || queuing) && (
             <button className="primary" onClick={handleCompsMatching}
                     disabled={queuing}
                     data-track="Price N with comps (no AI)"

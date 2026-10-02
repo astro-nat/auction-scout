@@ -1215,7 +1215,9 @@ export default function App() {
               the page is the table's own "Price N unpriced lots", which prices
               exactly what the filters show. These reach past the filters. */}
           <details className="picker" style={{ position: 'relative', marginLeft: isMobile ? 0 : 'auto' }}>
-            <summary>More actions ▾</summary>
+            <summary aria-label="More actions" data-track="More actions">
+              {isMobile ? <span aria-hidden="true" className="more-dots">⋯</span> : 'More actions ▾'}
+            </summary>
             <div className="panel" style={{ display: 'flex', flexDirection: 'column', gap: 6,
                                             left: isMobile ? 0 : 'auto', right: isMobile ? 'auto' : 0 }}
                  onClick={(ev) => { if (ev.target.closest('button')) ev.currentTarget.closest('details').open = false }}>
@@ -1275,7 +1277,7 @@ export default function App() {
                   title="Every hide rule, the gold-mine ROI target, the never list, and clean-up"
                   style={{ fontSize: 13, padding: '4px 10px' }}>
             Filters{activeRuleCount ? ` · ${activeRuleCount} on` : ''}{categoryFilter ? ` · ${categoryFilter}` : ''}
-            {hiddenCount > 0 && <span style={{ color: 'var(--muted)', fontWeight: 400 }}> · {hiddenCount.toLocaleString()} hidden</span>}
+            {hiddenCount > 0 && <span className="filters-hidden" style={{ color: 'var(--muted)', fontWeight: 400 }}> · {hiddenCount.toLocaleString()} hidden</span>}
             {' '}{filtersOpen ? '▴' : '▾'}
           </button>
   </>)
@@ -1481,19 +1483,22 @@ export default function App() {
   // on desktop they sit in the header row beside the tabs, as the design
   // has them, which gives the page back a whole row.
   const viewSwitch = (TABS.find((t) => t.views.includes(view)) ?? TABS[0]).views.length > 1 && (
-      <div className={isMobile ? undefined : 'views-inline'}
-           style={isMobile ? { display: 'flex', flexWrap: 'nowrap', overflowX: 'auto', gap: 6,
-                               margin: '10px -12px 12px', padding: '0 12px 2px',
-                               scrollbarWidth: 'none' } : undefined}>
+      <div className={isMobile ? 'views-inline views-phone' : 'views-inline'}>
         {(TABS.find((t) => t.views.includes(view)) ?? TABS[0]).views.map((v) => (
           <button
             key={v}
             aria-current={view === v ? 'page' : undefined}
             className={`subtab${view === v ? ' active' : ''}`}
             onClick={() => setView(v)}
-            style={isMobile ? { fontSize: 14, padding: '7px 14px', flexShrink: 0, whiteSpace: 'nowrap' } : undefined}
           >
-            {{
+            {isMobile ? {
+              auctions: 'Search',
+              saved: `Imported ${importedAuctions.length}`,
+              items: `Inventory ${(tabCounts.items ?? lotTotal).toLocaleString()}`,
+              watched: `Watched ${(tabCounts.watched ?? 0).toLocaleString()}`,
+              live: liveIds.length ? `● Live ${liveIds.length}` : 'Live',
+              queue: queueN ? `Queue ${queueN.toLocaleString()}` : 'Queue',
+            }[v] : {
               auctions: 'Search Auctions',
               saved: `Imported Auctions (${importedAuctions.length})`,
               items: `My Inventory (${(tabCounts.items ?? lotTotal).toLocaleString()})`,
