@@ -61,6 +61,10 @@ def due(db, now=None):
                       models.Auction.drive_minutes < MAX_DRIVE_MINUTES,
                       open_state.still_open(now),
                       or_(models.Auction.pickup_checked_at.is_(None),
+                          # Read before ship_only existed: read again. Not
+                          # left to a startup migration, which skips itself
+                          # quietly when the worker holds the table.
+                          models.Auction.ship_only.is_(None),
                           models.Auction.pickup_checked_at < now - REFRESH_AFTER))
               .all())
 
@@ -97,7 +101,8 @@ def refresh(db) -> int:
                 if lot.enrichment is not None and lot.enrichment.est_resale:
                     _apply_roi(lot, lot.enrichment)
         db.commit()
-        logger.info("Pickup info: asked about %d auctions", len(rows))
+        print(f"Pickup info: read {len(rows)} auctions, "
+              f"{sum(1 for a in rows if a.ship_only)} ship-only; lots re-graded")
         return len(rows)
     finally:
         _lock.release()

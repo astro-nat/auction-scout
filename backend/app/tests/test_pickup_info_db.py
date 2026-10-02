@@ -56,3 +56,19 @@ def test_only_auctions_within_45_minutes_are_asked(db, monkeypatch):
     asked.clear()
     pickup.refresh(db)
     assert asked == []
+
+
+def test_an_auction_read_before_ship_only_existed_is_read_again(db, monkeypatch):
+    a = _sale(db, NEAR, 24)
+    a.pickup_info = "Shipping only."
+    a.pickup_checked_at = datetime.utcnow()      # checked minutes ago...
+    db.commit()                                   # ...but ship_only still NULL
+
+    async def fake_fetch(client, ids):
+        return {i: {"pickup_info": "Shipping only.", "address": None, "city": None,
+                    "state": None, "zip": None} for i in ids}
+
+    monkeypatch.setattr("app.services.hibid.fetch_pickup", fake_fetch)
+    pickup.refresh(db)
+    db.expire_all()
+    assert db.get(models.Auction, a.id).ship_only is True
