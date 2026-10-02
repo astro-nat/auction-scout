@@ -1546,7 +1546,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     const a = g.auction
     const meta = [
       a ? [a.city, a.state].filter(Boolean).join(', ') : '',
-      a?.source === 'Local Pickup' ? 'local pickup' : a?.source === 'Ship' ? 'ships' : '',
+      a?.ship_only ? 'ships only' : a?.source === 'Local Pickup' ? 'local pickup' : a?.source === 'Ship' ? 'ships' : '',
       a?.buyer_premium_mult ? `${Math.round((a.buyer_premium_mult - 1) * 100)}% buyer's premium` : '',
     ].filter(Boolean).join(' · ')
     // Where every lot of this auction is: on screen, folded below, or kept
