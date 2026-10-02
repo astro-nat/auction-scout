@@ -9,6 +9,7 @@ drive-from address, still open, and not asked in the last REFRESH_AFTER.
 
 import asyncio
 import logging
+import re
 import threading
 from datetime import datetime, timedelta, timezone
 
@@ -22,6 +23,26 @@ MAX_DRIVE_MINUTES = 45
 # Houses edit pickup times as a sale goes on ("pickup moved to Saturday").
 REFRESH_AFTER = timedelta(hours=12)
 _lock = threading.Lock()
+
+# "Shipping only.", "No local pickup", "We do not offer pickup", "Ship only".
+_SHIP_ONLY_RE = re.compile(
+    r"\b(shipping only|ship only|ships only|no (local )?pick[ -]?ups?|"
+    r"(do not|don't|does not) (offer|allow|have) (local )?pick[ -]?up)\b",
+    re.IGNORECASE)
+
+
+def is_ship_only(text) -> bool:
+    return bool(text and _SHIP_ONLY_RE.search(text))
+
+
+def will_pick_up(auction) -> bool:
+    """You'd collect this sale's lots yourself: it is within driving reach
+    and its pickup text doesn't rule pickup out. A lot tagged "Ship" there
+    was being charged freight you would never pay."""
+    if auction is None or getattr(auction, "ship_only", None):
+        return False
+    minutes = getattr(auction, "drive_minutes", None)
+    return minutes is not None and minutes < MAX_DRIVE_MINUTES
 
 
 def _utcnow() -> datetime:
@@ -60,14 +81,21 @@ def refresh(db) -> int:
 
         got = asyncio.run(_fetch())
         now = _utcnow()
+        from ..workers.enrich import _apply_roi
         for a in rows:
             info = got.get(a.hibid_id)
             if info is None:
                 continue
             a.pickup_info = info["pickup_info"] or None
+            a.ship_only = is_ship_only(a.pickup_info)
             a.address = a.address or info["address"]
             a.zip = a.zip or info["zip"]
             a.pickup_checked_at = now
+            # Whether you'd pick up decides the freight in each lot's cost;
+            # re-grade them now (arithmetic only - no AI, no comps).
+            for lot in a.lots:
+                if lot.enrichment is not None and lot.enrichment.est_resale:
+                    _apply_roi(lot, lot.enrichment)
         db.commit()
         logger.info("Pickup info: asked about %d auctions", len(rows))
         return len(rows)

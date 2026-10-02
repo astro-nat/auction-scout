@@ -270,11 +270,14 @@ function RoiPeek({ text, children }) {
   )
 }
 
-function roiTooltip(lot, e) {
+function roiTooltip(lot, e, auction) {
   if (e.est_roi == null) return undefined
   const lines = [`Return on the all-in cost, not the hammer price.`]
   if (e.all_in_cost != null) {
-    const pickup = /pickup/i.test(lot.source || '')
+    // Same rule as the backend's pickup.will_pick_up: within 45 minutes and
+    // not ship-only, you collect it - whatever the lot's own tag says.
+    const pickup = !auction?.ship_only && ((auction?.drive_minutes != null && auction.drive_minutes < 45)
+      || /pickup/i.test(lot.source || ''))
     lines.push(`All-in ${money(e.all_in_cost)} = bid ${money(lot.est_cost)} (w/ premium + tax)`
       + (pickup ? ` + packing` : ` + freight in + packing`))
     lines.push(pickup
@@ -1515,6 +1518,9 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
   // house's own pickup text (fetched only within 45 minutes) and the
   // address, opening directions in Maps.
   function pickupLine(a) {
+    if (a?.ship_only) {
+      return <div className="pickup-info"><strong>Ships only</strong> - no pickup at this sale</div>
+    }
     if (!a?.pickup_info || a.drive_minutes == null || a.drive_minutes >= 45) return null
     const where = [a.address, a.city, a.state, a.zip].filter(Boolean).join(', ')
     const first = a.pickup_info.split(/\r?\n/).find((l) => l.trim()) || a.pickup_info
@@ -1571,7 +1577,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
               <span className="group-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
               <strong>{g.name}</strong>
             </button>
-            {g.auction?.drive_minutes != null && (
+            {g.auction?.drive_minutes != null && !g.auction?.ship_only && (
               <span className="group-drive"
                     title={`One way from ${driveFrom?.label || driveFrom?.address || 'your address'}, typical traffic`}>
                 <CarIcon /> {formatDrive(g.auction.drive_minutes)}
@@ -1973,7 +1979,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
         <td className="num">{resaleCell(lot, e, edited)}</td>
         <td className="num">
           {roi == null ? <span className={`d-roi d-roi-${kind}`}>—</span> : (
-            <RoiPeek text={roiTooltip(lot, e)}>
+            <RoiPeek text={roiTooltip(lot, e, auctions[lot.auction_id])}>
               <span className={`d-roi d-roi-${kind}`}>{roi}%</span>
             </RoiPeek>
           )}
@@ -2037,7 +2043,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
             {ev && isPaleEvidence(ev) && <span style={{ color: 'var(--warn)' }}> ({EVIDENCE_LABEL[ev] || ev})</span>}
           </span>
           {roi != null && (
-            <RoiPeek text={roiTooltip(lot, e)}>
+            <RoiPeek text={roiTooltip(lot, e, auctions[lot.auction_id])}>
               <span className={`d-roi d-roi-${kind}`}>ROI {roi}%</span>
             </RoiPeek>
           )}
@@ -2048,16 +2054,28 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
           </div>
         )}
         <div className="d-card-tags">{lotTags(lot, e)}</div>
-        {e.est_resale != null && (
-          <CompsPeek lot={lot} e={e} onLotUpdated={onLotUpdated}
-                     label={`${ev ? (EVIDENCE_LABEL[ev] || ev) : 'comps'}${e.comp_count ? ` · ${e.comp_count}` : ''}`}
-                     labelStyle={{ fontSize: 13, color: ev && isPaleEvidence(ev) ? 'var(--warn)' : 'var(--muted)' }} />
-        )}
-        <div className="d-card-actions">
-          {actionableButton(lot, { flex: 1, padding: 8 }) || <span style={{ flex: 1 }} />}
-          {starButton(lot)}
-          {rowMenu(lot)}
-        </div>
+        {(() => {
+          const peek = e.est_resale != null && (
+            <CompsPeek lot={lot} e={e} onLotUpdated={onLotUpdated}
+                       label={`${ev ? (EVIDENCE_LABEL[ev] || ev) : 'comps'}${e.comp_count ? ` · ${e.comp_count}` : ''}`}
+                       labelStyle={{ fontSize: 13, color: ev && isPaleEvidence(ev) ? 'var(--warn)' : 'var(--muted)' }} />
+          )
+          const act = actionableButton(lot, { flex: 1, padding: 8 })
+          // With nothing to press (an AI-checked gold mine, say), the star
+          // and menu ride on the comps line instead of a row of their own.
+          return act ? (
+            <>
+              {peek}
+              <div className="d-card-actions">{act}{starButton(lot)}{rowMenu(lot)}</div>
+            </>
+          ) : (
+            <div className="d-card-actions">
+              <div style={{ flex: 1, minWidth: 0 }}>{peek}</div>
+              {starButton(lot)}
+              {rowMenu(lot)}
+            </div>
+          )
+        })()}
       </div>
     )
   }
@@ -2439,7 +2457,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
               <td className="num" style={cell}>
                 {gold ? <span className="price-sticker">{money(e.max_bid)}</span> : money(e.max_bid)}
               </td>
-              <td className="num" title={roiTooltip(lot, e)}
+              <td className="num" title={roiTooltip(lot, e, auctions[lot.auction_id])}
                   style={{ ...cell,
                            cursor: e.est_roi != null ? 'help' : undefined,
                            color: e.est_roi == null ? undefined

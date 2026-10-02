@@ -955,3 +955,7 @@ details.roi-peek > summary::-webkit-details-marker { display: none; }
   .gold-summary { font-size: 13px; padding: 8px 12px; margin-bottom: 8px; }
 }
 @media (max-width: 768px) { .phone-bar .filters-hidden { display: none; } }
+
+/* Long BOLO badges ("BOLO · Designer luxury (Gucci/Prada/…)") wrap instead
+   of pushing a phone page 100px wider than the screen. */
+.badge { white-space: normal; overflow-wrap: anywhere; max-width: 100%; }

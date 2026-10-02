@@ -34,6 +34,9 @@ class Auction(Base):
     # services/pickup.MAX_DRIVE_MINUTES: the ones you'd actually drive to.
     pickup_info = Column(Text)
     pickup_checked_at = Column(DateTime)
+    # The pickup text says there is no pickup ("Shipping only."), whatever
+    # HiBid's Local Pickup tag says. NULL = not read yet.
+    ship_only = Column(Boolean)
     # Where the sale is, from the scan. HiBid sends 0,0 when it can't place
     # an auction; drive.usable_coords screens that out.
     geo_lat = Column(Float)

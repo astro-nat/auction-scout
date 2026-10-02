@@ -119,6 +119,9 @@ def _house_freight(auction, small_parcel: float):
     return q if q >= small_parcel else None
 
 
+_RED_FLAG_RE = re.compile(r"broken|damaged|for parts|untested|unknown condition", re.IGNORECASE)
+
+
 def _inbound_shipping(lot: models.Lot) -> float:
     """What the auction house charges to get this lot to you.
 
@@ -127,8 +130,11 @@ def _inbound_shipping(lot: models.Lot) -> float:
     prices each lot as if you bought only that one.
     """
     auction = lot.auction
+    from ..services.pickup import will_pick_up
+    if will_pick_up(auction):
+        return 0.0          # within reach and pickup offered: you collect it
     source = (lot.source or (auction.source if auction else None) or "").lower()
-    if "pickup" in source:
+    if "pickup" in source and not getattr(auction, "ship_only", None):
         return 0.0          # local pickup — you collect it, nothing to pay
     tier = lot.logistics_ease or "NEUTRAL"
     quoted = getattr(auction, "ship_cost_estimate", None) if auction else None
@@ -902,8 +908,9 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
     Always compute the ceiling when we have a resale estimate — even on
     red-flagged lots, knowing max_bid is useful context. Red flags and
     unreachable pickups just can't be GOLD MINEs."""
-    red_flag = e.verdict in ("broken, damaged, or for parts",
-                             "untested or unknown condition")
+    # Matched on the words, not the exact phrase: the AI also writes
+    # "damaged, or for parts", which slipped past as a GOLD MINE.
+    red_flag = bool(e.verdict and _RED_FLAG_RE.search(e.verdict))
     if e.est_resale:
         # Everything logistics costs on this lot: freight in from the
         # auction house, plus packing and fee drag on the way back out.

@@ -147,6 +147,7 @@ class AuctionOut(BaseModel):
     lot_count: Optional[int] = None
     lots_missing_open: Optional[int] = None   # open on HiBid, not on file (last full read)
     pickup_info: Optional[str] = None         # pickup days/hours, for auctions you'd drive to
+    ship_only: Optional[bool] = None          # pickup text says shipping only
     city: Optional[str] = None
     state: Optional[str] = None
     source: Optional[str] = None

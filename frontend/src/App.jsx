@@ -41,7 +41,7 @@ const panelRow = { display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wra
 // minutes, the same reach as the pickup info (services/pickup.py). "22 h
 // drive" on a ship-only sale is noise. The sort still uses every time.
 const MAX_DRIVE_MINUTES = 45
-const nearEnough = (a) => a.drive_minutes != null && a.drive_minutes <= MAX_DRIVE_MINUTES
+const nearEnough = (a) => !a.ship_only && a.drive_minutes != null && a.drive_minutes <= MAX_DRIVE_MINUTES
 const placeOf = (a) => [a.city, a.state].filter(Boolean).join(', ') || '—'
 // When an auction closes, to the minute: you sort and plan by it.
 const CLOSE_FMT = new Intl.DateTimeFormat(undefined, { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' })
@@ -773,6 +773,8 @@ export default function App() {
   // Houston auction that's actually ship-only was labeled "(Local Pickup)".
   // Once the AI has read the terms, its answer wins.
   const fulfillment = (a) => {
+    // The house's own pickup text beats HiBid's Local Pickup tag.
+    if (a.ship_only) return 'Ships only'
     if (a.ship_cost_estimate != null) return 'Ships'
     if (a.ship_summary && /pickup only|no shipping/i.test(a.ship_summary)) return 'Pickup only'
     return a.source

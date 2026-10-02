@@ -11,7 +11,7 @@
 export function farAuctionIds(auctions, maxMinutes, worthTheTrip = new Set()) {
   const limit = Number(maxMinutes)
   return new Set(auctions
-    .filter((a) => a && a.source !== 'Ship' && a.drive_minutes != null
+    .filter((a) => a && a.source !== 'Ship' && !a.ship_only && a.drive_minutes != null
                    && Number(a.drive_minutes) > limit && !worthTheTrip.has(a.id))
     .map((a) => a.id))
 }
@@ -20,6 +20,6 @@ export function farAuctionIds(auctions, maxMinutes, worthTheTrip = new Set()) {
 // count - so "kept" is said, not silent.
 export function keptForGold(auctions, maxMinutes, worthTheTrip) {
   const limit = Number(maxMinutes)
-  return auctions.filter((a) => a && a.source !== 'Ship' && a.drive_minutes != null
+  return auctions.filter((a) => a && a.source !== 'Ship' && !a.ship_only && a.drive_minutes != null
     && Number(a.drive_minutes) > limit && worthTheTrip.has(a.id)).length
 }

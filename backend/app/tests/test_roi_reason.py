@@ -102,3 +102,12 @@ def test_reason_refreshes_when_the_gate_changes():
     enrich._apply_roi(lot, e)
     assert e.roi_status == "GOLD MINE"
     assert e.roi_reason is None                   # stale reason cleared
+
+
+def test_damaged_in_any_wording_is_a_red_flag():
+    """The AI wrote "damaged, or for parts" on an 18K ring that then graded
+    GOLD MINE at 718%: the gate only knew the exact phrase."""
+    lot, e = _lot()
+    _grade(lot, e, verdict="damaged, or for parts")
+    assert e.roi_status == "PASS"
+    assert e.roi_reason.startswith("condition red flag")

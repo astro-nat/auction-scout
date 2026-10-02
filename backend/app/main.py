@@ -173,6 +173,11 @@ _MIGRATIONS = [
     "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS lots_missing_open INTEGER",
     "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS pickup_info TEXT",
     "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS pickup_checked_at TIMESTAMP",
+    "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS ship_only BOOLEAN",
+    # Pickup text read before ship_only existed is read again, once: the
+    # flag is set (true or false) by that read, so this then matches nothing.
+    "UPDATE auctions SET pickup_checked_at = NULL "
+    "WHERE ship_only IS NULL AND pickup_checked_at IS NOT NULL",
     "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS live_opt_out BOOLEAN DEFAULT FALSE",
     "ALTER TABLE lots ADD COLUMN IF NOT EXISTS max_passed_alert_at TIMESTAMP",
 ]
