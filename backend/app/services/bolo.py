@@ -99,9 +99,14 @@ DEFAULT_BOLO_PATHS: List[Path] = [
     # scanned - which means a real Rolex now lands here and is underpriced.
     # Restore it from git the day watches start turning up.
     _DATA_DIR / "watch_accessories_bolo.json",
-    # designer_eyewear and musical_instruments were dropped beside it, for
-    # the same reason and with the same caveat: Chrome Hearts and Tom Ford
-    # now fall through to the generic "Designer luxury" clothing entry.
+    # designer_eyewear was dropped beside it, for the same reason and with
+    # the same caveat: Chrome Hearts and Tom Ford now fall through to the
+    # generic "Designer luxury" clothing entry.
+    # Musical instruments came back on request (2026-10-01), widened from
+    # shippable gear to guitars, amps, synths, horns and drums - pickup
+    # within 45 minutes makes the bulky ones fair game. Loads BEFORE
+    # auto_parts so "Fender Stratocaster" can't be read as a car fender.
+    _DATA_DIR / "musical_instruments_bolo.json",
     _DATA_DIR / "camera_equipment_bolo.json",
     _DATA_DIR / "auto_parts_bolo.json",
     _DATA_DIR / "lightweight_collectibles_bolo.json",
@@ -1251,6 +1256,58 @@ _BRAND_ALIASES: Dict[str, List[str]] = {
         "ortofon concorde",
         # "shure" already aliased on microphones, "stanton"
         # / "audio-technica" model-context matched.
+    ],
+    # --- Big instruments (2026-10-01). Every pattern names the instrument
+    # or a model: "fender" is a car part, "gibson" an appliance maker,
+    # "martin" and "taylor" people, "yamaha" outboards and motorcycles.
+    "Guitars and basses (name brands)":       [
+        "fender stratocaster", "fender strat", "fender telecaster", "fender tele",
+        "fender jazzmaster", "fender jaguar", "fender mustang guitar",
+        "fender precision bass", "fender jazz bass", "fender guitar", "fender bass",
+        "fender acoustic", "gibson les paul", "gibson sg", "gibson es-335",
+        "gibson flying v", "gibson explorer", "gibson j-45", "gibson guitar",
+        "martin guitar", "c.f. martin", "cf martin", "martin d-28", "martin d-18",
+        "taylor guitar", "taylor acoustic", "taylor gs mini", "gretsch guitar",
+        "rickenbacker", "prs guitar", "paul reed smith", "epiphone", "squier",
+        "ibanez guitar", "ibanez bass", "guild guitar", "schecter guitar", "jackson guitar",
+        "esp guitar", "music man stingray", "danelectro",
+    ],
+    "Guitar and bass amplifiers":             [
+        "marshall amp", "marshall jcm", "marshall head", "marshall combo",
+        "marshall cabinet", "marshall 1960", "fender amp", "fender deluxe reverb",
+        "fender twin reverb", "fender blues junior", "fender hot rod", "fender bassman",
+        "fender princeton", "vox ac30", "vox ac15", "mesa boogie", "mesa/boogie",
+        "orange amp", "orange rockerverb", "peavey 6505", "peavey 5150", "ampeg",
+        "boss katana", "guitar amp", "bass amp", "guitar amplifier", "bass amplifier",
+    ],
+    "Synthesizers and keyboards":             [
+        # Bare "moog" is MOOG suspension parts - a big auto brand.
+        "moog synthesizer", "minimoog", "moog subsequent", "moog grandmother",
+        "moog mother-32", "moog sub 37", "moog matriarch", "korg minilogue", "korg ms-20", "korg triton", "korg kronos",
+        "roland juno", "roland jupiter", "roland jd-800", "roland fantom",
+        "nord stage", "nord electro", "nord lead", "nord piano", "yamaha dx7",
+        "yamaha motif", "sequential prophet", "dave smith", "arturia microfreak",
+        "arturia minibrute", "synthesizer", "analog synth", "digital piano",
+    ],
+    "Band instruments (brass and woodwind)":  [
+        "selmer saxophone", "selmer mark vi", "selmer super action", "selmer clarinet",
+        "yamaha saxophone", "yamaha trumpet", "yamaha clarinet", "yamaha flute",
+        "bach stradivarius", "vincent bach", "conn trombone", "conn saxophone",
+        "king trombone", "buffet clarinet", "buffet crampon", "yanagisawa",
+        "keilwerth", "alto saxophone", "tenor saxophone", "soprano saxophone",
+        "baritone saxophone",
+    ],
+    "Drums and cymbals":                      [
+        "zildjian", "sabian", "paiste", "ludwig drum", "ludwig snare",
+        "ludwig supraphonic", "ludwig black beauty", "pearl drum", "pearl snare",
+        "dw drums", "gretsch drums", "tama drum", "roland v-drums", "roland td-",
+        "alesis drum", "drum set", "drum kit", "snare drum",
+    ],
+    "Musical instruments (general)":          [
+        "electric guitar", "acoustic guitar", "bass guitar", "classical guitar",
+        "saxophone", "trumpet", "trombone", "clarinet", "violin", "cello",
+        "upright bass", "banjo", "mandolin", "french horn", "euphonium", "tuba",
+        "accordion", "harmonium", "dulcimer", "xylophone", "glockenspiel",
     ],
     "Premium ukuleles":                       [
         "kamaka", "koaloha", "kanile'a", "kanilea",
