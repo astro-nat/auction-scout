@@ -72,6 +72,10 @@ MIN_DESC_FOR_TEXT_PASS = 80     # below this the description carries no signal
 # median lot's all-in cost and swamped everything the ROI was meant to show.
 LOGISTICS_COST = {"EASY": 3.50, "NEUTRAL": 6.50, "HARD": 21.00}
 
+# Least a gold mine must clear if won at the max bid (the user's call,
+# 2026-10-03: "add the $10 minimum").
+MIN_GOLD_PROFIT = float(os.environ.get("MIN_GOLD_PROFIT", "10"))
+
 # The audit sweep promotes thin-evidence lots (no comps, value from the
 # itemized vision pass) when at least this much profit is on the table —
 # a half-cent audit isn't worth spending on a $4 pile.
@@ -977,10 +981,18 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
         # the item the comps describe, whatever they say it's worth.
         fk = funko.assess(f"{lot.title or ''} {lot.description or ''}")
         not_genuine = bool(fk and fk["block"])
+        # A gold mine has to be worth the trip: what it clears if you win it
+        # at your max bid. The Rare Estate audit had 43 of 58 gold mines
+        # under $10 each at max - costume pieces resold for $18-22 - which
+        # made the badge mean "cheap right now", not "worth buying".
+        acq = financials.acquisition_multiplier(premium)
+        profit_at_max = (float(e.est_resale) * (1 - financials.PLATFORM_FEE)
+                         - (float(lead.max_bid) * acq + penalty))
+        small_win = lead.status == "GOLD MINE" and profit_at_max < MIN_GOLD_PROFIT
         e.roi_status = ("PASS" if (red_flag or lot.unreachable_pickup
                                    or titled_vehicle or not_genuine
                                    or identity_uncertain
-                                   or thin_evidence or demoted)
+                                   or thin_evidence or demoted or small_win)
                         else lead.status)
         if demoted:
             # The auditor rejected this number and offered no replacement.
@@ -1012,6 +1024,9 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
                             "the badge needs 2 agreeing")
         elif demoted:
             e.roi_reason = "audit demoted the value (see its note)"
+        elif small_win:
+            e.roi_reason = (f"only ${profit_at_max:.0f} profit at your max bid - "
+                            f"under the ${MIN_GOLD_PROFIT:.0f} minimum for a gold mine")
         elif e.roi_status == "PASS":
             if lead.max_bid <= 0:
                 e.roi_reason = "value too low to clear costs at any bid"

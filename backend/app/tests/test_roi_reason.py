@@ -111,3 +111,20 @@ def test_damaged_in_any_wording_is_a_red_flag():
     _grade(lot, e, verdict="damaged, or for parts")
     assert e.roi_status == "PASS"
     assert e.roi_reason.startswith("condition red flag")
+
+
+def test_a_gold_mine_must_clear_ten_dollars_at_the_max_bid(monkeypatch):
+    """Costume pieces resold for $18-22 graded GOLD MINE on $5 bids while
+    clearing under $10 even at the max bid - not worth the trip."""
+    from app.services import financials
+    monkeypatch.setattr(financials, "current_target_roi", lambda: 0.3)
+    lot, e = _lot(current_bid=1, next_bid=1, source="Local Pickup")
+    _grade(lot, e, resale=22)
+    assert e.roi_status == "PASS"
+    assert "under the $10 minimum" in e.roi_reason
+
+
+def test_a_worthwhile_gold_mine_still_mints():
+    lot, e = _lot(current_bid=5, next_bid=6)
+    _grade(lot, e, resale=129.99)
+    assert e.roi_status == "GOLD MINE"
