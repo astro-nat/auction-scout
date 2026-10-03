@@ -150,7 +150,7 @@ _BOLO_MATCH_CACHE_PATH = _CACHE_DIR / "bolo_match_cache.json"
 #   v5 (2026-08-22): clothing additions — Y2K brands, graphic tees,
 #      plus-size brands, luxury outerwear/streetwear, contemporary
 #      designer women's (with collision-gated compound aliases).
-_MATCHER_LOGIC_VERSION = "5"
+_MATCHER_LOGIC_VERSION = "6"
 # How many writes to absorb before flushing the in-memory cache to
 # disk. Tuned for "scan 14k lots" use case — flushing every 500 misses
 # means ~30 disk writes during a full scan, each ~50ms (negligible
@@ -1545,7 +1545,12 @@ _BRAND_ALIASES: Dict[str, List[str]] = {
     "Corelle":                                ["corelle", "corning ware"],
     "Anchor Hocking / Fire-King":             [
         "anchor hocking", "fire-king", "fire king", "fireking",
-        "jadeite", "jade-ite", "vitrock",
+        # Bare "jadeite" is also the gemstone: a carved jade bangle and a
+        # 10K jade ring were both read as Fire-King glassware. Jade-ite (the
+        # trademark spelling) stays bare; the gem word needs a dish beside it.
+        "jade-ite", "vitrock", "jadeite mug", "jadeite cup", "jadeite bowl",
+        "jadeite plate", "jadeite saucer", "jadeite milk glass",
+        "jadeite restaurant ware", "jadeite batter bowl",
     ],
     # KitchenAid entry covers stand mixer ATTACHMENTS / BOWLS only —
     # not whole stand mixers (heavy / bulky). Aliases gate on

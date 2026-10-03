@@ -54,3 +54,10 @@ def test_look_alikes_are_not(title):
         "Synthesizers and keyboards", "Band instruments (brass and woodwind)",
         "Drums and cymbals", "Musical instruments (general)",
     }
+
+
+def test_jadeite_the_gem_is_not_fire_king():
+    """A carved jade bangle and a 10K jade ring both matched Fire-King."""
+    assert _brand("Vintage Hand Carved Green Jadeite Jade Snake Bangle Bracelet") != "Anchor Hocking / Fire-King"
+    assert _brand("Fire-King Jadeite Restaurant Ware Mug") == "Anchor Hocking / Fire-King"
+    assert _brand("Vintage Jadeite Mug Set of 4") == "Anchor Hocking / Fire-King"

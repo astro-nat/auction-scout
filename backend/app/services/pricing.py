@@ -363,11 +363,46 @@ _QUANTITY_CLAIM_RE = re.compile(
     r"|\blot of \d+\b|\b\d+\s*(?:pcs|pieces|pack|count)\b|\bset of \d+\b"
     r"|\bpair of\b|\b\d+x\b|\bbundle\b|\bwholesale\b",
     re.IGNORECASE)
-_IDENT_TOKEN_RE = re.compile(r"#\d{1,6}\b|\b[A-Za-z0-9][A-Za-z0-9-]{1,}\b")
+# A dot is kept inside a number, so "4.42g" is one token - split at the dot
+# it became "42g", an impossible weight that read as an invention.
+_IDENT_TOKEN_RE = re.compile(
+    r"#\d{1,6}\b|\b[A-Za-z0-9](?:[A-Za-z0-9-]|\.(?=\d))+\b")
+
+# What the AI SAW, not what it claims the item IS: a weight read off the
+# house's scale photo ("4.42g"), a length or size ("15in", "8-9in",
+# "2x6.5ft"), a layout ("3-Row"). None of these changes what the comps
+# search is for, and on 2026-10-03 they were 17 of 37 identity flags - every
+# one false, each keeping a lot (an $1,006 pair of 18K ruby earrings among
+# them) from being a gold mine.
+_NUM = r"\d+(?:\.\d+)?"
+_MEASUREMENT_RE = re.compile(
+    rf"^(?:{_NUM}(?:-{_NUM})?(?:g|gr|grams?|dwt|ct|ctw|tcw|oz|kg|lbs?|mm|cm|in|inch|inches|ft)"
+    rf"|{_NUM}x{_NUM}(?:ft|in|cm|mm)?"
+    r"|\d+-(?:row|rows|strand|strands|tier|tiers|stone|stones|piece|pc|pcs))$",
+    re.IGNORECASE)
+
+# BOLO entries that name what something is made of or its style - not a
+# maker. "Sterling silver" on a listing that says "Sterling", "Solid gold"
+# on one that says "14K": the AI asserted nothing new.
+_NOT_A_BRAND = {"precious_metal", "vintage_jewelry", "y2k"}
 
 
 def _squash(s: str) -> str:
     return re.sub(r"[^a-z0-9]", "", (s or "").lower())
+
+
+def _names_present(label: str, src_squashed: str) -> bool:
+    """Whether the listing names any maker in a BOLO label. A label can list
+    several ("James Avery + Brighton + Pandora") or run long ("American Girl
+    Pleasant Company"); each name counts as present by its first two words,
+    so a listing that says "American Girl" is not told it never did."""
+    for part in re.split(r"[+/,()]", label or ""):
+        words = part.split()
+        if not words:
+            continue
+        if _squash(" ".join(words[:2])) in src_squashed:
+            return True
+    return False
 
 
 def invented_identifiers(source_text: str, enriched_title: str, bolo=None) -> list[str]:
@@ -399,6 +434,8 @@ def invented_identifiers(source_text: str, enriched_title: str, bolo=None) -> li
             continue
         if len(_squash(tok)) < 3:
             continue
+        if _MEASUREMENT_RE.match(tok):
+            continue
         if _squash(tok) not in src:
             found.append(tok)
     claim = _QUANTITY_CLAIM_RE.search(enriched_title)
@@ -409,9 +446,12 @@ def invented_identifiers(source_text: str, enriched_title: str, bolo=None) -> li
     found.extend(funko.variant_claims(source_text, enriched_title))
     if bolo is not None:
         try:
-            claimed = (bolo.match(enriched_title) or {}).get("brand")
+            hit = bolo.match(enriched_title) or {}
+            claimed = hit.get("brand")
             actual = (bolo.match(source_text) or {}).get("brand")
-            if claimed and claimed != actual and _squash(claimed) not in src:
+            if (claimed and claimed != actual
+                    and hit.get("category") not in _NOT_A_BRAND
+                    and not _names_present(claimed, src)):
                 found.append(claimed)
         except Exception:  # noqa: BLE001 - the matcher is a bonus signal, never a blocker
             pass

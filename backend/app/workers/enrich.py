@@ -1749,6 +1749,15 @@ def _regrade_rows(db: Session, rows: list, job: str | None = None) -> tuple[int,
         # Hand-corrected PRICES are protected, but the verdict derived
         # from them still follows the current ROI target.
         before = e.roi_status
+        # An identity flag is re-checked under the current rules - text
+        # only, no network - so a fix to the checker reaches lots the AI has
+        # locked. Only lots already flagged: this clears or narrows a flag,
+        # it never raises a new one on a lot that was graded without one.
+        if (getattr(e, "identity_note", None)
+                and "enriched_title" not in set(e.user_overrides or [])):
+            claims = pricing.invented_identifiers(
+                f"{lot.title or ''} {lot.description or ''}", e.enriched_title, bolo_matcher)
+            e.identity_note = ", ".join(claims)[:200] if claims else None
         _apply_roi(lot, e)
         if e.roi_status != before:
             batch_changed += 1

@@ -10,6 +10,8 @@ order of magnitude on an identity the vision pass asserted with confidence:
 And the fourth family, a brand, through the BOLO matcher.
 """
 
+import pytest
+
 from app.services.pricing import invented_identifiers
 
 
@@ -74,3 +76,57 @@ def test_empty_inputs_are_safe_and_the_list_is_capped():
     assert invented_identifiers("x", None) == []
     many = " ".join(f"ZX{i}00" for i in range(12))
     assert len(invented_identifiers("nothing here", many)) == 5
+
+
+
+# --- 2026-10-03: 36 of 37 identity flags were false -----------------------
+
+class _Bolo:
+    """The real matcher's answers for these titles."""
+    LABELS = {   # in the real matcher's precedence: brands before metals
+        "pandora": ("James Avery + Brighton + Pandora", "modern_jewelry"),
+        "american girl": ("American Girl Pleasant Company", "nostalgia_doll"),
+        "sterling silver": ("Sterling silver", "precious_metal"),
+        "14k": ("Solid gold (10K-24K)", "precious_metal"),
+    }
+
+    def match(self, text, *_):
+        t = (text or "").lower()
+        for key, (brand, cat) in self.LABELS.items():
+            if key in t:
+                return {"brand": brand, "category": cat}
+        return None
+
+
+@pytest.mark.parametrize("src,ai", [
+    ("18K Yellow Gold True Ruby & Diamond Custom Earrings",
+     "18K Yellow Gold Ruby Diamond Custom Earrings 4.42g"),
+    ("18K Yellow Gold Fine Pearl Station Custom Necklace",
+     "18K Yellow Gold Pearl Station Custom Necklace 15in"),
+    ("Traditional Oriental Red Runner Rug", "Traditional Oriental Red Runner Rug 2x6.5 ft"),
+    ("Fine Sterling Silver Garnet Bracelet", "Vintage 925 Sterling Silver 3-Row Garnet Bracelet"),
+    ("Rare Sterling Larimar Chunky Bracelet", "Chunky Larimar Stone Bracelet 8-9in"),
+])
+def test_what_the_ai_saw_is_not_an_invention(src, ai):
+    assert invented_identifiers(src, ai) == []
+
+
+def test_a_material_label_is_not_a_brand():
+    assert invented_identifiers("Antique Sterling & 14K Doctors Caduceus Ring",
+                                "Vintage Sterling Silver 14K Gold Caduceus Ring", _Bolo()) == []
+
+
+def test_a_brand_the_listing_already_names_is_not_invented():
+    assert invented_identifiers("Limited Edition American Girl Frozen Anna Doll",
+                                "American Girl Disney Frozen Anna Doll", _Bolo()) == []
+
+
+def test_a_brand_the_listing_never_named_is_still_caught():
+    claims = invented_identifiers("Sterling Silver Fish Pendant",
+                                  "Pandora Retired Sterling Silver Fish Bead Charm", _Bolo())
+    assert "James Avery + Brighton + Pandora" in claims
+
+
+def test_a_model_number_is_still_caught():
+    assert invented_identifiers("Taxco Sterling Silver Double Hoop Earrings",
+                                "Taxco Sterling Silver Hoop Earrings TS-50") == ["TS-50"]
