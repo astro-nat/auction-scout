@@ -70,9 +70,16 @@ const FILTER_DEFAULTS = {
 // Where a view's defaults differ from the inventory's. Live starts with
 // every box unchecked: while bidding, a lot you can't see is a lot you
 // can't react to. The filters are all still there to switch on.
+// Watched starts the same way, bar closed lots: these are lots you picked
+// by hand, and the usage log had all seven other rules switched off within
+// three seconds of opening it.
 const VIEW_FILTER_DEFAULTS = {
   live: {
     hideLowValue: false, hideHardShip: false, hideNoUsShip: false, hideClosed: false,
+    hideOverMax: false, hideFar: false, hidePowered: false, hideNever: false,
+  },
+  watched: {
+    hideLowValue: false, hideHardShip: false, hideNoUsShip: false,
     hideOverMax: false, hideFar: false, hidePowered: false, hideNever: false,
   },
 }
@@ -563,14 +570,21 @@ export default function App() {
   // Imports run on the worker now: holding the request open while HiBid
   // paged through a 1,200-lot catalog was a timeout with a progress bar,
   // and closing the tab cancelled the import mid-save.
+  // stay: started from the inventory itself ("Import N missing" in an
+  // auction's header) - import and leave the view as it is. Narrowing to
+  // that one auction was undone by "Show every auction" 7 times out of 8.
   async function handleImport(auctionId, categoryId = scanCategoryId,
-                              searchText = scanSearchText) {
+                              searchText = scanSearchText, { stay = false } = {}) {
     const target = auctions.find((a) => a.id === auctionId)
     if (target?.ships_to_us === false
         && !await ask(`${target.name} has said it doesn't ship to the US — anything `
                            + 'won there can\'t be received. Import anyway?')) return
     try {
       await importLots(auctionId, categoryId, searchText)
+      if (stay) {
+        notify(`Importing the missing lots${target ? ` from ${target.name}` : ''} - progress shows in the top bar.`)
+        return
+      }
       setSelectedAuctions([auctionId])
       setView('items')
       notify(`Importing in the background — progress shows in the top bar, `
@@ -1204,7 +1218,7 @@ export default function App() {
             .map((a) => (
               <button key={`partial-${a.id}`}
                       data-track="Import N missing"
-                      onClick={() => handleImport(a.id, -1, '')}
+                      onClick={() => handleImport(a.id, -1, '', { stay: true })}
                       title={`${missingLots(a).toLocaleString()} open lots of "${a.name}" aren't imported yet - import them (free, no AI calls)`}
                       style={{ padding: 8, fontSize: 14 }}>
                 Import {missingLots(a).toLocaleString()} missing
@@ -2124,7 +2138,7 @@ export default function App() {
                     setFiltersOpen(true)
                     window.scrollTo?.({ top: 0, behavior: 'smooth' })
                   }}
-                  onImportMissing={(id) => handleImport(id, -1, '')}
+                  onImportMissing={(id) => handleImport(id, -1, '', { stay: true })}
                   panel={invPanel}
                   auctions={importedRows}
                   driveFrom={driveFrom}
