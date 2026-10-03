@@ -490,6 +490,14 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
   // opens and closes in a day and a half, many of them redoing the last
   // session's.
   const [flippedGroups, setFlippedGroups] = useState(() => savedFlipped(storage, viewKey))
+  // An auction just opened by hand, to scroll to after the others fold.
+  const [scrollToGroup, setScrollToGroup] = useState(null)
+  useEffect(() => {
+    if (scrollToGroup == null) return
+    document.querySelector(`[data-group-key="${CSS.escape(String(scrollToGroup))}"]`)
+      ?.scrollIntoView({ block: 'start', behavior: 'auto' })
+    setScrollToGroup(null)
+  }, [scrollToGroup])
   useEffect(() => {
     savePref(storage, `${FLIPPED_KEY}.${viewKey}`, JSON.stringify([...flippedGroups]))
   }, [storage, viewKey, flippedGroups])
@@ -1478,10 +1486,9 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
       setFlippedGroups(new Set(groups
         .filter((x) => groupKey(x) === key ? !x.hasGold : x.hasGold)
         .map(groupKey)))
-      // Auctions above it just folded, so bring its header back into view.
-      requestAnimationFrame(() => document
-        .querySelector(`[data-group-key="${CSS.escape(String(key))}"]`)
-        ?.scrollIntoView({ block: 'start', behavior: 'auto' }))
+      // Auctions above it just folded, so bring its header back into view
+      // once the fold has rendered (the effect below).
+      setScrollToGroup(key)
     } else {
       setFlippedGroups((prev) => {
         const next = new Set(prev)
