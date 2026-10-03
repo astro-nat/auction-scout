@@ -959,3 +959,7 @@ details.roi-peek > summary::-webkit-details-marker { display: none; }
 /* Long BOLO badges ("BOLO · Designer luxury (Gucci/Prada/…)") wrap instead
    of pushing a phone page 100px wider than the screen. */
 .badge { white-space: normal; overflow-wrap: anywhere; max-width: 100%; }
+
+/* An opened auction scrolls its header into view: clear the status bar and
+   the sticky column headings so they don't cover it. */
+.group-head-inner { scroll-margin-top: calc(var(--statusbar-h, 0px) + 48px); }

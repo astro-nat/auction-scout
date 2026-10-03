@@ -1470,12 +1470,26 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
   function toggleGroup(g) {
     const key = groupKey(g)
     const opening = !isGroupOpen(g)
-    setFlippedGroups((prev) => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
+    if (opening && !liveView) {
+      // Opening one auction closes the others. The usage log had 50 opens
+      // and closes in a day, most an open to check something and a close
+      // to clear it away again. Not in the Live view, where two sales are
+      // often bid on side by side.
+      setFlippedGroups(new Set(groups
+        .filter((x) => groupKey(x) === key ? !x.hasGold : x.hasGold)
+        .map(groupKey)))
+      // Auctions above it just folded, so bring its header back into view.
+      requestAnimationFrame(() => document
+        .querySelector(`[data-group-key="${CSS.escape(String(key))}"]`)
+        ?.scrollIntoView({ block: 'start', behavior: 'auto' }))
+    } else {
+      setFlippedGroups((prev) => {
+        const next = new Set(prev)
+        if (next.has(key)) next.delete(key)
+        else next.add(key)
+        return next
+      })
+    }
     // An auction with no gold mine has nothing featured: opening it shows
     // its first lots, or it would open onto an empty space.
     if (opening && !g.hasGold && !openGroups.get(key)) openMore(key, g.lots.length)
@@ -1561,7 +1575,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     return (
       // Clicking anywhere on the header that isn't one of its own controls
       // opens or closes the auction; the title button is the keyboard way.
-      <div className={`group-head-inner${open ? '' : ' closed'}`}
+      <div className={`group-head-inner${open ? '' : ' closed'}`} data-group-key={key}
            onClick={(ev) => {
              if (ev.target.closest('button, a, input, select, summary, details, label')) return
              // Not a button, so the page-wide tracker doesn't see it.
