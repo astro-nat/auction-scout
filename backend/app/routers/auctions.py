@@ -474,7 +474,7 @@ def backfill_photos(db: Session = Depends(get_db)):
 def set_auction_live(auction_id: int, live: bool = True,
                      db: Session = Depends(get_db)):
     """Switch Live Auction mode on or off (workers/live): bids refresh every
-    minute, and a watched lot passing your max bid sends an alert. An
+    minute. An
     auction whose last lot has closed can't be switched on."""
     auction = (db.query(models.Auction)
                  .filter(models.Auction.id == auction_id).first())

@@ -1,5 +1,5 @@
 """Live Auction mode: while an auction is live, its bids refresh every
-minute, and a watched lot whose bid passes your max bid sends one alert.
+minute.
 
 Bids otherwise move only when someone presses Refresh bids. During a sale
 that is the wrong cadence - the bid that matters changes minute to minute,
@@ -13,21 +13,21 @@ hour (auto_start), if you have imported lots from it - a sale with nothing
 of yours in it isn't worth the HiBid reads. Switching one off by hand opts
 it out of that, so the rule doesn't switch it straight back on.
 
-The alert is for watched lots only: they are the ones you are bidding on,
-and a 900-lot sale would otherwise alert on hundreds of lots nobody meant
-to buy. It fires on the crossing - at or under max before this refresh,
-over it after - once per lot (Lot.max_passed_alert_at), by the same ntfy
-push the closing digest uses, and never if NTFY_TOPIC is unset.
+It used to push an ntfy alert when a watched lot's bid passed your max.
+Dropped 2026-10-03 at the user's word - "i never remember what they are
+and i don't really care". The Live view's own "N watched past your max"
+line still shows it, for whoever is looking. Lot.max_passed_alert_at is
+left in the schema, unused.
 """
 
 import logging
 import threading
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Iterable
+
 
 from ..database import SessionLocal
-from .. import config, models
+from .. import models
 from ..services import open_state
 
 logger = logging.getLogger(__name__)
@@ -39,33 +39,6 @@ AUTO_LIVE_WINDOW = timedelta(hours=1)
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
-
-
-def newly_past_max(before: dict, lots: Iterable) -> list:
-    """Watched lots whose bid was at or under their max before, and over it
-    now - each alerted once. `before` maps lot id to its bid before the
-    refresh. Pure, so the rule is tested without HiBid."""
-    out = []
-    for lot in lots:
-        e = lot.enrichment
-        if not lot.watched or not e or e.max_bid is None or lot.max_passed_alert_at:
-            continue
-        was, now = before.get(lot.id), lot.current_bid
-        if was is None or now is None:
-            continue
-        if float(was) <= float(e.max_bid) < float(now):
-            out.append(lot)
-    return out
-
-
-def _alert(auction, lot) -> None:
-    from .notify import _push
-    e = lot.enrichment
-    title = f"Past your max: {lot.title[:60]}"
-    body = (f"Bid ${float(lot.current_bid):.2f} is over your max ${float(e.max_bid):.2f}"
-            f" - lot {lot.lot_number or ''} at {auction.name[:60]}")
-    if config.NTFY_TOPIC:
-        _push(title, body, lot.lot_link)
 
 
 def auto_start(db, now) -> int:
@@ -95,10 +68,10 @@ def auto_start(db, now) -> int:
 
 
 def run_once() -> int:
-    """One pass over every live auction. Returns how many alerts went out."""
+    """One pass over every live auction. Returns how many were refreshed."""
     from .refresh import run_bid_refresh
     db = SessionLocal()
-    sent = 0
+    refreshed = 0
     try:
         now = _utcnow()
         auto_start(db, now)
@@ -112,26 +85,16 @@ def run_once() -> int:
                 db.commit()
                 logger.info("Live mode off for %s: its last lot has closed", auction.name)
                 continue
-            watched = (db.query(models.Lot)
-                         .filter(models.Lot.auction_id == auction.id,
-                                 models.Lot.watched.is_(True)).all())
-            before = {l.id: l.current_bid for l in watched}
             # Quiet: a job row every minute would bury the real work in the
             # Queue tab. The refresh itself is the same one the button runs.
             run_bid_refresh([auction.id], track_job=False)
             db.expire_all()
-            watched = (db.query(models.Lot)
-                         .filter(models.Lot.auction_id == auction.id,
-                                 models.Lot.watched.is_(True)).all())
-            for lot in newly_past_max(before, watched):
-                _alert(auction, lot)
-                lot.max_passed_alert_at = _utcnow()
-                sent += 1
             auction.live_refreshed_at = _utcnow()
             db.commit()
+            refreshed += 1
     finally:
         db.close()
-    return sent
+    return refreshed
 
 
 def start_live_loop() -> None:
@@ -139,9 +102,7 @@ def start_live_loop() -> None:
         while True:
             started = time.monotonic()
             try:
-                n = run_once()
-                if n:
-                    print(f"Live mode: {n} past-your-max alert(s)")
+                run_once()
             except Exception as exc:  # noqa: BLE001 - the loop outlives its own bugs
                 logger.warning("Live refresh failed: %s", exc)
             time.sleep(max(5, LIVE_INTERVAL - (time.monotonic() - started)))

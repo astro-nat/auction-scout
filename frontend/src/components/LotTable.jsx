@@ -1523,7 +1523,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                     ? 'Live by itself: lots here close within the hour. Bids refresh every minute. Click to stop - it stays off.'
                     : 'Live: bids refresh every minute. Click to stop.'} ${ago == null ? 'First refresh within a minute.'
                     : ago < 90 ? `Updated ${ago}s ago.` : `Updated ${Math.round(ago / 60)} min ago.`}`
-                  : 'Switch on to refresh this auction\'s bids every minute while it runs, and get an alert when a watched lot passes your max bid. Auctions go live by themselves an hour before lots close.'}
+                  : 'Switch on to refresh this auction\'s bids every minute while it runs. Auctions go live by themselves an hour before lots close.'}
                 onClick={() => onSetLive(a.id, !a.live)}>
           <span className="live-track" aria-hidden="true"><span className="live-knob" /></span>
           {a.live ? (a.live_auto ? 'Live · auto' : 'Live') : 'Live off'}
@@ -1605,6 +1605,14 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
               </span>
             )}
             {liveControl(g)}
+            {/* The sale's own page, a click from its header - for bidding,
+                terms and the house's photos. */}
+            {a?.source_url && (
+              <a className="group-import group-hibid" href={a.source_url} target="_blank" rel="noreferrer"
+                 data-track="Open auction on HiBid">
+                {/hibid\.com/i.test(a.source_url) ? 'Open on HiBid' : 'Open auction page'}
+              </a>
+            )}
             {auctionUnpriced(g).length > 0 && (
               <button type="button" className="group-import group-act" data-track="Price this auction (comps)"
                       disabled={queuing}

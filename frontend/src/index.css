@@ -963,3 +963,11 @@ details.roi-peek > summary::-webkit-details-marker { display: none; }
 /* An opened auction scrolls its header into view: clear the status bar and
    the sticky column headings so they don't cover it. */
 .group-head-inner { scroll-margin-top: calc(var(--statusbar-h, 0px) + 48px); }
+
+/* "Open on HiBid" in an auction header: a link drawn as a small button. */
+a.group-hibid {
+  display: inline-flex; align-items: center; border: 1px solid var(--border-strong);
+  border-radius: var(--radius); text-decoration: none; color: var(--text);
+}
+a.group-hibid:hover { text-decoration: none; }
+@media (pointer: coarse) { a.group-hibid { min-height: 44px; padding: 0 12px; } }

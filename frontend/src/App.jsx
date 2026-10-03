@@ -2099,7 +2099,7 @@ export default function App() {
               An auction goes live by itself an hour before any of its lots closes. To go
               live sooner, switch <strong>Live</strong> on in its header in{' '}
               <strong>My Inventory</strong>. Live auctions refresh their bids every minute and
-              show up here, and a watched lot passing your max bid sends an alert.
+              show up here.
             </div>
             <button className="primary" style={{ marginTop: 12 }}
                     onClick={() => setView('items')}>
