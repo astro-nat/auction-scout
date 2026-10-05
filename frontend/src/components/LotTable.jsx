@@ -1895,6 +1895,12 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
             rejected by audit
           </div>
         )}
+        {e.melt_value != null && (
+          <div style={{ color: 'var(--muted)', fontSize: 11 }}
+               title="The gold or silver alone, at today's spot price. 90% of it is the floor the grade uses - a piece can always be sold for its metal.">
+            melt {money(e.melt_value)}{e.est_resale != null && Number(e.melt_value) * 0.9 > Number(e.est_resale) ? ' · floor' : ''}
+          </div>
+        )}
         {houseEstimate(lot) && (
           <div style={{ color: 'var(--muted)', fontSize: 11 }}
                title={houseRatioTitle(lot.house_ratio, lot.house_ratio_n)
@@ -1939,6 +1945,14 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
   function lotTags(lot, e) {
     return (
       <>
+        {e.metal_label && (
+          <span className="badge metal"
+                title={e.melt_value != null
+                  ? `${e.metal_label}${e.metal_grams ? `, ${e.metal_grams}g as listed` : ''} - worth about ${money(e.melt_value)} as metal at today's spot price`
+                  : `${e.metal_label} - no weight in the listing, so no melt value`}>
+            {e.metal_label}{e.metal_grams ? ` · ${e.metal_grams}g` : ''}
+          </span>
+        )}
         {e.bolo_brand && (
           <span className="badge bolo" title={`BOLO match: ${e.bolo_brand} (tier ${e.bolo_tier ?? '?'})`}>
             BOLO · {e.bolo_brand}

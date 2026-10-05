@@ -30,6 +30,9 @@ class EnrichmentOut(BaseModel):
     comps: Optional[list] = None
     max_bid: Optional[Decimal] = None
     all_in_cost: Optional[Decimal] = None
+    metal_label: Optional[str] = None       # "18K", "Sterling"
+    metal_grams: Optional[float] = None     # grams as the listing states them
+    melt_value: Optional[Decimal] = None    # the metal at today's spot price
     est_roi: Optional[float] = None
     profit: Optional[Decimal] = None
     roi_status: Optional[str] = None

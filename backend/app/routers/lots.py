@@ -281,8 +281,12 @@ def flush_closed(dry_run: bool = False, db: Session = Depends(get_db)):
 
 
 @router.post("/regrade", status_code=202)
-def regrade(db: Session = Depends(get_db)):
+def regrade(payload: Optional[schemas.LotIdsRequest] = None,
+            db: Session = Depends(get_db)):
     """Recompute every verdict from values already stored.
+
+    With lot_ids, just those lots, right now (a handful is milliseconds, so
+    no job): "re-grade only the lots I won".
 
     No comp lookups, no AI, no network - max_bid, profit, ROI and the gold
     badge are arithmetic over numbers the database already holds. Settings
@@ -291,6 +295,16 @@ def regrade(db: Session = Depends(get_db)):
     otherwise the only way to apply one is to re-price everything at the
     cost of a comp lookup per lot.
     """
+    if payload and payload.lot_ids:
+        from sqlalchemy.orm import joinedload
+        from ..workers.enrich import _regrade_rows
+        rows = (db.query(models.Lot)
+                  .options(joinedload(models.Lot.enrichment))
+                  .filter(models.Lot.lot_id.in_(payload.lot_ids),
+                          models.Lot.enrichment.has())
+                  .all())
+        changed, lost = _regrade_rows(db, rows)
+        return {"regraded": len(rows), "changed": changed, "lost": lost}
     if jobs.has_pending("regrade"):
         return {"regrading": 0, "already_running": True}
     n = (db.query(models.Enrichment)

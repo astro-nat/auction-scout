@@ -41,6 +41,7 @@ from .. import models, config
 from ..services import financials, gemini, hibid, jobs, price_log, pricing
 from ..services import funko, shipping
 from ..services import twins
+from ..services import metal
 from ..services import settings as settings_store
 from ..services.bolo import BoloMatcher
 from ..services.hibid import classify_logistics
@@ -75,6 +76,9 @@ LOGISTICS_COST = {"EASY": 3.50, "NEUTRAL": 6.50, "HARD": 21.00}
 # Least a gold mine must clear if won at the max bid (the user's call,
 # 2026-10-03: "add the $10 minimum").
 MIN_GOLD_PROFIT = float(os.environ.get("MIN_GOLD_PROFIT", "10"))
+
+# Share of melt value used as the resale floor: about what a refiner pays.
+MELT_FLOOR_SHARE = float(os.environ.get("MELT_FLOOR_SHARE", "0.9"))
 
 # The audit sweep promotes thin-evidence lots (no comps, value from the
 # itemized vision pass) when at least this much profit is on the table —
@@ -915,7 +919,19 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
     # Matched on the words, not the exact phrase: the AI also writes
     # "damaged, or for parts", which slipped past as a GOLD MINE.
     red_flag = bool(e.verdict and _RED_FLAG_RE.search(e.verdict))
-    if e.est_resale:
+    # The gold or silver in it, at today's spot price. Melt is a floor under
+    # the resale: a piece can always be sold for its metal, whatever the
+    # comps said (the AI audit once valued a 5.08g 14K bracelet at $45).
+    mi = metal.assess(lot.title, lot.description)
+    e.metal_label = mi["label"] if mi else None
+    e.metal_grams = mi["grams"] if mi else None
+    melt = metal.melt_value(mi)
+    e.melt_value = melt
+    floor = round(melt * MELT_FLOOR_SHARE, 2) if melt else 0.0
+    comps_value = float(e.est_resale) if e.est_resale else 0.0
+    value = max(comps_value, floor)
+    melt_backed = floor > comps_value
+    if value:
         # Everything logistics costs on this lot: freight in from the
         # auction house, plus packing and fee drag on the way back out.
         penalty = (LOGISTICS_COST.get(lot.logistics_ease or "NEUTRAL", 6.50)
@@ -927,7 +943,7 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
         mult = getattr(lot.auction, "buyer_premium_mult", None) if lot.auction else None
         premium = (float(mult) - 1) if mult else financials.BUYERS_PREMIUM
         lead = financials.evaluate_lead(
-            resale_value=float(e.est_resale),
+            resale_value=value,
             current_bid=effective_bid,
             logistics_penalty=penalty,
             dts=0.0,  # no sell-through data yet — don't fail lots on it
@@ -965,7 +981,7 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
         audit_backed = ((e.price_source or "").startswith("audit-corrected")
                         or e.gold_check in ("confirmed", "corrected"))
         thin_evidence = ((e.comp_count or 0) < 2
-                         and not (from_title or audit_backed))
+                         and not (from_title or audit_backed or melt_backed))
         e.profit = lead.profit
         # An audit demotion stands until the VALUE changes (which clears
         # gold_check) — recomputing ROI on a new bid or a reprice must not
@@ -986,7 +1002,7 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
         # under $10 each at max - costume pieces resold for $18-22 - which
         # made the badge mean "cheap right now", not "worth buying".
         acq = financials.acquisition_multiplier(premium)
-        profit_at_max = (float(e.est_resale) * (1 - financials.PLATFORM_FEE)
+        profit_at_max = (value * (1 - financials.PLATFORM_FEE)
                          - (float(lead.max_bid) * acq + penalty))
         small_win = lead.status == "GOLD MINE" and profit_at_max < MIN_GOLD_PROFIT
         e.roi_status = ("PASS" if (red_flag or lot.unreachable_pickup

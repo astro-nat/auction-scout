@@ -216,6 +216,12 @@ class Enrichment(Base):
     # tax + freight in, packing and fee drag. This is the ROI denominator,
     # and it's much larger than est_cost (hammer + premium only).
     all_in_cost = Column(Numeric)
+    # Gold or silver in the lot, read from its title and description
+    # (services/metal): "18K", grams as stated, and its worth at spot. The
+    # melt value floors the resale the grade is computed from.
+    metal_label = Column(String)
+    metal_grams = Column(Float)
+    melt_value = Column(Numeric)
     est_roi = Column(Float)            # at current bid
     profit = Column(Numeric)
     roi_status = Column(String)        # GOLD MINE | PASS

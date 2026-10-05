@@ -971,3 +971,6 @@ a.group-hibid {
 }
 a.group-hibid:hover { text-decoration: none; }
 @media (pointer: coarse) { a.group-hibid { min-height: 44px; padding: 0 12px; } }
+
+/* Karat and weight, from the listing ("18K · 4.42g"). */
+.badge.metal { background: var(--badge-bg); color: var(--text); font-weight: 600; border: 1px solid var(--border-strong); }

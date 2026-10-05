@@ -543,6 +543,40 @@ def _model_match(query: str, comp_title: str) -> bool:
     return any(c in comp for c in codes)
 
 
+# The stone is the item. "10K Yellow Gold Natural Jade Band Ring" shares six
+# of its seven words with "10K Yellow Gold Natural Diamond Band Ring", so the
+# word filter passed seven diamond, emerald and tanzanite rings ($599-$799)
+# and priced a jade ring at $599 - the four real jade comps said $80-$425.
+# If the lot names a stone, a comp must name one of the same stones.
+# "Diamond cut" is a chain style, not a stone, so it is taken out first.
+_STONES = (
+    "jade|jadeite|nephrite|emerald|ruby|rubies|sapphire|opal|turquoise|garnet|"
+    "pearl|amethyst|topaz|diamond|onyx|coral|lapis|tanzanite|peridot|aquamarine|"
+    "citrine|tourmaline|moonstone|amber|larimar|malachite|carnelian|morganite|"
+    "alexandrite|spinel|cameo|tiger'?s?\s*eye")
+_STONE_RE = re.compile(rf"\b({_STONES})s?\b", re.IGNORECASE)
+_DIAMOND_CUT_RE = re.compile(r"\bdiamond[\s-]*cut\b", re.IGNORECASE)
+_STONE_SAME = {"jadeite": "jade", "nephrite": "jade", "rubies": "ruby"}
+
+
+def _stones(text: str) -> set[str]:
+    t = _DIAMOND_CUT_RE.sub(" ", text or "")
+    out = set()
+    for m in _STONE_RE.finditer(t):
+        w = re.sub(r"[^a-z]", "", m.group(1).lower())
+        w = "tigerseye" if w.startswith("tiger") else w
+        out.add(_STONE_SAME.get(w, w))
+    return out
+
+
+def _stone_match(query: str, comp_title: str) -> bool:
+    """If the lot names a stone, the comp has to name one of the same."""
+    want = _stones(query)
+    if not want:
+        return True
+    return bool(want & _stones(comp_title))
+
+
 def _quantity_match(query: str, comp_title: str) -> bool:
     return bool(_BULK_RE.search(query)) == bool(_BULK_RE.search(comp_title or ""))
 
@@ -1185,6 +1219,7 @@ def lookup_comps(title: str) -> dict:
         comps = [c for c in comps
                  if _relevant(query, c["title"]) and _quantity_match(title, c["title"])
                  and _model_match(query, c["title"])
+                 and _stone_match(query, c["title"])
                  and _audience_match(title, c["title"])
                  and _promo_match(title, c["title"])
                  and funko.comp_fits(title, c["title"])
@@ -1210,6 +1245,7 @@ def lookup_comps(title: str) -> dict:
         comps = [c for c in comps
                  if _relevant(query, c["title"]) and _quantity_match(title, c["title"])
                  and _model_match(title, c["title"])
+                 and _stone_match(title, c["title"])
                  and _audience_match(title, c["title"])
                  and _promo_match(title, c["title"])
                  and funko.comp_fits(title, c["title"])
