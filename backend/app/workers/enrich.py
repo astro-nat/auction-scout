@@ -1762,6 +1762,10 @@ def _regrade_rows(db: Session, rows: list, job: str | None = None) -> tuple[int,
     batch_start = 1
     for i, lot in enumerate(rows, 1):
         e = lot.enrichment
+        # A full regrade loads every row up front and runs for minutes; read
+        # this one fresh so a value an AI pass or audit changed meanwhile is
+        # the value graded (see refresh.py, same race).
+        db.refresh(e)
         # Hand-corrected PRICES are protected, but the verdict derived
         # from them still follows the current ROI target.
         before = e.roi_status

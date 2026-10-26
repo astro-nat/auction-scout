@@ -27,13 +27,24 @@ def count_lots(
     flagged_only: bool = False,
     watched_only: bool = False,
     include_closed: bool = False,
+    include_hidden: bool = False,
     db: Session = Depends(get_db),
 ):
     """How many lots match these filters — so the UI can say 'showing 2000 of
-    10,559' instead of implying the page size is the whole database."""
+    10,559' instead of implying the page size is the whole database.
+
+    Hidden lots and closed ones are left out unless asked for: the views
+    don't show them by default, and counting them gave "My Watched Items (6)"
+    over an empty list - six watched lots the user had hidden, from sales
+    that had closed weeks before."""
     q = db.query(models.Lot)
     if watched_only:
         q = q.filter(models.Lot.watched.is_(True))
+    if not include_hidden:
+        q = q.filter(models.Lot.hidden.isnot(True))
+    if not include_closed:
+        q = q.filter(or_(models.Lot.status.is_(None),
+                         ~func.upper(models.Lot.status).like("CLOSED%")))
     if category:
         q = q.filter(models.Lot.category == category)
     if auction_id:

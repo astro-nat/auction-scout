@@ -182,6 +182,13 @@ def run_bid_refresh(auction_ids: list[int], resume_job_id: str | None = None,
                     lot.status = "CLOSED"
                     lot.time_left = None
                 # New bid moves cost, so the ROI verdict has to move with it.
+                # Re-read the enrichment first: the rows were loaded at the
+                # start of this auction, and an AI pass or audit may have
+                # changed the value since. Grading the stale copy wrote a max
+                # bid and profit for the OLD value beside the new one (a $45
+                # putter carried a $59.58 max worked out from $135).
+                if lot.enrichment is not None:
+                    db.refresh(lot.enrichment)
                 if lot.enrichment and lot.enrichment.est_resale:
                     _apply_roi(lot, lot.enrichment)
                 updated_total += 1
