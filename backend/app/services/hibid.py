@@ -392,6 +392,39 @@ def _lot_category(raw: Any) -> Optional[str]:
     return None
 
 
+# The house's own "Dimensions:" line. Anything 4 ft or longer doesn't go in a
+# parcel: a 55" faux bamboo plant, 92" fishing rods, a 57" floor lamp all
+# graded NEUTRAL on their titles (#660 audit). Only the dimensions line is
+# read - the rest of a description is boilerplate - and only up to the next
+# field ("-Material/Brand: ...").
+BULKY_INCHES = 48
+_DIMENSIONS_RE = re.compile(r"dimensions?\s*:([^*\n]{0,160}?)(?:\s[-*][A-Z]|$)", re.IGNORECASE)
+_INCHES_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(?:\"|”|''|in\b|inch(?:es)?\b)", re.IGNORECASE)
+# Feet only up to 12: "50 ft in length" is a coiled hose or edging roll, not
+# a 50-foot box.
+_FEET_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(?:'(?!')|ft\b|feet\b|foot\b)", re.IGNORECASE)
+
+
+# Soft goods fold: a 55"-tall hitch-rack dry bag ships in a mailer.
+_FOLDS_RE = re.compile(
+    r"\b(?:bags?|tents?|tarps?|covers?|banners?|flags?|blankets?|quilts?|"
+    r"curtains?|sheets?|throws?|tapestr(?:y|ies))\b", re.IGNORECASE)
+
+
+def is_bulky(description: str | None, title: str = "") -> bool:
+    """True when the description's dimensions line has a side of 4 ft or more
+    and the item isn't something that folds."""
+    if _FOLDS_RE.search(title or ""):
+        return False
+    m = _DIMENSIONS_RE.search(description or "")
+    if not m:
+        return False
+    dims = m.group(1)
+    sides = [float(x) for x in _INCHES_RE.findall(dims)]
+    sides += [float(x) * 12 for x in _FEET_RE.findall(dims) if float(x) <= 12]
+    return any(s >= BULKY_INCHES for s in sides)
+
+
 def _logistics_ease(title: str, category: str, description: str) -> str:
     if _PICKUP_ONLY_RE.search(description or ""):
         return "HARD"
@@ -407,7 +440,7 @@ def _logistics_ease(title: str, category: str, description: str) -> str:
     # boilerplate ("we sell furniture, vehicles... our moving truck can come
     # to you") that flagged every lot in an auction HARD. The only description
     # signal we trust is the explicit pickup-only phrase above.
-    if _SHIP_KILLERS_RE.search(hay):
+    if _SHIP_KILLERS_RE.search(hay) or is_bulky(description, title):
         return "HARD"
     return "NEUTRAL"
 

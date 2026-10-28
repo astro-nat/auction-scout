@@ -1798,6 +1798,14 @@ def _regrade_rows(db: Session, rows: list, job: str | None = None) -> tuple[int,
             claims = pricing.invented_identifiers(
                 f"{lot.title or ''} {lot.description or ''}", e.enriched_title, bolo_matcher)
             e.identity_note = ", ".join(claims)[:200] if claims else None
+        # A ship-rule fix reaches old lots too, but only upward: an item the
+        # rules now call HARD (a wheelchair, a 55" plant) is HARD whatever an
+        # older rule or the AI said. A tier you set by hand stands.
+        if (lot.logistics_ease != "HARD"
+                and "logistics_ease" not in set(e.user_overrides or [])
+                and classify_logistics(lot.title or "", lot.category or "",
+                                       lot.description or "") == "HARD"):
+            lot.logistics_ease = "HARD"
         _apply_roi(lot, e)
         if e.roi_status != before:
             batch_changed += 1

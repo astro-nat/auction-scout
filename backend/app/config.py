@@ -103,6 +103,10 @@ SHIP_KILLERS = (
     r"|(?<!dishwasher )(?<!microwave )(?<!oven )(?<!kid )(?<!child )(?<!food )(?<!skin )\bsafe\b"
     r"|\bvault\b|gun safe|toolbox"
     r"|tool chest|workbench|\bladder\b"
+    # Medical and fitness equipment, floor lamps and shelving: no box, and
+    # nobody buys them shipped (#660 audit).
+    r"|wheelchair|commode|rollator|folding walker|knee (?:walker|scooter)"
+    r"|(?:weight|workout|exercise) bench|floor lamp|torchiere|shelving unit"
     r"|(?<!rc )(?<!toy )(?<!slot )\bcars?\b(?!\s+(?:photo|chargers?|mounts?|keys?|covers?|mats?|seats?|wash|care|audio|stereo|holders?|organizers?|vacuums?|adapters?|fresheners?))"
     r"|vehicle|(?<!rc )(?<!toy )\btrucks?\b(?!\s+bed liner)|\bsuv\b|\bsedan\b"
     r"|motorcycle|\batv\b|\butv\b|\bboat\b|jet ski|\btrailer\b|\brv\b|\bcamper\b|motorhome"
