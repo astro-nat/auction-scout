@@ -1140,11 +1140,29 @@ export default function App() {
     for (const l of lots) n[l.auction_id] = (n[l.auction_id] || 0) + 1
     return n
   }, [lots])
-  // Rules narrowing the view right now, for the Filters button's label.
-  // Show-hidden is left out: switching it on shows MORE, not less.
-  const activeRuleCount = [hideLowValue, hideOverMax, hidePowered, hideNever,
-                           hideHardShip, hideNoUsShip, hideClosed, hideFar && !!driveFrom,
-                           filters.flaggedOnly, cheapMediaOnly].filter(Boolean).length
+  // The filters you've changed from this view's defaults, each named, each
+  // with a switch back. The usage log had the Filters panel opened 16 times
+  // in two weeks against 9 changes made in it - opened to read what was set,
+  // not to change it. Defaults get no chip: they're the normal state, and
+  // seven chips for it would be noise.
+  const defaultOf = (name) => VIEW_FILTER_DEFAULTS[filterView]?.[name] ?? FILTER_DEFAULTS[name]
+  const changedRule = (key, value, set, hiding, showing) => (
+    value !== defaultOf(key) && { name: value ? hiding : showing, off: () => set(defaultOf(key)) })
+  const activeRules = [
+    changedRule('hideLowValue', hideLowValue, setHideLowValue,
+                `Hiding under $${lowValueCutoff}`, 'Showing low-value'),
+    changedRule('hideOverMax', hideOverMax, setHideOverMax, 'Hiding over max bid', 'Showing over max bid'),
+    changedRule('hidePowered', hidePowered, setHidePowered, 'Hiding power tools', 'Showing power tools'),
+    changedRule('hideNever', hideNever, setHideNever, 'Hiding never-buy', 'Showing never-buy'),
+    changedRule('hideHardShip', hideHardShip, setHideHardShip, 'Hiding hard to ship', 'Showing hard to ship'),
+    changedRule('hideNoUsShip', hideNoUsShip, setHideNoUsShip, 'Hiding no US shipping', 'Showing no US shipping'),
+    changedRule('hideClosed', hideClosed, setHideClosed, 'Hiding closed', 'Showing closed'),
+    !!driveFrom && changedRule('hideFar', hideFar, setHideFar,
+                               `Hiding over ${maxDriveMinutes} min away`, 'Showing far auctions'),
+    changedRule('cheapMediaOnly', cheapMediaOnly, setCheapMediaOnly, `Media under $${maxPerItem} only`, ''),
+    filters.flaggedOnly && { name: 'Flagged only', off: () => setFilters((f) => ({ ...f, flaggedOnly: false })) },
+    categoryFilter && { name: categoryFilter, off: () => setCategoryFilter('') },
+  ].filter(Boolean)
 
 
   // The Inventory controls. The table renders them in its one toolbar row
@@ -1292,10 +1310,23 @@ export default function App() {
                   data-track="Filters panel"
                   title="Every hide rule, the gold-mine ROI target, the never list, and clean-up"
                   style={{ fontSize: 13, padding: '4px 10px' }}>
-            Filters{activeRuleCount ? ` · ${activeRuleCount} on` : ''}{categoryFilter ? ` · ${categoryFilter}` : ''}
+            Filters
             {hiddenCount > 0 && <span className="filters-hidden" style={{ color: 'var(--muted)', fontWeight: 400 }}> · {hiddenCount.toLocaleString()} hidden</span>}
             {' '}{filtersOpen ? '▴' : '▾'}
           </button>
+          {!filtersOpen && activeRules.length > 0 && (
+            <span className="filter-chips" aria-label="Filters on">
+              {activeRules.map((r) => (
+                <span key={r.name} className="filter-chip">
+                  {r.name}
+                  <button type="button" onClick={r.off}
+                          aria-label={`Undo: ${r.name}`}
+                          title={`Back to the default: ${r.name}`}
+                          data-track="Filter chip off">×</button>
+                </span>
+              ))}
+            </span>
+          )}
   </>)
   const invHidden = (<>
           {hiddenCount > 0 && (

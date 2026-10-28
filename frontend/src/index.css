@@ -461,6 +461,44 @@ tr.row-overbid td:first-child { box-shadow: inset 3px 0 0 var(--overbid-accent);
   color: var(--link);
 }
 
+/* The filters that are on, beside the Filters button: each one named, each
+   one switched off in place. Neutral ink - green means gold mine. */
+.filter-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 2px 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--badge-bg);
+  color: var(--text);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.filter-chip button {
+  background: none;
+  border: none;
+  padding: 0 6px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--muted);
+}
+.filter-chip button:hover {
+  background: none;
+  transform: none;
+  color: var(--text);
+}
+.filter-chip button:focus-visible {
+  outline: 2px solid var(--hover-ink);
+  outline-offset: 1px;
+}
+
 /* ======================= touch targets ============================== */
 
 /* On a touch screen every control has to be hittable with a thumb. The
