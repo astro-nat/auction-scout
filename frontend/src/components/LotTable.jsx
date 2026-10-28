@@ -15,6 +15,7 @@ import { offerFrom, offerLabel } from '../lib/hideLike'
 import { ADDON_FLOOR_KEY, ARRANGE_KEY, basketLabel, groupByAuction, savePref, savedAddonFloor, savedArrange } from '../lib/grouping'
 import DriveFrom, { CarIcon, formatDrive } from './DriveFrom'
 import useMediaQuery from '../useMediaQuery'
+import { weightLabel, weightTitle } from '../lib/weight'
 
 // The homework behind a resale number: the comp records the pricer actually
 // used (raw observed prices — never scaled to match the conclusion), plus a
@@ -1366,6 +1367,9 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
               {e.est_resale != null && <CompsPeek lot={lot} e={e} onLotUpdated={onLotUpdated} />}
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
                 <span className="badge">{lot.logistics_ease}</span>
+                {weightLabel(e) && (
+                  <span className="badge" title={weightTitle(e)}>{weightLabel(e)}</span>
+                )}
                 {e.bolo_brand && (
                   <span className="badge bolo">BOLO: {e.bolo_brand} T{e.bolo_tier ?? '?'}</span>
                 )}
@@ -2463,6 +2467,11 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                   edited={edited.has('logistics_ease')}
                   onSave={(v) => handleCorrect(lot.lot_id, 'logistics_ease', v)}
                 />
+                {weightLabel(e) && (
+                  <div style={{ color: 'var(--muted)', fontSize: 11 }} title={weightTitle(e)}>
+                    {weightLabel(e)}
+                  </div>
+                )}
               </td>
               <td className="num" style={cell}>
                 <EditableCell

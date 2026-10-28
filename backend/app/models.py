@@ -222,6 +222,11 @@ class Enrichment(Base):
     metal_label = Column(String)
     metal_grams = Column(Float)
     melt_value = Column(Numeric)
+    # Shipping weight in pounds (services/weight): read off the photos by an
+    # AI inspection (weight_source "ai"), else a rough figure from the item
+    # type ("est"). Listings almost never print one.
+    weight_lb = Column(Float)
+    weight_source = Column(String)
     est_roi = Column(Float)            # at current bid
     profit = Column(Numeric)
     roi_status = Column(String)        # GOLD MINE | PASS

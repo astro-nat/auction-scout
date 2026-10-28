@@ -33,6 +33,8 @@ class EnrichmentOut(BaseModel):
     metal_label: Optional[str] = None       # "18K", "Sterling"
     metal_grams: Optional[float] = None     # grams as the listing states them
     melt_value: Optional[Decimal] = None    # the metal at today's spot price
+    weight_lb: Optional[float] = None       # shipping weight, pounds
+    weight_source: Optional[str] = None     # "ai" (from photos) | "est" (item type)
     est_roi: Optional[float] = None
     profit: Optional[Decimal] = None
     roi_status: Optional[str] = None

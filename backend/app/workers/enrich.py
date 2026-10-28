@@ -42,6 +42,7 @@ from ..services import financials, gemini, hibid, jobs, price_log, pricing
 from ..services import funko, shipping
 from ..services import twins
 from ..services import metal
+from ..services import weight
 from ..services import settings as settings_store
 from ..services.bolo import BoloMatcher
 from ..services.hibid import classify_logistics
@@ -319,11 +320,12 @@ From the title and description, produce:
 - confident: true only if brand AND specific product type are identifiable
 - notes: one sentence of resale-relevant context
 - ship: how hard this item is to ship, exactly one of "EASY" (fits a padded mailer or small box: clothing, media, jewelry, small electronics) | "NEUTRAL" (normal parcel) | "HARD" (furniture, appliances, oversized/freight, or pickup-only)
+- weight_lb: your best estimate of the item's shipping weight in pounds, as a number
 
 Title: {title}
 Description: {description}
 
-Return ONLY valid JSON: {{"enriched_title": string, "verdict": string, "confident": boolean, "notes": string, "ship": string}}
+Return ONLY valid JSON: {{"enriched_title": string, "verdict": string, "confident": boolean, "notes": string, "ship": string, "weight_lb": number}}
 """
 
 SHIPPING_PROMPT = """You are helping an auction reseller decide whether it's worth having items shipped from this auction house.
@@ -365,9 +367,10 @@ Weigh the words and the photo by what each can actually show:
   notes which one it came from.
 {photo_note}
 
-Return ONLY valid JSON: {{"enriched_title": string, "verdict": string, "confident": boolean, "notes": string, "ship": string}}
+Return ONLY valid JSON: {{"enriched_title": string, "verdict": string, "confident": boolean, "notes": string, "ship": string, "weight_lb": number}}
 verdict must be exactly one of "broken, damaged, or for parts" | "untested or unknown condition" | "mint condition or working perfectly" | "normal wear and tear"
 ship judges how hard the pictured item is to ship: exactly one of "EASY" (fits a padded mailer or small box) | "NEUTRAL" (normal parcel) | "HARD" (furniture, appliance, oversized/freight)
+weight_lb is your best estimate of the pictured item's shipping weight in pounds, as a number
 """
 
 
@@ -395,6 +398,14 @@ def _mark_ai_ship(e: models.Enrichment) -> None:
     marks = set(e.user_overrides or [])
     if "logistics_ease_ai" not in marks:
         e.user_overrides = sorted(marks | {"logistics_ease_ai"})
+
+
+def _take_ai_weight(e: models.Enrichment, value) -> None:
+    """The AI saw the item: its weight replaces the item-type guess, and the
+    grade never overwrites it (weight_source "ai")."""
+    lb = weight.from_ai(value)
+    if lb is not None:
+        e.weight_lb, e.weight_source = lb, "ai"
 
 
 def _progress(db: Session, e: models.Enrichment, text: str | None) -> None:
@@ -800,6 +811,7 @@ def _enrich(lot: models.Lot, e: models.Enrichment, db: Session,
         if ship in ("EASY", "NEUTRAL", "HARD") and "logistics_ease" not in protected:
             lot.logistics_ease = ship
             _mark_ai_ship(e)
+        _take_ai_weight(e, ai.get("weight_lb"))
     elif e.ai_source is None:
         e.ai_source = "none"
 
@@ -922,6 +934,11 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
     # The gold or silver in it, at today's spot price. Melt is a floor under
     # the resale: a piece can always be sold for its metal, whatever the
     # comps said (the AI audit once valued a 5.08g 14K bracelet at $45).
+    # Shipping weight: the AI's when it has looked, else the item-type guess,
+    # refreshed every grade so a ship-tier change reaches it.
+    if getattr(e, "weight_source", None) != "ai":
+        e.weight_lb = weight.estimate(lot.title, lot.logistics_ease)
+        e.weight_source = "est" if e.weight_lb is not None else None
     mi = metal.assess(lot.title, lot.description)
     e.metal_label = mi["label"] if mi else None
     e.metal_grams = mi["grams"] if mi else None
@@ -1383,10 +1400,11 @@ separate entries.
 Max 12 items.
 
 Return ONLY valid JSON:
-{{"items": [{{"title": string, "est_value": number or null}}], "summary": string, "ship": string}}
+{{"items": [{{"title": string, "est_value": number or null}}], "summary": string, "ship": string, "weight_lb": number}}
 est_value = realistic secondhand SOLD price in USD; null only if you genuinely can't estimate.
 summary = one sentence on what the lot contains overall.
 ship = how hard the WHOLE lot is to ship, exactly one of "EASY" (fits a padded mailer or small box) | "NEUTRAL" (normal parcel or two) | "HARD" (furniture, appliance, oversized/freight)
+weight_lb = your best estimate of the WHOLE lot's shipping weight in pounds, as a number
 """
 
 MAX_INSPECT_ITEMS = 12
@@ -1617,6 +1635,7 @@ def _inspect(lot: models.Lot, e: models.Enrichment, db: Session) -> None:
     if ship in ("EASY", "NEUTRAL", "HARD") and "logistics_ease" not in protected:
         lot.logistics_ease = ship
         _mark_ai_ship(e)
+    _take_ai_weight(e, result.get("weight_lb"))
     if "est_resale" not in protected:
         if keep_prior:
             _apply_roi(lot, e)     # price stays; bid/ship may have moved
