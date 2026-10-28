@@ -14,6 +14,8 @@ import re
 # (pattern on the lowercased title, pounds for ONE). Most specific first:
 # "floor lamp" before "lamp", "golf bag" before "bag".
 _ITEMS = [
+    # Industrial light fixtures are cast housings, not lamps (#660 Pauluhn).
+    (r"flood ?lights?|light fixture|high bay|explosion[- ]proof|hazardous location", 35),
     (r"wheelchair", 40), (r"commode", 20), (r"(?:weight|workout|exercise) bench", 45),
     (r"treadmill|elliptical", 150), (r"dresser|armoire|hutch|china cabinet", 120),
     (r"sofa|couch|loveseat|recliner", 100), (r"desk|table", 40), (r"chair", 20),
@@ -23,12 +25,16 @@ _ITEMS = [
     (r"\b(?:tv|television)\b", 25), (r"amplifier|\bamp\b", 25),
     (r"record player|turntable|stereo|receiver|dvd player|vcr|radio", 10),
     (r"dutch oven", 13), (r"cast iron", 7), (r"skillet|frying pan", 4),
-    (r"cooler", 8), (r"lantern", 4), (r"umbrella", 5), (r"tent\b", 8),
+    # Umbrella before cooler: "Sun Country Cooler" is a brand on an umbrella.
+    (r"umbrella", 5), (r"cooler", 8), (r"lantern", 4), (r"tent\b", 8),
     (r"landscape edging|edging", 12), (r"gutter", 3),
     (r"battery charger|jump starter", 8), (r"\bdrill|\bsaw\b|grinder|sander", 6),
     (r"hole saw|bit set|socket", 1.5),
     (r"guitar", 9), (r"drum", 3), (r"keyboard|synth", 15),
-    (r"framed (?:poster|print|photo|art)|wall art|canvas", 5), (r"poster|print", 1),
+    # Framed means glass and a frame, whatever sits between the words:
+    # "Framed Casablanca French Movie Poster".
+    (r"framed\b.{0,40}?\b(?:poster|print|photo|art|picture|painting)", 8),
+    (r"wall art|canvas", 5), (r"poster|print", 1),
     (r"mirror", 12), (r"\blamp\b", 6), (r"vase|pitcher|planter", 3),
     (r"plates?|platter|bowl|dish|baker|casserole", 3), (r"glass(?:es)?\b|mug|cup", 1),
     (r"fishing rods?", 2), (r"landing nets?", 2), (r"canes?\b|walking stick", 2),

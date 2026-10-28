@@ -14,6 +14,13 @@ from app.workers import enrich
     ("Vintage Metal Torchiere Floor Lamp Glass Shade", "HARD", 15),   # not a 6 lb lamp
     ("Golfmate Jr. Youth Stand Golf Bag", "HARD", 8),                  # not a 1.5 lb bag
     ("Signed Kenneth Lane 36\" Faceted Necklace", "EASY", 0.2),
+    # #660 spot-check misses.
+    ("Framed Casablanca French Movie Poster", "NEUTRAL", 8),
+    ("Framed NASA Space Shuttle Discovery Photograph", "NEUTRAL", 8),
+    ("Casablanca Movie Poster", "EASY", 1),
+    ("Pauluhn Marine 400W Hazardous Location Floodlight", "NEUTRAL", 35),
+    ("Vintage Sun Country Cooler Beach Umbrella", "NEUTRAL", 5),
+    ("Igloo 48 Qt Cooler", "NEUTRAL", 8),
     # Counts multiply.
     ("Set of 4 Dog Man Series Books", "NEUTRAL", 6),
     ("Vintage Fishing Landing Nets Duo", "NEUTRAL", 4),
