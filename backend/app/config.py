@@ -107,6 +107,8 @@ SHIP_KILLERS = (
     # nobody buys them shipped (#660 audit).
     r"|wheelchair|commode|rollator|folding walker|knee (?:walker|scooter)"
     r"|(?:weight|workout|exercise) bench|floor lamp|torchiere|shelving unit"
+    # A golf bag is a bag that doesn't fold: 3 ft of rigid tube and stand.
+    r"|golf (?:club |stand |cart )?bags?"
     r"|(?<!rc )(?<!toy )(?<!slot )\bcars?\b(?!\s+(?:photo|chargers?|mounts?|keys?|covers?|mats?|seats?|wash|care|audio|stereo|holders?|organizers?|vacuums?|adapters?|fresheners?))"
     r"|vehicle|(?<!rc )(?<!toy )\btrucks?\b(?!\s+bed liner)|\bsuv\b|\bsedan\b"
     r"|motorcycle|\batv\b|\butv\b|\bboat\b|jet ski|\btrailer\b|\brv\b|\bcamper\b|motorhome"

@@ -26,6 +26,9 @@ from app.workers import enrich
     ("Drive Medical Drop-Arm Commode w/ Padded Seat", ""),
     ("Vintage Metal Torchiere Floor Lamp Glass Shade", ""),
     ("Shed Door", "-Dimensions: Approximately 6 ft tall. -Material: wood"),
+    # A bag, but not one that folds.
+    ("Callaway Golf Stand Bag 14-Way Divider", "-Dimensions: Approximately 36\" H."),
+    ("TaylorMade Golf Bag", ""),
     # As stored: HiBid's line breaks between fields, not spaces. The first
     # version of the rule missed every real lot on this.
     ("Vintage Fishing Rods Duo",

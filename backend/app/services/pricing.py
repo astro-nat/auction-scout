@@ -111,19 +111,48 @@ _DESC_RETAIL_RE = re.compile(
 
 
 def retail_from_description(description: Optional[str]) -> Optional[float]:
-    """The top of the house's printed retail estimate, or None.
+    """The bottom of the house's printed retail estimate, or None.
 
-    A range gives its high end ("$15 to $25" -> 25): the cap is meant to
-    catch comps for the wrong item, not to second-guess a fair estimate.
+    A range gives its low end ("$20 to $40" -> 20): that is what you can
+    count on getting for it, so it's what the lot is graded on.
     """
     m = _DESC_RETAIL_RE.search(description or "")
     if not m:
         return None
     try:
-        value = float((m.group(2) or m.group(1)).replace(",", ""))
+        value = float(m.group(1).replace(",", ""))
     except ValueError:
         return None
     return value if _RETAIL_MIN <= value <= _RETAIL_MAX else None
+
+
+# A size, count or decade, not a model: "4-tier", "50ft", "2pk", "1950s".
+_NOT_A_MODEL_RE = re.compile(
+    r"^\d+-?(?:s|ft|in|inch|oz|lbs?|pcs?|pk|pack|piece|tier|qt|gal|mm|cm|ml|l|v|w|"
+    r"mah|gb|tb|x|way|cup|quart|watt|volt|amp|ct|count)$")
+
+
+def comps_name_the_model(title: Optional[str], comps) -> bool:
+    """True when the lot's title names a model code and at least half its
+    comps name the same one - the comps are the item, not a lookalike.
+
+    Then they outrank the house's printed estimate: a Coleman 220J sold at
+    $40-50 again and again, whatever "$25 to $50" the house wrote. Generic
+    lots (shelving, a frame drum) name no model, so they stay capped.
+    """
+    name = title_without_retail_prefix(title or "")
+    codes = {c for c in _model_codes(name) if not _NOT_A_MODEL_RE.match(c)}
+    # Part numbers can be all digits (Greenlee 35713). Five or more, so a
+    # year ("1985") never counts as one.
+    codes |= set(re.findall(r"(?<![\d.$])\d{5,}(?![\d.])", name))
+    if not codes:
+        return False
+    titles = [str(c.get("title") or "").lower() for c in (comps or [])
+              if isinstance(c, dict) and c.get("title")]
+    if len(titles) < 2:
+        return False
+    hits = sum(1 for t in titles if any(code in t for code in codes))
+    return hits * 2 >= len(titles)
 
 
 # Condition words the liquidation houses stamp ahead of the price, mapped to

@@ -929,14 +929,27 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
     e.melt_value = melt
     floor = round(melt * MELT_FLOOR_SHARE, 2) if melt else 0.0
     comps_value = float(e.est_resale) if e.est_resale else 0.0
-    # The house's printed retail estimate caps the comps: a generic title
-    # comps against the name-brand item (#660: cheap shelving at $40 against
-    # the house's own $15-25). Your own edit to the value stands.
+    # The low end of the house's printed retail estimate caps the comps: a
+    # generic title comps against the name-brand item (#660: cheap shelving
+    # at $40 against the house's own $15-25), and "$20-40" means count on
+    # $20. Your own edit to the value stands, and so do comps that name the
+    # lot's own model - those are the item, not a lookalike.
     house_retail = pricing.retail_from_description(lot.description)
-    if (house_retail and comps_value > house_retail
-            and "est_resale" not in set(e.user_overrides or [])):
-        src = (e.price_source or "").split(" · capped at house retail")[0]
-        e.price_source = f"{src} · capped at house retail ${house_retail:.0f} (comps said ${comps_value:.2f})"
+    src, _, prior = (e.price_source or "").partition(" · capped at house retail")
+    # Recapped (the rule moved): keep what the comps said the first time.
+    m = re.search(r"comps said \$([\d.]+)", prior)
+    said = float(m.group(1)) if m else None
+    model_comps = pricing.comps_name_the_model(lot.title, e.comps)
+    if "est_resale" in set(e.user_overrides or []):
+        pass
+    elif said is not None and model_comps:
+        # Capped under an earlier rule, but its comps name its model: the
+        # comps' own figure comes back.
+        e.price_source = src
+        e.est_resale = comps_value = said
+    elif house_retail and (said or comps_value) > house_retail and not model_comps:
+        said = said if said is not None else comps_value
+        e.price_source = f"{src} · capped at house retail ${house_retail:.0f} (comps said ${said:.2f})"
         e.est_resale = comps_value = house_retail
     value = max(comps_value, floor)
     melt_backed = floor > comps_value
