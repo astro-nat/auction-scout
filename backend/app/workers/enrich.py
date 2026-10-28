@@ -929,6 +929,15 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
     e.melt_value = melt
     floor = round(melt * MELT_FLOOR_SHARE, 2) if melt else 0.0
     comps_value = float(e.est_resale) if e.est_resale else 0.0
+    # The house's printed retail estimate caps the comps: a generic title
+    # comps against the name-brand item (#660: cheap shelving at $40 against
+    # the house's own $15-25). Your own edit to the value stands.
+    house_retail = pricing.retail_from_description(lot.description)
+    if (house_retail and comps_value > house_retail
+            and "est_resale" not in set(e.user_overrides or [])):
+        src = (e.price_source or "").split(" · capped at house retail")[0]
+        e.price_source = f"{src} · capped at house retail ${house_retail:.0f} (comps said ${comps_value:.2f})"
+        e.est_resale = comps_value = house_retail
     value = max(comps_value, floor)
     melt_backed = floor > comps_value
     if value:

@@ -97,6 +97,35 @@ def retail_from_title(title: str) -> Optional[float]:
     return value if _RETAIL_MIN <= value <= _RETAIL_MAX else None
 
 
+# The house's own retail estimate, printed in the description: "Estimated
+# Retail Value: Approximately $15 to $25", "Estimated Retail Price: $40.00 -
+# $50.00 USD", "Estimated retail value ranges from $25 to $50". A keyword comp
+# search on a generic title finds the name-brand version of the item - plastic
+# shelving priced off metal racks, a no-name DVD player off Sony (#660 audit) -
+# so the house's figure for the thing actually in the lot caps the resale.
+_DESC_PRICE = r"\$\s?(\d{1,3}(?:,\d{3})+(?:\.\d{2})?|\d{1,4}(?:\.\d{2})?)"
+_DESC_RETAIL_RE = re.compile(
+    r"estimated\s+retail\s+(?:price|value)\b[^$\d]{0,40}" + _DESC_PRICE
+    + r"(?:\s*(?:usd\s*)?(?:-|–|—|to)\s*" + _DESC_PRICE.replace(r"\$\s?", r"\$?\s?") + ")?",
+    re.IGNORECASE)
+
+
+def retail_from_description(description: Optional[str]) -> Optional[float]:
+    """The top of the house's printed retail estimate, or None.
+
+    A range gives its high end ("$15 to $25" -> 25): the cap is meant to
+    catch comps for the wrong item, not to second-guess a fair estimate.
+    """
+    m = _DESC_RETAIL_RE.search(description or "")
+    if not m:
+        return None
+    try:
+        value = float((m.group(2) or m.group(1)).replace(",", ""))
+    except ValueError:
+        return None
+    return value if _RETAIL_MIN <= value <= _RETAIL_MAX else None
+
+
 # Condition words the liquidation houses stamp ahead of the price, mapped to
 # the same verdict vocabulary the AI pass uses. Reading them off the title is
 # free, so a lot whose price is already printed needs no model call at all.
