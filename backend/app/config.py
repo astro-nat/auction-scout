@@ -81,6 +81,19 @@ ENRICH_CONCURRENCY = int(os.environ.get("ENRICH_CONCURRENCY", "3"))
 # "dishwasher safe" are small items, not the furniture the bare word implies.
 # Bare "large"/"heavy" removed — they're product adjectives ("heavy duty",
 # "large print") far more often than freight warnings.
+# Always hard to ship, whatever the category says. Checked on the title
+# BEFORE the clothing and mailbox rules: a youth golf bag listed under
+# "Outdoor Games & Sports Equipment" matched the mailbox rule on "Games" and
+# graded EASY (#660 audit).
+BULKY_ITEMS = (
+    # Medical and fitness equipment, floor lamps and shelving: no box, and
+    # nobody buys them shipped.
+    r"wheelchair|commode|rollator|folding walker|knee (?:walker|scooter)"
+    r"|(?:weight|workout|exercise) bench|floor lamp|torchiere|shelving unit"
+    # A golf bag is a bag that doesn't fold: 3 ft of rigid tube and stand.
+    r"|golf (?:club |stand |cart )?bags?"
+)
+
 SHIP_KILLERS = (
     r"\btables?\b(?!\s+(?:lamps?|runners?|cloths?|linens?|top|tennis|book|clocks?|fans?|saw blade))"
     r"|\bdesks?\b(?!\s+(?:clock|lamp|fan|organizers?|pads?|mats?|armrest|accessor))"
@@ -103,12 +116,6 @@ SHIP_KILLERS = (
     r"|(?<!dishwasher )(?<!microwave )(?<!oven )(?<!kid )(?<!child )(?<!food )(?<!skin )\bsafe\b"
     r"|\bvault\b|gun safe|toolbox"
     r"|tool chest|workbench|\bladder\b"
-    # Medical and fitness equipment, floor lamps and shelving: no box, and
-    # nobody buys them shipped (#660 audit).
-    r"|wheelchair|commode|rollator|folding walker|knee (?:walker|scooter)"
-    r"|(?:weight|workout|exercise) bench|floor lamp|torchiere|shelving unit"
-    # A golf bag is a bag that doesn't fold: 3 ft of rigid tube and stand.
-    r"|golf (?:club |stand |cart )?bags?"
     r"|(?<!rc )(?<!toy )(?<!slot )\bcars?\b(?!\s+(?:photo|chargers?|mounts?|keys?|covers?|mats?|seats?|wash|care|audio|stereo|holders?|organizers?|vacuums?|adapters?|fresheners?))"
     r"|vehicle|(?<!rc )(?<!toy )\btrucks?\b(?!\s+bed liner)|\bsuv\b|\bsedan\b"
     r"|motorcycle|\batv\b|\butv\b|\bboat\b|jet ski|\btrailer\b|\brv\b|\bcamper\b|motorhome"

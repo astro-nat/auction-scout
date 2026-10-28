@@ -137,6 +137,7 @@ query LotSearch($auctionId: Int!, $pageNumber: Int!, $searchText: String!, $cate
 """
 
 _SHIP_KILLERS_RE = re.compile(config.SHIP_KILLERS, re.IGNORECASE)
+_BULKY_ITEMS_RE = re.compile(config.BULKY_ITEMS, re.IGNORECASE)
 _MAILBOX_RE = re.compile(config.MAILBOX_WINNERS, re.IGNORECASE)
 _CLOTHING_RE = re.compile(config.CLOTHING, re.IGNORECASE)
 _PICKUP_ONLY_RE = re.compile(r"local pickup only|pickup only|no shipping", re.IGNORECASE)
@@ -432,6 +433,8 @@ def is_bulky(description: str | None, title: str = "") -> bool:
 
 def _logistics_ease(title: str, category: str, description: str) -> str:
     if _PICKUP_ONLY_RE.search(description or ""):
+        return "HARD"
+    if _BULKY_ITEMS_RE.search(title or ""):
         return "HARD"
     hay = f"{title} {category or ''}"
     # Clothing is soft and light — always cheap to ship, so it overrides even

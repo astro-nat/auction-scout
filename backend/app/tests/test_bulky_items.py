@@ -47,6 +47,12 @@ def test_bulky_lots_are_hard(title, description):
     assert classify_logistics(title, "", description) == "HARD"
 
 
+def test_a_bulky_title_beats_a_mailbox_category():
+    """"Games" in the category is a mailbox signal; it lost the golf bag."""
+    assert classify_logistics("Golfmate Jr. Youth Stand Golf Bag",
+                              "Outdoor Games & Sports Equipment", "") == "HARD"
+
+
 @pytest.mark.parametrize("title,description", [
     # Folds flat whatever its packed-out height.
     ("Rightline Gear Hitch Rack Dry Bags Set",
