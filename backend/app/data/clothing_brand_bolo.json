@@ -795,6 +795,7 @@
     },
     {
       "brand": "Pendleton",
+      "_disqualifiers": ["terry pendleton", "rookie card", "baseball card", "trading card", "donruss", "topps", "fleer"],
       "category": "vintage_heritage",
       "tier": 2,
       "models": [

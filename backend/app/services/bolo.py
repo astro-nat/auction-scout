@@ -150,7 +150,10 @@ _BOLO_MATCH_CACHE_PATH = _CACHE_DIR / "bolo_match_cache.json"
 #   v5 (2026-08-22): clothing additions — Y2K brands, graphic tees,
 #      plus-size brands, luxury outerwear/streetwear, contemporary
 #      designer women's (with collision-gated compound aliases).
-_MATCHER_LOGIC_VERSION = "6"
+#   v7 (2026-10-26): multi-word alias gaps no longer cross a comma,
+#      sentence end, slash or line break; skip phrases for Snap-On
+#      toilet seats, Terry Pendleton cards, palm-tree frames, records.
+_MATCHER_LOGIC_VERSION = "7"
 # How many writes to absorb before flushing the in-memory cache to
 # disk. Tuned for "scan 14k lots" use case — flushing every 500 misses
 # means ~30 disk writes during a full scan, each ~50ms (negligible
@@ -3729,10 +3732,18 @@ def _whole_word_pattern(literal: str, max_gap_words: int = 6) -> re.Pattern:
         )
     # Multi-token: connect tokens with `\W+` PLUS an optional run of
     # up to max_gap_words intervening word-blobs.
+    # Adjacent tokens may be joined by any punctuation ("snap-on"), but
+    # a gap with intervening words must stay inside one phrase: no
+    # comma, sentence end, slash or line break. Otherwise list
+    # descriptions pair words from different items - "dark green,
+    # orange, & black. -Ideal use: power" read as be quiet! "dark
+    # power", "WD-40, Flex Tape, ... / blue" as "wd blue" (#660 audit).
+    # A period followed directly by a word character (a decimal, "U.S.")
+    # is not a sentence end.
+    sep = r"(?:[^\w.,;:!?/|\r\n]|\.(?=\w))+"
     parts = [re.escape(tokens[0])]
     for t in tokens[1:]:
-        # `(?:\w+\W+){0,N}` = up to N intervening (word + non-word).
-        parts.append(rf"\W+(?:\w+\W+){{0,{max_gap_words}}}")
+        parts.append(rf"(?:\W+|{sep}(?:\w+{sep}){{1,{max_gap_words}}})")
         parts.append(re.escape(t))
     inner = "".join(parts)
     return re.compile(

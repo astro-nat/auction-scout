@@ -872,6 +872,7 @@
     },
     {
       "brand": "Snap-On hand tools",
+      "_disqualifiers": ["snap-on toilet", "snap-on seat", "snap-on lid", "snap-on cover", "snap-on cap", "snap on toilet", "snap on seat", "snap on lid", "snap on cover"],
       "category": "tool_parts",
       "tier": 2,
       "models": [

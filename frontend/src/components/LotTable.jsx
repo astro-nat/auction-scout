@@ -270,9 +270,15 @@ function RoiPeek({ text, children }) {
   )
 }
 
+// The bid the ROI is worked out at: the next bid, what winning would
+// actually cost now (the backend grades the same number).
+function roiBid(lot) {
+  return Math.max(Number(lot.current_bid ?? 0), Number(lot.next_bid ?? 0))
+}
+
 function roiTooltip(lot, e, auction) {
   if (e.est_roi == null) return undefined
-  const lines = [`Return on the all-in cost, not the hammer price.`]
+  const lines = [`Return at the next bid of ${money(roiBid(lot))}, on the all-in cost, not the hammer price.`]
   if (e.all_in_cost != null) {
     // Same rule as the backend's pickup.will_pick_up: within 45 minutes and
     // not ship-only, you collect it - whatever the lot's own tag says.
@@ -1353,7 +1359,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                   <span style={{ fontWeight: 600,
                                  color: Number(e.est_roi) < 0 ? 'var(--danger)'
                                    : e.roi_status === 'GOLD MINE' ? 'var(--success)' : undefined }}>
-                    ROI {Math.round(Number(e.est_roi) * 100)}%
+                    ROI {Math.round(Number(e.est_roi) * 100)}% at {money(roiBid(lot))}
                   </span>
                 )}
               </div>
@@ -2023,7 +2029,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
         <td className="num">
           {roi == null ? <span className={`d-roi d-roi-${kind}`}>—</span> : (
             <RoiPeek text={roiTooltip(lot, e, auctions[lot.auction_id])}>
-              <span className={`d-roi d-roi-${kind}`}>{roi}%</span>
+              <span className={`d-roi d-roi-${kind}`} title={`at the next bid of ${money(roiBid(lot))}`}>{roi}%</span>
             </RoiPeek>
           )}
         </td>
@@ -2087,7 +2093,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
           </span>
           {roi != null && (
             <RoiPeek text={roiTooltip(lot, e, auctions[lot.auction_id])}>
-              <span className={`d-roi d-roi-${kind}`}>ROI {roi}%</span>
+              <span className={`d-roi d-roi-${kind}`}>ROI {roi}% at {money(roiBid(lot))}</span>
             </RoiPeek>
           )}
         </div>
@@ -2510,7 +2516,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                 {e.est_roi == null ? '—' : `${Math.round(Number(e.est_roi) * 100)}%`}
                 {e.all_in_cost != null && (
                   <div style={{ color: 'var(--muted)', fontSize: 11 }}>
-                    all-in {money(e.all_in_cost)}
+                    at {money(roiBid(lot))} bid, all-in {money(e.all_in_cost)}
                   </div>
                 )}
               </td>

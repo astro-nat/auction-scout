@@ -312,6 +312,7 @@
     },
     {
       "brand": "Personal organizers and PDAs",
+      "_disqualifiers": ["palm tree", "palm trees"],
       "category": "vintage_computing",
       "tier": 3,
       "models": [

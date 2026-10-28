@@ -113,15 +113,45 @@ def test_damaged_in_any_wording_is_a_red_flag():
     assert e.roi_reason.startswith("condition red flag")
 
 
-def test_a_gold_mine_must_clear_ten_dollars_at_the_max_bid(monkeypatch):
+def _profit_at(lot, e, bid):
+    from app.services import financials
+    acq = financials.acquisition_multiplier(lot.auction.buyer_premium_mult - 1)
+    return float(e.est_resale) * (1 - financials.PLATFORM_FEE) - bid * acq - (
+        enrich.LOGISTICS_COST[lot.logistics_ease] + enrich._inbound_shipping(lot))
+
+
+def test_the_max_bid_still_clears_ten_dollars(monkeypatch):
     """Costume pieces resold for $18-22 graded GOLD MINE on $5 bids while
-    clearing under $10 even at the max bid - not worth the trip."""
+    clearing under $10 even at the max bid - not worth the trip. The max
+    bid now stops where the profit would drop under $10."""
+    from app.services import financials
+    monkeypatch.setattr(financials, "current_target_roi", lambda: 0.3)
+    lot, e = _lot(current_bid=5, next_bid=6, source="Local Pickup")
+    _grade(lot, e, resale=22)
+    assert e.roi_status == "PASS"
+    assert "the most you can pay and still clear $10" in e.roi_reason
+    assert _profit_at(lot, e, float(e.max_bid)) == pytest.approx(10, abs=0.02)
+
+
+def test_a_cheap_bid_on_a_good_item_is_still_gold(monkeypatch):
+    """A $40 Coleman lantern at a $2 bid failed the $10 gate because its
+    ROI ceiling cleared $9 - while the lot itself would clear $25 (#660)."""
+    from app.services import financials
+    monkeypatch.setattr(financials, "current_target_roi", lambda: 1.5)
+    lot, e = _lot(current_bid=2, next_bid=3, source="Local Pickup")
+    _grade(lot, e, resale=40)
+    assert e.roi_status == "GOLD MINE"
+    assert _profit_at(lot, e, float(e.max_bid)) >= 9.99
+
+
+def test_nothing_clears_ten_dollars(monkeypatch):
     from app.services import financials
     monkeypatch.setattr(financials, "current_target_roi", lambda: 0.3)
     lot, e = _lot(current_bid=1, next_bid=1, source="Local Pickup")
-    _grade(lot, e, resale=22)
+    _grade(lot, e, resale=14)
     assert e.roi_status == "PASS"
-    assert "under the $10 minimum" in e.roi_reason
+    assert e.max_bid == 0
+    assert e.roi_reason == "under $10 profit at any bid - the minimum for a gold mine"
 
 
 def test_a_worthwhile_gold_mine_still_mints():
