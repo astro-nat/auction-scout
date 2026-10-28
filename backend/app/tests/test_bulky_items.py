@@ -26,6 +26,19 @@ from app.workers import enrich
     ("Drive Medical Drop-Arm Commode w/ Padded Seat", ""),
     ("Vintage Metal Torchiere Floor Lamp Glass Shade", ""),
     ("Shed Door", "-Dimensions: Approximately 6 ft tall. -Material: wood"),
+    # As stored: HiBid's line breaks between fields, not spaces. The first
+    # version of the rule missed every real lot on this.
+    ("Vintage Fishing Rods Duo",
+     "Vintage Fishing Rods Duo\r\n-Estimated Retail Price: $30 - $60.\r\n"
+     "-Dimensions: Approximately 59\" (4'11\") for the shorter rod and up to "
+     "92\" (7'8\") for the longer rod.\r\n-Material/Brand: Fiberglass"),
+    ("Adjustable Aluminum Underarm Crutches Pair",
+     "-Dimensions: Approximately 52\"–53\" in height.\n-Material: aluminum"),
+    # As stored by the LLC house: fields padded with runs of spaces.
+    ("Artificial Faux Bamboo Plant in Glazed Planter",
+     "Artificial Faux Bamboo Plant" + " " * 200
+     + "-Dimensions: Approximately 55 inches tall (overall height)." + " " * 220
+     + "-Material / Brand: Polyester"),
 ])
 def test_bulky_lots_are_hard(title, description):
     assert classify_logistics(title, "", description) == "HARD"

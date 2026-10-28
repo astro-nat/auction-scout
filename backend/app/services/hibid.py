@@ -398,7 +398,10 @@ def _lot_category(raw: Any) -> Optional[str]:
 # read - the rest of a description is boilerplate - and only up to the next
 # field ("-Material/Brand: ...").
 BULKY_INCHES = 48
-_DIMENSIONS_RE = re.compile(r"dimensions?\s*:([^*\n]{0,160}?)(?:\s[-*][A-Z]|$)", re.IGNORECASE)
+# Stored descriptions keep HiBid's "\r\n" between fields, so a line break
+# ends the line as surely as the next "-Field:" does.
+_DIMENSIONS_RE = re.compile(r"dimensions?\s*:([^*\r\n]{0,160}?)(?:\s[-*][A-Z]|[\r\n]|$)",
+                            re.IGNORECASE)
 _INCHES_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(?:\"|”|''|in\b|inch(?:es)?\b)", re.IGNORECASE)
 # Feet only up to 12: "50 ft in length" is a coiled hose or edging roll, not
 # a 50-foot box.
@@ -416,7 +419,9 @@ def is_bulky(description: str | None, title: str = "") -> bool:
     and the item isn't something that folds."""
     if _FOLDS_RE.search(title or ""):
         return False
-    m = _DIMENSIONS_RE.search(description or "")
+    # HiBid pads fields with runs of 200+ spaces (and sometimes line breaks);
+    # collapsed, the next "-Field:" sits right after the dimensions.
+    m = _DIMENSIONS_RE.search(re.sub(r"[ \t]+", " ", description or ""))
     if not m:
         return False
     dims = m.group(1)
