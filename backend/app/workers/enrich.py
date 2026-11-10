@@ -43,6 +43,7 @@ from ..services import funko, shipping
 from ..services import twins
 from ..services import metal
 from ..services import weight
+from ..services import mailer
 from ..services import settings as settings_store
 from ..services.bolo import BoloMatcher
 from ..services.hibid import classify_logistics
@@ -77,6 +78,10 @@ LOGISTICS_COST = {"EASY": 3.50, "NEUTRAL": 6.50, "HARD": 21.00}
 # Least a gold mine must clear if won at the max bid (the user's call,
 # 2026-10-03: "add the $10 minimum").
 MIN_GOLD_PROFIT = float(os.environ.get("MIN_GOLD_PROFIT", "10"))
+# Heaviest lot worth buying, in pounds (the user's call, 2026-10-28: "I
+# don't want to buy anything that's over 10 lb"). Judged on the AI's weight
+# when it has one, else the item-type estimate (services/weight).
+MAX_WEIGHT_LB = float(os.environ.get("MAX_WEIGHT_LB", "10"))
 
 # Share of melt value used as the resale floor: about what a refiner pays.
 MELT_FLOOR_SHARE = float(os.environ.get("MELT_FLOOR_SHARE", "0.9"))
@@ -1051,7 +1056,15 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
             e.max_bid = min_profit_ceiling
             small_win = (lead.status == "GOLD MINE"
                          and effective_bid > min_profit_ceiling)
+        too_heavy = (e.weight_lb is not None
+                     and float(e.weight_lb) > MAX_WEIGHT_LB)
+        # Everything you sell goes out in one poly mailer (the user's call,
+        # 2026-10-28); a lot that won't fit it is not worth buying.
+        mailer_size = mailer.current_size()
+        too_big = not mailer.fits(lot.title, lot.description, lot.logistics_ease,
+                                  e.weight_lb, mailer_size)
         e.roi_status = ("PASS" if (red_flag or lot.unreachable_pickup
+                                   or too_big or too_heavy
                                    or titled_vehicle or not_genuine
                                    or identity_uncertain
                                    or thin_evidence or demoted or small_win)
@@ -1074,6 +1087,11 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
             e.roi_reason = "pickup-only and outside your radius"
         elif titled_vehicle:
             e.roi_reason = "titled vehicle — excluded by your settings"
+        elif too_big:
+            e.roi_reason = f"won't fit your {mailer.size_label(mailer_size)} mailer"
+        elif too_heavy:
+            e.roi_reason = (f"{'about ' if e.weight_source != 'ai' else ''}"
+                            f"{float(e.weight_lb):g} lb - over your {MAX_WEIGHT_LB:g} lb limit")
         elif not_genuine:
             e.roi_reason = f"fraud check: listing says \"{fk['bootleg']}\" - not a genuine Funko"
         elif identity_uncertain:

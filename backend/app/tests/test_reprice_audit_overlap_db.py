@@ -24,6 +24,13 @@ from app.workers import enrich
 
 pytestmark = pytest.mark.db
 
+
+@pytest.fixture(autouse=True)
+def _every_lot_fits_the_mailer(monkeypatch):
+    """These tests are about the audit pass, not shipping: their placeholder lots
+    would otherwise fail the mailer check first."""
+    monkeypatch.setattr(enrich.mailer, "fits", lambda *a, **k: True)
+
 TEST_HIBID = 999999977
 N = 8
 FOUND = {"est_resale": 90, "price_low": 80, "price_high": 100,

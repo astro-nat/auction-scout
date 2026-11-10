@@ -224,7 +224,11 @@ def get_settings():
     from ..services import settings as settings_store
     from ..services import drive
     o = drive.origin()
+    from ..services import mailer
+    width, length = mailer.current_size()
     return {"target_roi_pct": round(financials.current_target_roi() * 100),
+            # The poly mailer everything you sell ships in, in inches.
+            "mailer_size": {"width": width, "length": length},
             "exclude_titled_vehicles": settings_store.flag(
                 "exclude_titled_vehicles",
                 settings_store.EXCLUDE_VEHICLES_DEFAULT),
@@ -273,8 +277,15 @@ def patch_settings(payload: dict,
         if not isinstance(vehicles, bool):
             raise HTTPException(status_code=422,
                                 detail="exclude_titled_vehicles must be true or false")
+    size = None
+    if "mailer_size" in payload:
+        from ..services import mailer
+        size = mailer.parse_size(str(payload["mailer_size"] or ""))
+        if size is None:
+            raise HTTPException(status_code=422,
+                                detail="mailer_size must be two sizes in inches, like 14.5x20")
     roi = None
-    if "target_roi_pct" in payload or (not to_save and vehicles is None):
+    if "target_roi_pct" in payload or (not to_save and vehicles is None and size is None):
         roi = payload.get("target_roi_pct")
         if not isinstance(roi, (int, float)) or not (1 <= roi <= 10000):
             raise HTTPException(status_code=422,
@@ -292,6 +303,10 @@ def patch_settings(payload: dict,
         settings_store.set("target_roi_pct", str(float(roi)))
         to_save["target_roi_pct"] = roi
         regrade = True
+    if size is not None:
+        settings_store.set("mailer_size", f"{size[0]:g}x{size[1]:g}")
+        to_save["mailer_size"] = {"width": size[0], "length": size[1]}
+        regrade = True   # what fits decides what can be a gold mine
     n = 0
     if regrade:
         # Re-GRADE, not re-price: neither knob changes what anything is

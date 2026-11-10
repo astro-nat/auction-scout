@@ -28,8 +28,9 @@ _ITEMS = [
     # Umbrella before cooler: "Sun Country Cooler" is a brand on an umbrella.
     (r"umbrella", 5), (r"cooler", 8), (r"lantern", 4), (r"tent\b", 8),
     (r"landscape edging|edging", 12), (r"gutter", 3),
-    (r"battery charger|jump starter", 8), (r"\bdrill|\bsaw\b|grinder|sander", 6),
+    # A hole saw is a bit, not a power saw.
     (r"hole saw|bit set|socket", 1.5),
+    (r"battery charger|jump starter", 8), (r"\bdrill|\bsaw\b|grinder|sander", 6),
     (r"guitar", 9), (r"drum", 3), (r"keyboard|synth", 15),
     # Framed means glass and a frame, whatever sits between the words:
     # "Framed Casablanca French Movie Poster".
@@ -38,12 +39,15 @@ _ITEMS = [
     (r"mirror", 12), (r"\blamp\b", 6), (r"vase|pitcher|planter", 3),
     (r"plates?|platter|bowl|dish|baker|casserole", 3), (r"glass(?:es)?\b|mug|cup", 1),
     (r"fishing rods?", 2), (r"landing nets?", 2), (r"canes?\b|walking stick", 2),
-    (r"helmet", 4), (r"baseball|football|basketball|soccer ball", 1),
+    # Clothing before balls: a "Basketball Jersey" is a jersey.
     (r"jersey|shirt|t-shirt|hoodie|sweater|dress|jacket|coat|jeans|pants", 1.5),
+    (r"helmet", 4), (r"baseball|football|basketball|soccer ball", 1),
     (r"gown", 4), (r"shoes|boots|sneakers", 3),
+    # Swarovski pieces are small crystal: a figurine or a bag charm, ounces.
+    (r"swarovski", 0.5),
     (r"backpack|duffel", 2), (r"purse|handbag|crossbody|wallet|clutch|bag", 1.5),
     (r"books?\b", 1.5), (r"vinyl|record|\blps?\b", 0.6), (r"\bdvds?\b|\bcds?\b|blu-?ray|vhs", 0.4),
-    (r"figurine|statue", 1.5), (r"swarovski|crystal", 0.5),
+    (r"figurine|statue", 1.5), (r"crystal", 0.5),
     (r"trading cards?|\bcards?\b", 0.3),
     (r"necklace|bracelet|earrings?|\bring\b|brooch|\bpin\b|pinback|charm|pendant", 0.2),
     (r"watch\b", 0.4), (r"coin|token|medal", 0.2),

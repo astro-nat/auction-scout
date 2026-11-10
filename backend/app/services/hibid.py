@@ -403,7 +403,20 @@ BULKY_INCHES = 48
 # ends the line as surely as the next "-Field:" does.
 _DIMENSIONS_RE = re.compile(r"dimensions?\s*:([^*\r\n]{0,160}?)(?:\s[-*][A-Z]|[\r\n]|$)",
                             re.IGNORECASE)
-_INCHES_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(?:\"|”|''|in\b|inch(?:es)?\b)", re.IGNORECASE)
+# A number of inches, fractions included: 14, 6.5, 6-3/8, 6 3/8, 7/8. Without
+# the fractions "6-3/8" read as 8 inches - a 6" hole saw too big to mail.
+_INCHES_RE = re.compile(
+    r"(?<![\d/.])((?:\d+[- ])?\d+/\d+|\d+(?:\.\d+)?)\s*(?:\"|”|''|in\b|inch(?:es)?\b)",
+    re.IGNORECASE)
+
+
+def _inches(token: str) -> float:
+    """"6-3/8" -> 6.375, "7/8" -> 0.875, "14" -> 14.0."""
+    whole, _, frac = token.replace(" ", "-").rpartition("-")
+    if "/" in frac:
+        num, den = frac.split("/")
+        return (float(whole) if whole else 0.0) + float(num) / float(den)
+    return float(token)
 # Feet only up to 12: "50 ft in length" is a coiled hose or edging roll, not
 # a 50-foot box.
 _FEET_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(?:'(?!')|ft\b|feet\b|foot\b)", re.IGNORECASE)
@@ -415,20 +428,32 @@ _FOLDS_RE = re.compile(
     r"curtains?|sheets?|throws?|tapestr(?:y|ies))\b", re.IGNORECASE)
 
 
+def dimensions_line(description: str | None) -> str:
+    """The text of the house's "Dimensions:" line, or "" when there is none."""
+    # HiBid pads fields with runs of 200+ spaces (and sometimes line breaks);
+    # collapsed, the next "-Field:" sits right after the dimensions.
+    m = _DIMENSIONS_RE.search(re.sub(r"[ \t]+", " ", description or ""))
+    return m.group(1) if m else ""
+
+
+def dimensions_inches(description: str | None) -> list[float]:
+    """Every measurement on the house's "Dimensions:" line, in inches, in the
+    order written. Empty when there is no such line or it has no numbers
+    ("as shown in the photos")."""
+    dims = dimensions_line(description)
+    if not dims:
+        return []
+    sides = [_inches(x) for x in _INCHES_RE.findall(dims)]
+    sides += [float(x) * 12 for x in _FEET_RE.findall(dims) if float(x) <= 12]
+    return sides
+
+
 def is_bulky(description: str | None, title: str = "") -> bool:
     """True when the description's dimensions line has a side of 4 ft or more
     and the item isn't something that folds."""
     if _FOLDS_RE.search(title or ""):
         return False
-    # HiBid pads fields with runs of 200+ spaces (and sometimes line breaks);
-    # collapsed, the next "-Field:" sits right after the dimensions.
-    m = _DIMENSIONS_RE.search(re.sub(r"[ \t]+", " ", description or ""))
-    if not m:
-        return False
-    dims = m.group(1)
-    sides = [float(x) for x in _INCHES_RE.findall(dims)]
-    sides += [float(x) * 12 for x in _FEET_RE.findall(dims) if float(x) <= 12]
-    return any(s >= BULKY_INCHES for s in sides)
+    return any(s >= BULKY_INCHES for s in dimensions_inches(description))
 
 
 def _logistics_ease(title: str, category: str, description: str) -> str:

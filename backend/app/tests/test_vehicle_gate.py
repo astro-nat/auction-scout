@@ -82,6 +82,9 @@ def test_a_profitable_bus_is_gated_not_golded(monkeypatch):
 def test_the_gate_respects_the_setting(monkeypatch):
     monkeypatch.setattr(enrich.settings_store, "flag",
                         lambda key, default: False)
+    # This test is about the vehicle gate alone.
+    monkeypatch.setattr(enrich, "MAX_WEIGHT_LB", 1e9)
+    monkeypatch.setattr(enrich.mailer, "fits", lambda *a, **k: True)
     lot, e = _lot()
     enrich._apply_roi(lot, e)
     assert e.roi_status == "GOLD MINE"

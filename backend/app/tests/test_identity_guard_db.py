@@ -19,6 +19,13 @@ from app.workers import enrich
 
 pytestmark = pytest.mark.db
 
+
+@pytest.fixture(autouse=True)
+def _every_lot_fits_the_mailer(monkeypatch):
+    """These tests are about the identity guard, not shipping: their placeholder lots
+    would otherwise fail the mailer check first."""
+    monkeypatch.setattr(enrich.mailer, "fits", lambda *a, **k: True)
+
 TEST_HIBID = 999999984
 LISTING = "CASSETTE TAPE DECK ~ JN-6-23 (R48B)"
 INVENTED = "Vintage Denon DR-M11 Stereo Cassette Tape Deck Rack Mount Black"

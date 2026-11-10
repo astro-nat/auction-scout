@@ -21,6 +21,13 @@ from app.workers import enrich
     ("Pauluhn Marine 400W Hazardous Location Floodlight", "NEUTRAL", 35),
     ("Vintage Sun Country Cooler Beach Umbrella", "NEUTRAL", 5),
     ("Igloo 48 Qt Cooler", "NEUTRAL", 8),
+    # Rule order: the specific item before the general word.
+    ("Swarovski Kris Bear Lucky Charm Figurine", "NEUTRAL", 0.5),
+    ("Swarovski Brown Bear Bag Charm", "NEUTRAL", 0.5),
+    ("Greenlee 35713 6-3/8\" Recessed Light Hole Saw", "NEUTRAL", 1.5),
+    ("DeWalt Circular Saw", "NEUTRAL", 6),
+    ("West Virginia Mountaineers #44 Basketball Jersey", "NEUTRAL", 1.5),
+    ("Evan Gattis #11 MLB Baseball in Display Case", "NEUTRAL", 1),
     # Counts multiply.
     ("Set of 4 Dog Man Series Books", "NEUTRAL", 6),
     ("Vintage Fishing Landing Nets Duo", "NEUTRAL", 4),
@@ -62,3 +69,26 @@ def test_an_ai_weight_survives_regrading():
     enrich._take_ai_weight(e, 5.5)
     enrich._apply_roi(lot, e)
     assert (e.weight_lb, e.weight_source) == (5.5, "ai")
+
+
+def test_over_ten_pounds_is_never_a_gold_mine(monkeypatch):
+    monkeypatch.setattr(enrich.mailer, "fits", lambda *a, **k: True)   # the weight gate alone
+    lot, e = _lot("Drive Medical Cruiser III Folding Wheelchair")
+    enrich._apply_roi(lot, e)
+    assert e.roi_status == "PASS"
+    assert e.roi_reason == "about 40 lb - over your 10 lb limit"
+
+
+def test_ten_pounds_on_the_nose_is_fine():
+    lot, e = _lot("Emerson NR303TT Wooden Record Player & Radio")   # 10 lb
+    enrich._apply_roi(lot, e)
+    assert e.weight_lb == 10
+    assert "lb limit" not in (e.roi_reason or "")
+
+
+def test_an_ai_weight_decides_it(monkeypatch):
+    monkeypatch.setattr(enrich.mailer, "fits", lambda *a, **k: True)   # the weight gate alone
+    lot, e = _lot("Coleman Green Metal Fuel Lantern")              # ~4 lb guess
+    enrich._take_ai_weight(e, 12)
+    enrich._apply_roi(lot, e)
+    assert e.roi_reason == "12 lb - over your 10 lb limit"

@@ -3,7 +3,7 @@ import { ask } from './lib/ask'
 import { missingLots } from './lib/missing'
 import NumberField from './components/NumberField'
 import { notify } from './lib/notice'
-import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, importLots, importAllAuctions, flushClosed, refreshBids, reinspectNoComps, repriceUnpriced, fetchSettings, saveTargetRoi, saveDriveFrom, clearDriveFrom, setAuctionLive, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
+import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, importLots, importAllAuctions, flushClosed, refreshBids, reinspectNoComps, repriceUnpriced, fetchSettings, saveTargetRoi, saveMailerSize, saveDriveFrom, clearDriveFrom, setAuctionLive, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
 import { fetchNeverRules } from './api'
 import { auctionClosed } from './lib/pacing'
 import { houseRatioLabel, houseRatioTitle } from './lib/calibration'
@@ -288,9 +288,16 @@ export default function App() {
   const [driveAvailable, setDriveAvailable] = useState(false)
   // Target ROI % for the GOLD MINE verdict — DB-backed, editable inline.
   const [targetRoi, setTargetRoi] = useState('')
+  // The mailer a lot must fit to be a gold mine, inches - DB-backed too.
+  const [mailerW, setMailerW] = useState('')
+  const [mailerL, setMailerL] = useState('')
   useEffect(() => {
     fetchSettings().then((s) => {
       setTargetRoi(String(s.target_roi_pct))
+      if (s.mailer_size) {
+        setMailerW(String(s.mailer_size.width))
+        setMailerL(String(s.mailer_size.length))
+      }
       setDriveFrom(s.drive_from || null)
       setDriveAvailable(Boolean(s.drive_times_available))
     }).catch(console.error)
@@ -589,6 +596,16 @@ export default function App() {
       setView('items')
       notify(`Importing in the background — progress shows in the top bar, `
             + `and the items appear here when it finishes.`)
+    } catch (e) { alertOnce(e.message) }
+  }
+
+  async function handleSaveMailer() {
+    const w = Number(mailerW)
+    const l = Number(mailerL)
+    if (!w || !l) { notify('Enter the mailer size in inches, e.g. 14.5 by 20.'); return }
+    try {
+      const r = await saveMailerSize(w, l)
+      notify(`Mailer set to ${r.mailer_size.width} x ${r.mailer_size.length} in. Re-grading ${r.regrading} items — takes a few seconds.`)
     } catch (e) { alertOnce(e.message) }
   }
 
@@ -1517,6 +1534,19 @@ export default function App() {
                   style={{ width: 58 }}
                 />% ROI
                 <button style={{ fontSize: 12, padding: '3px 9px' }} onClick={handleSaveRoi} data-track="Save ROI target">Save target</button>
+              </span>
+              <span style={panelRow}
+                    title="Everything you sell ships in this poly mailer. A lot that won't fit it is never a gold mine. Saving re-grades every item for free.">
+                fits a
+                <input type="number" min="2" step="0.5" value={mailerW}
+                       onChange={(ev) => setMailerW(ev.target.value)}
+                       aria-label="Mailer width, inches" style={{ width: 52 }} />
+                x
+                <input type="number" min="2" step="0.5" value={mailerL}
+                       onChange={(ev) => setMailerL(ev.target.value)}
+                       aria-label="Mailer length, inches" style={{ width: 52 }} />
+                in mailer
+                <button style={{ fontSize: 12, padding: '3px 9px' }} onClick={handleSaveMailer} data-track="Save mailer size">Save size</button>
               </span>
             </fieldset>
           </div>
