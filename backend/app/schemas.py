@@ -35,6 +35,10 @@ class EnrichmentOut(BaseModel):
     melt_value: Optional[Decimal] = None    # the metal at today's spot price
     weight_lb: Optional[float] = None       # shipping weight, pounds
     weight_source: Optional[str] = None     # "ai" (from photos) | "est" (item type)
+    str_pct: Optional[float] = None         # sell-through rate, percent
+    str_sold: Optional[int] = None          # eBay sold total behind it
+    str_active: Optional[int] = None        # eBay active total behind it
+    str_checked_at: Optional[datetime] = None
     est_roi: Optional[float] = None
     profit: Optional[Decimal] = None
     roi_status: Optional[str] = None
@@ -195,6 +199,9 @@ class AuctionOut(BaseModel):
 
 class EnrichBatchRequest(BaseModel):
     lot_ids: list[str]
+    # Run them in the order given - the page's, top row first - instead of
+    # soonest-closing first, so rows fill in as the user reads down.
+    in_page_order: bool = False
 
 
 class LotIdsRequest(BaseModel):
@@ -210,6 +217,7 @@ class RepriceRequest(BaseModel):
     lots, so no scope filter applies: a lot with no AI title is searched on
     its raw one, and a lot that already has a value is searched again."""
     lot_ids: list[str]
+    in_page_order: bool = False      # as EnrichBatchRequest
 
 
 class UiEventIn(BaseModel):

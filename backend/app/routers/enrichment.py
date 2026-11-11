@@ -38,6 +38,25 @@ def _worth_pricing():
                     models.Lot.closes_at >= datetime.now()))
 
 
+def _can_be_gold(db: Session, lot_db_ids: list[int]) -> tuple[list[int], int]:
+    """The lots worth pricing, in the order given, and how many were left
+    out because they are SURE to fail the mailer or 10 lb rule - a sofa can
+    never be a gold mine, so its comp lookup and AI check buy nothing (the
+    user's call, 2026-11-10). Bulk paths only: pricing one lot by hand is a
+    deliberate choice and goes through."""
+    from ..services import mailer
+    if not lot_db_ids:
+        return [], 0
+    size = mailer.current_size()
+    rows = (db.query(models.Lot.id, models.Lot.title, models.Lot.description,
+                     models.Lot.logistics_ease)
+              .filter(models.Lot.id.in_(lot_db_ids)).all())
+    blocked = {r.id for r in rows
+               if mailer.wont_be_gold(r.title, r.description, r.logistics_ease, size)}
+    keep = [i for i in lot_db_ids if i not in blocked]
+    return keep, len(lot_db_ids) - len(keep)
+
+
 def _refuse_if_locked(lot: models.Lot) -> None:
     """A lot AI has already priced is locked against another paid run."""
     if ai_done(lot.enrichment):
@@ -112,11 +131,17 @@ def enrich_batch(payload: schemas.EnrichBatchRequest, db: Session = Depends(get_
         .all()
     )
     by_lot = {lot_id: enrichment_id for lot_id, enrichment_id in rows}
+    db_ids = dict(db.query(models.Lot.lot_id, models.Lot.id)
+                    .filter(models.Lot.lot_id.in_(list(by_lot))).all())
+    keep, skipped = _can_be_gold(db, [db_ids[i] for i in by_lot if i in db_ids])
+    kept = set(keep)
+    by_lot = {k: v for k, v in by_lot.items() if db_ids.get(k) in kept}
     queued_at = datetime.now(timezone.utc)
-    # Soonest-closing first (services/closing_order); lots closing together
-    # keep the caller's order - on-screen, most valuable first. queue_rank
-    # carries it, because the picking happens in another process.
-    ordered = closing_order.by_lot_id(db, [i for i in payload.lot_ids if i in by_lot])
+    # Soonest-closing first (services/closing_order), or exactly as sent when
+    # the page asks to keep its own order. queue_rank carries it, because the
+    # picking happens in another process.
+    given = [i for i in payload.lot_ids if i in by_lot]
+    ordered = given if payload.in_page_order else closing_order.by_lot_id(db, given)
     mappings = [
         {"id": by_lot[lot_id], "status": "queued", "queued_task": "enrich",
          "queued_at": queued_at, "queue_rank": rank, "claimed_at": None}
@@ -125,7 +150,7 @@ def enrich_batch(payload: schemas.EnrichBatchRequest, db: Session = Depends(get_
     if mappings:
         db.bulk_update_mappings(models.Enrichment, mappings)
         db.commit()
-    return {"queued": len(mappings)}
+    return {"queued": len(mappings), "skipped_wont_be_gold": skipped}
 
 
 @router.post("/reprice", status_code=202)
@@ -149,7 +174,7 @@ def reprice(auction_id: int | None = None, weak_only: bool = False,
     spends nothing, so the request cost is known before it is paid.
     """
     from ..services import pricing
-    q = (db.query(models.Lot.id)
+    q = (db.query(models.Lot.id, models.Lot.lot_id)
            .join(models.Enrichment)
            .filter(_worth_pricing(),
                    # AI-priced lots are locked: never searched again.
@@ -184,15 +209,27 @@ def reprice(auction_id: int | None = None, weak_only: bool = False,
         q = q.filter(models.Lot.category == category)
     if weak_only:
         q = q.filter(models.Enrichment.price_source.ilike("active%"))
-    lot_ids = [row[0] for row in q.all()]
+    rows = q.all()
+    if payload and payload.in_page_order and payload.lot_ids:
+        # The page's order, top row first, so lots price as the user reads.
+        at = {lot_id: i for i, lot_id in enumerate(payload.lot_ids)}
+        rows.sort(key=lambda r: at.get(r[1], len(at)))
+        lot_ids = [r[0] for r in rows]
+    else:
+        # Soonest-closing first. run_reprice only sorts a run it starts
+        # itself; a queued job resumes from this list as given, so before
+        # this the queued path ran in whatever order the database returned.
+        lot_ids = closing_order.by_db_id(db, [r[0] for r in rows])
+    lot_ids, skipped = _can_be_gold(db, lot_ids)
     if dry_run:
         return {"repricing": len(lot_ids), "dry_run": True,
+                "skipped_wont_be_gold": skipped,
                 "cache_empties": pricing.count_empty_sold_cache() if weak_only else 0,
                 # About one request per lot: the first query variant answers
                 # nearly every time, and the durable cache absorbs repeats.
                 "requests_estimate": len(lot_ids) if unpriced_only else None}
     if not lot_ids:
-        return {"repricing": 0}
+        return {"repricing": 0, "skipped_wont_be_gold": skipped}
     # No refusal: a second reprice queues behind the first rather than
     # being refused outright — the worker runs heavy jobs one at a time
     # itself, in order, so this just waits its turn.
@@ -200,7 +237,8 @@ def reprice(auction_id: int | None = None, weak_only: bool = False,
     purged = pricing.purge_empty_sold_cache() if weak_only else 0
     jobs.enqueue("reprice", "Re-pricing lots with current comp rules",
                  total=len(lot_ids), payload={"lot_ids": lot_ids})
-    return {"repricing": len(lot_ids), "cache_purged": purged}
+    return {"repricing": len(lot_ids), "cache_purged": purged,
+            "skipped_wont_be_gold": skipped}
 
 
 @router.post("/audit-golds", status_code=202)
@@ -226,6 +264,15 @@ def audit_golds(db: Session = Depends(get_db)):
         return {"auditing": 0}
     jobs.enqueue("audit-golds", "Auditing unchecked golds", total=n)
     return {"auditing": n}
+
+
+@router.post("/str-golds", status_code=202)
+def str_golds(db: Session = Depends(get_db)):
+    """Queue a sell-through check for every open gold mine with no STR, or
+    one over a week old. Two SoldComps requests per lot; nothing when none
+    are due. Regrades and bid refreshes queue this themselves."""
+    from ..workers.enrich import queue_str_sweep
+    return {"checking": queue_str_sweep(db)}
 
 
 @router.post("/match-twins")
@@ -255,11 +302,12 @@ def enrich_category(category: str, skip_hard: bool = False, dry_run: bool = Fals
                    open_state.still_open(datetime.now())))
     if skip_hard:
         q = q.filter(models.Lot.logistics_ease != "HARD")
-    lot_ids = [row[0] for row in q.all()]
+    lot_ids, skipped = _can_be_gold(db, [row[0] for row in q.all()])
     if dry_run:
-        return {"category": category, "lots": len(lot_ids), "dry_run": True}
+        return {"category": category, "lots": len(lot_ids), "dry_run": True,
+                "skipped_wont_be_gold": skipped}
     if not lot_ids:
-        return {"category": category, "queued": 0}
+        return {"category": category, "queued": 0, "skipped_wont_be_gold": skipped}
     db.query(models.Enrichment).filter(
         models.Enrichment.lot_id.in_(lot_ids)
     ).update({"status": "queued", "queued_task": "enrich",
@@ -267,7 +315,7 @@ def enrich_category(category: str, skip_hard: bool = False, dry_run: bool = Fals
               "queue_rank": 0, "claimed_at": None},
              synchronize_session=False)
     db.commit()
-    return {"category": category, "queued": len(lot_ids)}
+    return {"category": category, "queued": len(lot_ids), "skipped_wont_be_gold": skipped}
 
 
 @router.post("/re-enrich-blind", status_code=202)

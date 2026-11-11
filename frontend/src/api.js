@@ -113,10 +113,11 @@ export function hideLike(lotId, hidden = true, dryRun = false) {
                  { method: 'POST' })
 }
 
-export function enrichBatch(lotIds) {
+// inPageOrder: run them in the order given (the page's), not soonest-closing.
+export function enrichBatch(lotIds, { inPageOrder = false } = {}) {
   return request('/lots/enrich-batch', {
     method: 'POST',
-    body: JSON.stringify({ lot_ids: lotIds }),
+    body: JSON.stringify({ lot_ids: lotIds, in_page_order: inPageOrder }),
   })
 }
 
@@ -175,10 +176,10 @@ export function repriceUnpriced({ auctionIds = [], category = '', dryRun = false
 
 // Comps-only on an explicit selection: the lots the user ticked, whatever
 // their state. Raw title when there is no AI one; no AI spend either way.
-export function repriceSelected(lotIds, { dryRun = false } = {}) {
+export function repriceSelected(lotIds, { dryRun = false, inPageOrder = false } = {}) {
   return request(`/lots/reprice${dryRun ? '?dry_run=true' : ''}`, {
     method: 'POST',
-    body: JSON.stringify({ lot_ids: lotIds }),
+    body: JSON.stringify({ lot_ids: lotIds, in_page_order: inPageOrder }),
   })
 }
 

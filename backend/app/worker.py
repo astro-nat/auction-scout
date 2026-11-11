@@ -53,7 +53,7 @@ def _runner_for(kind: str):
     """Imported lazily — workers.enrich builds the Anthropic client at import
     time, and that shouldn't happen just because someone imported this."""
     from .workers.enrich import (run_audit_sweep, run_regrade, run_reprice,
-                                 run_ship_analysis)
+                                 run_ship_analysis, run_str_sweep)
     from .workers.import_all import run_import_all, run_photo_backfill
     from .workers.refresh import run_bid_refresh
     return {
@@ -62,6 +62,7 @@ def _runner_for(kind: str):
         "bid-refresh": run_bid_refresh,
         "regrade": run_regrade,
         "audit-golds": run_audit_sweep,
+        "str-golds": run_str_sweep,
         "import-all": run_import_all,
         "backfill-photos": run_photo_backfill,
     }.get(kind)

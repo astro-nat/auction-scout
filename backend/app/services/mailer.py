@@ -13,9 +13,10 @@ mailer; a hard-to-ship lot doesn't; anything else fits if it weighs about
 
 from __future__ import annotations
 
+import os
 import re
 
-from . import hibid
+from . import hibid, weight
 
 DEFAULT_SIZE = (14.5, 20.0)
 SETTINGS_KEY = "mailer_size"
@@ -78,9 +79,10 @@ def _fits_measured(sides: list[float], size: tuple[float, float]) -> bool:
     return a + c <= length and b + c <= width
 
 
-def fits(title: str | None, description: str | None, logistics_ease: str | None,
-         weight_lb: float | None, size: tuple[float, float] | None = None) -> bool:
-    size = size or current_size()
+def _sure(title: str | None, description: str | None, logistics_ease: str | None,
+          size: tuple[float, float]) -> bool | None:
+    """Fits or not from the listing's own words and size, or None when only
+    the item's weight can decide."""
     t = title or ""
     if _NEVER_FITS_RE.search(t):
         return False
@@ -97,4 +99,34 @@ def fits(title: str | None, description: str | None, logistics_ease: str | None,
         return False                      # one side longer than the mailer
     if (logistics_ease or "").upper() == "HARD":
         return False
+    return None
+
+
+def fits(title: str | None, description: str | None, logistics_ease: str | None,
+         weight_lb: float | None, size: tuple[float, float] | None = None) -> bool:
+    sure = _sure(title, description, logistics_ease, size or current_size())
+    if sure is not None:
+        return sure
     return weight_lb is not None and float(weight_lb) <= LIGHT_ENOUGH_LB
+
+
+# Pricing a lot that can never be a gold mine is money spent on nothing:
+# a comp lookup, often an AI check (the user's call, 2026-11-10: "so that I
+# don't waste resources analyzing furniture"). Same limit as the grader's.
+MAX_WEIGHT_LB = float(os.environ.get("MAX_WEIGHT_LB", "10"))
+
+
+def wont_be_gold(title: str | None, description: str | None, logistics_ease: str | None,
+                 size: tuple[float, float] | None = None) -> str | None:
+    """Why a lot is SURE to fail the mailer or weight rule before it is
+    priced, or None. Sure means the listing says so - its words, its size,
+    its ship tier, or a recognised item type's weight. An unrecognised title
+    is not sure: an AI look might find it small, so it still gets priced."""
+    size = size or current_size()
+    lb = weight.by_item_type(title)
+    if lb is not None and lb > MAX_WEIGHT_LB:
+        return f"about {lb:g} lb - over your {MAX_WEIGHT_LB:g} lb limit"
+    sure = _sure(title, description, logistics_ease, size)
+    if sure is False or (sure is None and lb is not None and lb > LIGHT_ENOUGH_LB):
+        return f"won't fit your {size_label(size)} mailer"
+    return None

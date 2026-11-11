@@ -664,12 +664,20 @@ export default function App() {
   async function compsFor(scope, where) {
     try {
       const peek = await repriceUnpriced({ ...scope, dryRun: true })
-      if (!peek.repricing) { notify('Every item in view already has a value.'); return }
+      if (!peek.repricing) {
+        notify(peek.skipped_wont_be_gold
+          ? `Nothing to price: the ${peek.skipped_wont_be_gold} unpriced items in view are too big for your mailer or over 10 lb.`
+          : 'Every item in view already has a value.')
+        return
+      }
       const msg = `Look up sold comps for ${peek.repricing} unpriced items (${where}), using their `
         + `auction titles as-is?\n\nNo AI cost. At most ${peek.requests_estimate ?? peek.repricing} `
         + `SoldComps requests against your plan - identical titles share one. `
         + `Afterwards, "AI check" can add a condition check to the ones worth it. `
         + `Progress shows in the bar at the top.`
+        + (peek.skipped_wont_be_gold
+          ? `\n\n${peek.skipped_wont_be_gold} more are left out: too big for your mailer or over 10 lb, so they can't be gold mines.`
+          : '')
       if (!await ask(msg, { confirmLabel: 'Price with comps' })) return
       const r = await repriceUnpriced(scope)
       notify(`Queued ${r.repricing} items.`)

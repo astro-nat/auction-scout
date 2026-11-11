@@ -29,7 +29,7 @@ import os
 import re
 import base64
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import anthropic
 import httpx
@@ -44,6 +44,7 @@ from ..services import twins
 from ..services import metal
 from ..services import weight
 from ..services import mailer
+from ..services import sell_through
 from ..services import settings as settings_store
 from ..services.bolo import BoloMatcher
 from ..services.hibid import classify_logistics
@@ -413,6 +414,37 @@ def _take_ai_weight(e: models.Enrichment, value) -> None:
         e.weight_lb, e.weight_source = lb, "ai"
 
 
+# A gold mine's sell-through rate is checked at most this often: two
+# SoldComps requests a time, and how fast a thing sells moves slowly.
+STR_RECHECK_DAYS = float(os.environ.get("STR_RECHECK_DAYS", "7"))
+
+
+def _str_due(e: models.Enrichment) -> bool:
+    if e.roi_status != "GOLD MINE":
+        return False
+    if e.str_checked_at is None:
+        return True
+    age = datetime.now(timezone.utc).replace(tzinfo=None) - e.str_checked_at
+    return age.total_seconds() > STR_RECHECK_DAYS * 86400
+
+
+def _check_str(db: Session, lot: models.Lot, e: models.Enrichment) -> bool:
+    """Sell-through rate for a gold mine (the user's call, 2026-11-10:
+    gold mines only, shown not gated). Searched on the same words the lot
+    was priced on. A failed check leaves the lot unchecked, so the next pass
+    retries it. Returns whether it saved a result."""
+    if not _str_due(e):
+        return False
+    query = e.enriched_title or pricing.title_without_retail_prefix(lot.title or "")
+    result = sell_through.check(query)
+    if result is None:
+        return False
+    e.str_sold, e.str_active, e.str_pct = result["sold"], result["active"], result["pct"]
+    e.str_checked_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    db.commit()
+    return True
+
+
 def _progress(db: Session, e: models.Enrichment, text: str | None) -> None:
     """Publish a live stage update — the UI polls and shows this next to the
     spinner, so the user sees exactly what the worker is doing right now."""
@@ -666,6 +698,10 @@ def run_enrichment(lot_db_id: int) -> None:
                 _verify_gold(db, lot, e)
             except Exception as exc:  # noqa: BLE001 — the audit must not fail the lot
                 logger.warning("Gold check failed for lot %s: %s", lot_db_id, exc)
+            try:
+                _check_str(db, lot, e)
+            except Exception as exc:  # noqa: BLE001 — nor the STR check
+                logger.warning("STR check failed for lot %s: %s", lot_db_id, exc)
             _share_quietly(db, lot, e)
     finally:
         db.close()
@@ -1112,11 +1148,18 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
                             f"${min_profit_ceiling:.0f}, the most you can pay and "
                             f"still clear ${MIN_GOLD_PROFIT:.0f}")
         elif e.roi_status == "PASS":
+            # Quote the max the lot actually shows - after the $10-profit
+            # cap - not the ROI-only ceiling under it: a Swarovski bell read
+            # "past the $6 ceiling" beside a $0.40 max.
+            shown_max = float(e.max_bid or 0)
             if lead.max_bid <= 0:
                 e.roi_reason = "value too low to clear costs at any bid"
+            elif shown_max <= 0:
+                e.roi_reason = (f"under ${MIN_GOLD_PROFIT:.0f} profit at any bid - "
+                                "the minimum for a gold mine")
             else:
                 e.roi_reason = (f"bid ${effective_bid:.0f} already past the "
-                                f"${float(lead.max_bid):.0f} ceiling")
+                                f"${shown_max:.0f} ceiling")
         else:
             e.roi_reason = None
     else:
@@ -1482,6 +1525,10 @@ def run_inspection(lot_db_id: int) -> None:
                 _verify_gold(db, lot, e)
             except Exception as exc:  # noqa: BLE001 — the audit must not fail the lot
                 logger.warning("Gold check failed for lot %s: %s", lot_db_id, exc)
+            try:
+                _check_str(db, lot, e)
+            except Exception as exc:  # noqa: BLE001 — nor the STR check
+                logger.warning("STR check failed for lot %s: %s", lot_db_id, exc)
             _share_quietly(db, lot, e)
     finally:
         db.close()
@@ -1904,6 +1951,10 @@ def run_regrade(resume_job_id: str | None = None) -> None:
         jobs.update(job, current=len(rows))
     finally:
         jobs.finish(job)
+        try:
+            queue_str_sweep(db)
+        except Exception as exc:  # noqa: BLE001 - the regrade itself is done
+            logger.warning("Could not queue the STR sweep: %s", exc)
         db.close()
     tail = f" — {lost} rows LOST to failed commits, see warnings" if lost else ""
     print(f"Re-grade complete: {changed} verdicts changed{tail}")
@@ -1962,6 +2013,58 @@ def run_audit_sweep(resume_job_id: str | None = None) -> None:
         db.close()
     print(f"Audit sweep complete: {audited} lots checked "
           f"({len(candidates)} thin candidates)")
+
+
+def _str_sweep_query(db: Session):
+    """Open, visible gold mines whose STR is missing or over a week old."""
+    stale = (datetime.now(timezone.utc).replace(tzinfo=None)
+             - timedelta(days=STR_RECHECK_DAYS))
+    return (db.query(models.Lot)
+              .join(models.Enrichment)
+              .options(joinedload(models.Lot.enrichment))
+              .join(models.Auction, models.Lot.auction_id == models.Auction.id)
+              .filter(models.Enrichment.roi_status == "GOLD MINE",
+                      or_(models.Enrichment.str_checked_at.is_(None),
+                          models.Enrichment.str_checked_at < stale),
+                      or_(models.Lot.hidden.is_(False), models.Lot.hidden.is_(None)),
+                      open_state.still_open(datetime.now())))
+
+
+def queue_str_sweep(db: Session) -> int:
+    """Queue an STR sweep when gold mines are waiting for one. Lots turn
+    gold by pure arithmetic in a regrade or bid refresh, where nothing
+    calls SoldComps; this is what reaches them. Returns how many wait."""
+    n = _str_sweep_query(db).count()
+    if n and not jobs.has_pending("str-golds") and not jobs.has_active("str-golds"):
+        jobs.enqueue("str-golds", "Checking sell-through on gold mines", total=n)
+    return n
+
+
+def run_str_sweep(resume_job_id: str | None = None) -> None:
+    """Sell-through rate for every gold mine that has none, or a stale one.
+    Idempotent: checked lots drop out of the query, so a resume after a
+    deploy re-queries what's left."""
+    db: Session = SessionLocal()
+    job = resume_job_id or jobs.start("str-golds", "Checking sell-through on gold mines")
+    checked = 0
+    try:
+        rows = _str_sweep_query(db).all()
+        jobs.update(job, total=len(rows))
+        for i, lot in enumerate(rows, 1):
+            if jobs.is_cancelled(job):
+                print(f"STR sweep cancelled after {i - 1} lots")
+                break
+            try:
+                if _check_str(db, lot, lot.enrichment):
+                    checked += 1
+            except Exception as exc:  # noqa: BLE001 - one lot must not stop the sweep
+                db.rollback()
+                logger.warning("STR sweep failed for lot %s: %s", lot.id, exc)
+            jobs.update(job, current=i, detail=(lot.title or "")[:40])
+    finally:
+        jobs.finish(job)
+        db.close()
+    print(f"STR sweep complete: {checked} of {len(rows)} gold mines checked")
 
 
 # How many comp lookups a re-price keeps in flight at once. The wait per lot
@@ -2109,6 +2212,10 @@ def _apply_reprice(db: Session, plan: dict, comps, audits: list | None = None) -
         _verify_gold(db, lot, e)
     except Exception as exc:  # noqa: BLE001
         logger.warning("Gold check failed for lot %s: %s", plan["lot_db_id"], exc)
+    try:
+        _check_str(db, lot, e)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("STR check failed for lot %s: %s", plan["lot_db_id"], exc)
     _share_quietly(db, lot, e)
     return True
 

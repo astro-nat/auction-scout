@@ -16,6 +16,7 @@ import { ADDON_FLOOR_KEY, ARRANGE_KEY, basketLabel, groupByAuction, savePref, sa
 import DriveFrom, { CarIcon, formatDrive } from './DriveFrom'
 import useMediaQuery from '../useMediaQuery'
 import { weightLabel, weightTitle } from '../lib/weight'
+import { strLabel, strTitle } from '../lib/sellThrough'
 
 // The homework behind a resale number: the comp records the pricer actually
 // used (raw observed prices — never scaled to match the conclusion), plus a
@@ -272,9 +273,13 @@ function RoiPeek({ text, children }) {
 }
 
 // The bid the ROI is worked out at: the next bid, what winning would
-// actually cost now (the backend grades the same number).
+// actually cost now - but never under $5, the floor the backend grades at
+// (MIN_ASSUMED_BID in workers/enrich.py: nothing worth grading hammers for
+// a dollar). Without the floor a lot read "ROI 5% at $2" for a figure
+// worked out at $5.
+const MIN_ASSUMED_BID = 5
 function roiBid(lot) {
-  return Math.max(Number(lot.current_bid ?? 0), Number(lot.next_bid ?? 0))
+  return Math.max(Number(lot.current_bid ?? 0), Number(lot.next_bid ?? 0), MIN_ASSUMED_BID)
 }
 
 function roiTooltip(lot, e, auction) {
@@ -866,6 +871,29 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
   // result from sold comps on its own title - no AI. AI then goes only to
   // the lots worth a closer look: comps-priced at or above `aiMin`, where a
   // condition check and a sharper identification can move real money.
+  // Lots in the order the page shows them, so a bulk price works down the
+  // screen and each row fills in as you read it (the user's call,
+  // 2026-11-10). By auction: each group in turn, its gold mines and
+  // add-ons first, then the rest - as renderGroups lays them out; the Live
+  // view keeps plain sort order. The backend is told to keep this order.
+  function inPageOrder(lots) {
+    const seq = arrange === 'auction'
+      ? groups.flatMap((g) => (liveView || !g.hasGold ? g.lots : [...g.featured, ...g.others]))
+      : sorted
+    const at = new Map(seq.map((l, i) => [l.lot_id, i]))
+    return [...lots].sort((a, b) => (at.get(a.lot_id) ?? Infinity) - (at.get(b.lot_id) ?? Infinity))
+  }
+  const pageIds = (lots) => inPageOrder(lots).map((l) => l.lot_id)
+
+  // Bulk pricing leaves out lots that can never be gold mines - too big for
+  // the mailer or over 10 lb - so nothing is spent on them. Say so, or a run
+  // smaller than the button promised reads as lots gone missing.
+  function noteSkipped(r) {
+    const n = r?.skipped_wont_be_gold
+    if (n) notify(`Skipped ${n.toLocaleString()} ${n === 1 ? 'lot' : 'lots'} that can't be a gold mine `
+                  + '(too big for your mailer or over 10 lb), so nothing was spent on them.')
+  }
+
   const unpricedShown = sorted
     .filter((l) => l.enrichment?.est_resale == null && l.enrichment?.status !== 'queued')
   const [aiMin, setAiMin] = useState(50)
@@ -880,7 +908,6 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     .filter((l) => !aiDone(l.enrichment) && l.enrichment?.status !== 'queued'
                    && l.enrichment?.est_resale != null
                    && Number(l.enrichment.est_resale) >= Number(aiMin || 0))
-    .sort((a, b) => Number(b.enrichment.est_resale) - Number(a.enrichment.est_resale))
 
   async function handleCompsMatching() {
     if (!unpricedShown.length || queuing) return
@@ -891,7 +918,8 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     if (!ok) return
     setQueuing(true)
     try {
-      const r = await repriceSelected(unpricedShown.map((l) => l.lot_id))
+      const r = await repriceSelected(pageIds(unpricedShown), { inPageOrder: true })
+      noteSkipped(r)
       if (r.already_running) notify('A re-price is already running; let it finish first.')
       onRefresh?.()
     } catch (e) { alertOnce(e.message) }
@@ -904,7 +932,6 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
   const auctionAiTargets = (g) => g.lots
     .filter((l) => rowAction(l.enrichment || {}, pollingIds.has(l.lot_id)).step === 'ai'
                    && !(l.item_closed ?? l.auction_closed))
-    .sort((a, b) => Number(b.enrichment?.est_resale || 0) - Number(a.enrichment?.est_resale || 0))
 
   // One auction's lots the free comps pricing would run on: no value yet,
   // not queued, still open - what the row's "Price with comps" offers.
@@ -920,12 +947,13 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     const ok = await ask(
       `Look up sold comps for the ${targets.length} unpriced `
       + `${targets.length === 1 ? 'lot' : 'lots'} at ${g.name}?\n\n`
-      + `No AI cost - at most one SoldComps request per title, soonest-closing first. `
+      + `No AI cost - at most one SoldComps request per title, top of the page first. `
       + `Progress appears in the bar at the top of the page.`)
     if (!ok) return
     setQueuing(true)
     try {
-      const r = await repriceSelected(targets.map((l) => l.lot_id))
+      const r = await repriceSelected(pageIds(targets), { inPageOrder: true })
+      noteSkipped(r)
       if (r.already_running) notify('A re-price is already running; let it finish first.')
       onRefresh?.()
     } catch (e) {
@@ -943,12 +971,13 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
       `Further inspect with AI the ${targets.length} priced ${targets.length === 1 ? 'lot' : 'lots'} `
       + `at ${g.name} that haven't had one?\n\n`
       + `AI reads each one's photo and listing for condition and a closer identification, `
-      + `then prices it again - roughly $${cost} of API usage, most valuable first.\n\n`
+      + `then prices it again - roughly $${cost} of API usage, top of the page first.\n\n`
       + `Progress appears in the bar at the top of the page.`)
     if (!ok) return
     setQueuing(true)
     try {
-      const r = await enrichBatch(targets.map((l) => l.lot_id))
+      const r = await enrichBatch(pageIds(targets), { inPageOrder: true })
+      noteSkipped(r)
       onRefresh?.()
       if (!r.queued) notify('Nothing to queue - those lots are already inspected or in progress.')
     } catch (e) {
@@ -966,7 +995,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
 
 ` +
       `AI reads each one's photo and listing for condition and a closer identification, ` +
-      `then prices it again - roughly $${cost} of API usage, most valuable first.
+      `then prices it again - roughly $${cost} of API usage, top of the page first.
 
 ` +
       `Progress appears in the bar at the top of the page.`
@@ -976,7 +1005,8 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     // moment, and total silence after "OK" read as the button being broken.
     setQueuing(true)
     try {
-      const r = await enrichBatch(aiTargets.map((l) => l.lot_id))
+      const r = await enrichBatch(pageIds(aiTargets), { inPageOrder: true })
+      noteSkipped(r)
       onRefresh?.()
       if (!r.queued) {
         notify('Nothing to queue — those lots are already enriched or in progress.')
@@ -1006,15 +1036,14 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
   }
 
   async function handleBulkPrice() {
-    const ids = selectedInView
-      .filter((l) => !['success', 'queued'].includes(l.enrichment?.status))
-      .map((l) => l.lot_id)
+    const ids = pageIds(selectedInView
+      .filter((l) => !['success', 'queued'].includes(l.enrichment?.status)))
     if (!ids.length) { notify('Every selected lot is already priced or in progress.'); return }
     const cost = (ids.length * 0.005).toFixed(2)
     if (!await ask(`Price ${ids.length} selected lots?\n\nEach runs an AI pass and a comp `
                         + `lookup — roughly $${cost} of API usage, in the order shown.`)) return
     setQueuing(true)
-    try { await enrichBatch(ids); onRefresh?.() } catch (e) { alertOnce(e.message) }
+    try { noteSkipped(await enrichBatch(ids, { inPageOrder: true })); onRefresh?.() } catch (e) { alertOnce(e.message) }
     finally { setQueuing(false) }
   }
 
@@ -1025,7 +1054,7 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
     .filter((l) => l.enrichment?.est_resale == null && l.enrichment?.status !== 'queued')
 
   async function handleBulkComps() {
-    const ids = selectedUnpriced.map((l) => l.lot_id)
+    const ids = pageIds(selectedUnpriced)
     if (!ids.length) { notify('Every selected lot already has a value.'); return }
     const skipped = selectedInView.length - ids.length
     if (!await ask(`Look up sold comps for the ${ids.length} selected lots with no value yet, `
@@ -1034,7 +1063,8 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                         + (skipped ? `\n\n${skipped} selected lots already have a value and are left alone.` : ''))) return
     setQueuing(true)
     try {
-      const r = await repriceSelected(ids)
+      const r = await repriceSelected(ids, { inPageOrder: true })
+      noteSkipped(r)
       if (r.already_running) notify('A re-price is already running; let it finish first.')
       onRefresh?.()
     } catch (e) { alertOnce(e.message) }
@@ -1362,6 +1392,9 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                                    : e.roi_status === 'GOLD MINE' ? 'var(--success)' : undefined }}>
                     ROI {Math.round(Number(e.est_roi) * 100)}% at {money(roiBid(lot))}
                   </span>
+                )}
+                {strLabel(e) && (
+                  <span style={{ color: 'var(--muted)' }} title={strTitle(e)}>{strLabel(e)}</span>
                 )}
               </div>
               {e.est_resale != null && <CompsPeek lot={lot} e={e} onLotUpdated={onLotUpdated} />}
@@ -2526,6 +2559,11 @@ export default function LotTable({ lots, onLotUpdated, onRefresh, onLotTouched,
                 {e.all_in_cost != null && (
                   <div style={{ color: 'var(--muted)', fontSize: 11 }}>
                     at {money(roiBid(lot))} bid, all-in {money(e.all_in_cost)}
+                  </div>
+                )}
+                {strLabel(e) && (
+                  <div style={{ color: 'var(--muted)', fontSize: 11 }} title={strTitle(e)}>
+                    {strLabel(e)}
                   </div>
                 )}
               </td>

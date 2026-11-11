@@ -553,16 +553,16 @@ def enrich_all(auction_id: int, skip_hard: bool = False, db: Session = Depends(g
     re-run — already-successful lots are skipped. skip_hard leaves out
     HARD-to-ship lots, which rarely clear the ROI bar and cost the same to
     enrich as anything else."""
-    from .enrichment import _worth_pricing
+    from .enrichment import _can_be_gold, _worth_pricing
     q = (db.query(models.Lot).join(models.Enrichment)
            .filter(models.Lot.auction_id == auction_id,
                    _worth_pricing(),
                    models.Enrichment.status.in_(["pending", "failed"])))
     if skip_hard:
         q = q.filter(models.Lot.logistics_ease != "HARD")
-    lot_ids = [lot.id for lot in q.all()]
+    lot_ids, skipped = _can_be_gold(db, [lot.id for lot in q.all()])
     if not lot_ids:
-        return {"auction_id": auction_id, "queued": 0}
+        return {"auction_id": auction_id, "queued": 0, "skipped_wont_be_gold": skipped}
     db.query(models.Enrichment).filter(
         models.Enrichment.lot_id.in_(lot_ids)
     ).update({"status": "queued", "queued_task": "enrich",
@@ -570,7 +570,7 @@ def enrich_all(auction_id: int, skip_hard: bool = False, db: Session = Depends(g
               "queue_rank": 0, "claimed_at": None},
              synchronize_session=False)
     db.commit()
-    return {"auction_id": auction_id, "queued": len(lot_ids)}
+    return {"auction_id": auction_id, "queued": len(lot_ids), "skipped_wont_be_gold": skipped}
 
 
 @router.delete("/{auction_id}")

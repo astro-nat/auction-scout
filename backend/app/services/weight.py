@@ -74,12 +74,22 @@ def _count(title: str) -> int:
     return 2 if _PAIR_RE.search(title) else 1
 
 
-def estimate(title: str | None, logistics_ease: str | None = None) -> float | None:
-    """Rough shipping weight in pounds, or None when there's nothing to go on."""
+def by_item_type(title: str | None) -> float | None:
+    """Weight from a recognised item type only, or None - never the ship-tier
+    guess. What the pre-pricing skip trusts: a known cast-iron baker is too
+    heavy to bother pricing, an unrecognised title is not known to be."""
     t = (title or "").lower()
     for rx, lb in _ITEMS_RE:
         if rx.search(t):
             return round(lb * _count(t), 1)
+    return None
+
+
+def estimate(title: str | None, logistics_ease: str | None = None) -> float | None:
+    """Rough shipping weight in pounds, or None when there's nothing to go on."""
+    lb = by_item_type(title)
+    if lb is not None:
+        return lb
     tier = (logistics_ease or "").upper()
     return _BY_TIER.get(tier)
 

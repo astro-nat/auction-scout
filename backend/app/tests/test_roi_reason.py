@@ -158,3 +158,19 @@ def test_a_worthwhile_gold_mine_still_mints():
     lot, e = _lot(current_bid=5, next_bid=6)
     _grade(lot, e, resale=129.99)
     assert e.roi_status == "GOLD MINE"
+
+
+def test_the_reason_quotes_the_max_the_lot_shows(monkeypatch):
+    """A Swarovski bell read "past the $6 ceiling" beside a $0.40 max: the
+    reason quoted the ROI-only ceiling, not the $10-profit max."""
+    from app.services import financials
+    # A high target fails it on ROI alone - the path that quoted the wrong max.
+    monkeypatch.setattr(financials, "current_target_roi", lambda: 3.0)
+    monkeypatch.setattr(enrich.mailer, "fits", lambda *a, **k: True)
+    lot, e = _lot(current_bid=6, next_bid=6, source="Local Pickup")
+    _grade(lot, e, resale=20)
+    assert e.roi_status == "PASS"
+    if float(e.max_bid) <= 0:
+        assert e.roi_reason == "under $10 profit at any bid - the minimum for a gold mine"
+    else:
+        assert f"${float(e.max_bid):.0f} ceiling" in e.roi_reason

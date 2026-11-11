@@ -227,6 +227,12 @@ class Enrichment(Base):
     # type ("est"). Listings almost never print one.
     weight_lb = Column(Float)
     weight_source = Column(String)
+    # Sell-through rate from SoldComps' eBay totals (services/sell_through):
+    # checked on gold mines only, at most weekly. Informational - no gate.
+    str_pct = Column(Float)
+    str_sold = Column(Integer)
+    str_active = Column(Integer)
+    str_checked_at = Column(DateTime)              # UTC, naive like the rest
     est_roi = Column(Float)            # at current bid
     profit = Column(Numeric)
     roi_status = Column(String)        # GOLD MINE | PASS

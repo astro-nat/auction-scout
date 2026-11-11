@@ -74,6 +74,8 @@ STALE_BY_KIND = {
     "regrade": float(os.environ.get("STALE_REGRADE_SECONDS", "180")),
     "reprice": float(os.environ.get("STALE_REPRICE_SECONDS", "900")),
     "ship-analysis": float(os.environ.get("STALE_SHIP_ANALYSIS_SECONDS", "900")),
+    # Heartbeats per lot; a lot is two SoldComps calls at up to 25s each.
+    "str-golds": float(os.environ.get("STALE_STR_SECONDS", "300")),
 }
 
 

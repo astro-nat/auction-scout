@@ -23,7 +23,7 @@ from ..database import SessionLocal
 from .. import config, models
 from ..services import hibid, jobs
 from ..services import open_state
-from .enrich import _apply_roi
+from .enrich import _apply_roi, queue_str_sweep
 
 logger = logging.getLogger(__name__)
 
@@ -196,6 +196,12 @@ def run_bid_refresh(auction_ids: list[int], resume_job_id: str | None = None,
     finally:
         if job is not None:
             jobs.finish(job)
+        # A new bid can turn a lot gold with no SoldComps call in sight;
+        # the sweep gives it its sell-through check.
+        try:
+            queue_str_sweep(db)
+        except Exception as exc:  # noqa: BLE001 - the refresh itself is done
+            logging.getLogger(__name__).warning("Could not queue the STR sweep: %s", exc)
         db.close()
     print(f"Bid refresh complete: {updated_total} lots updated")
 
