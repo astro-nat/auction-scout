@@ -1,3 +1,4 @@
+import re
 import threading
 import time
 from contextlib import asynccontextmanager
@@ -191,6 +192,50 @@ _MIGRATIONS = [
     "ALTER TABLE lots ADD COLUMN IF NOT EXISTS max_passed_alert_at TIMESTAMP",
 ]
 
+_ADD_COLUMN_RE = re.compile(r"ALTER TABLE (\w+) ADD COLUMN IF NOT EXISTS (\w+)", re.I)
+_CREATE_RE = re.compile(r"CREATE (?:UNIQUE )?(TABLE|INDEX) IF NOT EXISTS (\w+)", re.I)
+
+
+def _migration_key(stmt: str):
+    """What a migration creates - ("column", table, name), ("table", name)
+    or ("index", name) - or None for one that must always run (a backfill)."""
+    m = _ADD_COLUMN_RE.match(stmt.strip())
+    if m:
+        return ("column", m.group(1).lower(), m.group(2).lower())
+    m = _CREATE_RE.match(stmt.strip())
+    if m:
+        return (m.group(1).lower(), m.group(2).lower())
+    return None
+
+
+def _already_applied() -> set:
+    """Every column, table and index that exists, from one catalog read.
+
+    "ADD COLUMN IF NOT EXISTS" still takes an ACCESS EXCLUSIVE lock on the
+    table even when the column is there, so re-running all ~90 migrations on
+    every boot made each one queue behind the worker's open transactions. At
+    5 s a timeout that held the port closed for ~10 minutes after a deploy -
+    the 2026-11-10 outage - while the four genuinely new columns kept losing
+    the race. Reading the catalog takes no table lock; only what's actually
+    missing gets an ALTER."""
+    try:
+        with engine.connect() as conn:
+            cols = conn.execute(text(
+                "SELECT table_name, column_name FROM information_schema.columns "
+                "WHERE table_schema = current_schema()")).all()
+            tables = conn.execute(text(
+                "SELECT table_name FROM information_schema.tables "
+                "WHERE table_schema = current_schema()")).all()
+            indexes = conn.execute(text(
+                "SELECT indexname FROM pg_indexes WHERE schemaname = current_schema()")).all()
+    except Exception as exc:  # noqa: BLE001 - fall back to running everything
+        print(f"Could not read the schema catalog, running every migration: {exc}")
+        return set()
+    return ({("column", t.lower(), c.lower()) for t, c in cols}
+            | {("table", t.lower()) for (t,) in tables}
+            | {("index", i.lower()) for (i,) in indexes})
+
+
 def _run_migrations() -> list[str]:
     """Apply pending migrations, returning the ones that didn't land.
 
@@ -201,7 +246,10 @@ def _run_migrations() -> list[str]:
     report what's still pending.
     """
     pending = []
+    done = _already_applied()
     for stmt in _MIGRATIONS:
+        if _migration_key(stmt) in done:
+            continue
         try:
             with engine.begin() as conn:
                 conn.execute(text("SET lock_timeout = '5000ms'"))
