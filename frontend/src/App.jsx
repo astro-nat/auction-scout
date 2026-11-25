@@ -3,7 +3,7 @@ import { ask } from './lib/ask'
 import { missingLots } from './lib/missing'
 import NumberField from './components/NumberField'
 import { notify } from './lib/notice'
-import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, importLots, importAllAuctions, flushClosed, refreshBids, reinspectNoComps, repriceUnpriced, fetchSettings, saveTargetRoi, saveMailerSize, saveDriveFrom, clearDriveFrom, setAuctionLive, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
+import { fetchLots, fetchLotCount, fetchAuctions, fetchCategories, fetchLotCategories, scanAuctions, importLots, importAllAuctions, flushClosed, refreshBids, reinspectNoComps, repriceUnpriced, fetchSettings, saveTargetRoi, saveMailerSize, saveGoldRules, saveDriveFrom, clearDriveFrom, setAuctionLive, addFavoriteHouse, removeFavoriteHouse, setAuctionHidden, fetchDismissed, undismissAuction, alertOnce, parseUtc } from './api'
 import { fetchNeverRules } from './api'
 import { auctionClosed } from './lib/pacing'
 import { houseRatioLabel, houseRatioTitle } from './lib/calibration'
@@ -291,6 +291,8 @@ export default function App() {
   // The mailer a lot must fit to be a gold mine, inches - DB-backed too.
   const [mailerW, setMailerW] = useState('')
   const [mailerL, setMailerL] = useState('')
+  // Which rules make a gold mine - the user's switches, DB-backed.
+  const [goldRules, setGoldRules] = useState(null)
   useEffect(() => {
     fetchSettings().then((s) => {
       setTargetRoi(String(s.target_roi_pct))
@@ -298,6 +300,7 @@ export default function App() {
         setMailerW(String(s.mailer_size.width))
         setMailerL(String(s.mailer_size.length))
       }
+      if (s.gold_rules) setGoldRules(s.gold_rules)
       setDriveFrom(s.drive_from || null)
       setDriveAvailable(Boolean(s.drive_times_available))
     }).catch(console.error)
@@ -415,7 +418,12 @@ export default function App() {
     if (!liveIds.length || !['items', 'watched', 'live'].includes(view)) return undefined
     const inScope = selectedAuctions.length
       ? liveIds.filter((id) => selectedAuctions.includes(id)) : liveIds
+    // One at a time, and not from a hidden tab: overlapping polls are what
+    // used up the backend's connection pool (see StatusBar).
+    let inFlight = false
     const tick = async () => {
+      if (inFlight || document.hidden) return
+      inFlight = true
       try {
         if (inScope.length) {
           const fresh = await fetchLots({
@@ -428,6 +436,8 @@ export default function App() {
         rememberAuctions(await fetchAuctions(), { full: true })
       } catch (e) {
         console.error(e)   // a missed minute is not worth a popup
+      } finally {
+        inFlight = false
       }
     }
     const t = setInterval(tick, 60000)
@@ -598,6 +608,19 @@ export default function App() {
             + `and the items appear here when it finishes.`)
     } catch (e) { alertOnce(e.message) }
   }
+
+  async function handleSaveGoldRules() {
+    if (!goldRules) return
+    const lb = Number(goldRules.max_weight_lb)
+    const usd = Number(goldRules.min_profit_usd)
+    if (!(lb > 0) || !(usd >= 0)) { notify('Enter a weight limit and a minimum profit, e.g. 10 lb and $10.'); return }
+    try {
+      const r = await saveGoldRules({ ...goldRules, max_weight_lb: lb, min_profit_usd: usd })
+      setGoldRules(r.gold_rules)
+      notify(`Gold mine rules saved. Re-grading ${r.regrading} items — takes a few seconds.`)
+    } catch (e) { alertOnce(e.message) }
+  }
+  const setRule = (key, value) => setGoldRules((r) => ({ ...r, [key]: value }))
 
   async function handleSaveMailer() {
     const w = Number(mailerW)
@@ -1531,7 +1554,7 @@ export default function App() {
             </fieldset>
 
             <fieldset style={panelGroup}>
-              <legend style={panelLegend}>Gold mine threshold</legend>
+              <legend style={panelLegend}>Gold mine rules</legend>
               <span style={panelRow}
                     title="An item is a GOLD MINE when its current bid still clears this return after all fees. Saving re-grades every item for free.">
                 at
@@ -1556,6 +1579,46 @@ export default function App() {
                 in mailer
                 <button style={{ fontSize: 12, padding: '3px 9px' }} onClick={handleSaveMailer} data-track="Save mailer size">Save size</button>
               </span>
+              {goldRules && (<>
+                <label style={panelRow}
+                       title="A lot that won't fit the mailer above is never a gold mine, and bulk pricing skips it.">
+                  <input type="checkbox" checked={goldRules.mailer}
+                         onChange={(ev) => setRule('mailer', ev.target.checked)} />
+                  Must fit the mailer
+                </label>
+                <label style={panelRow}
+                       title="Judged on the AI's weight when it has one, else a rough estimate from the item type.">
+                  <input type="checkbox" checked={goldRules.weight}
+                         onChange={(ev) => setRule('weight', ev.target.checked)} />
+                  Weighs at most
+                  <input type="number" min="0.1" step="1" value={goldRules.max_weight_lb}
+                         disabled={!goldRules.weight}
+                         onChange={(ev) => setRule('max_weight_lb', ev.target.value)}
+                         aria-label="Heaviest gold mine, pounds" style={{ width: 52 }} />
+                  lb
+                </label>
+                <label style={panelRow}
+                       title="The max bid stops where your profit would drop below this.">
+                  <input type="checkbox" checked={goldRules.min_profit}
+                         onChange={(ev) => setRule('min_profit', ev.target.checked)} />
+                  Clears at least $
+                  <input type="number" min="0" step="1" value={goldRules.min_profit_usd}
+                         disabled={!goldRules.min_profit}
+                         onChange={(ev) => setRule('min_profit_usd', ev.target.value)}
+                         aria-label="Least profit for a gold mine, dollars" style={{ width: 52 }} />
+                  profit
+                </label>
+                <label style={panelRow}
+                       title="A printed retail price, an audit or a melt value counts as the second source.">
+                  <input type="checkbox" checked={goldRules.two_comps}
+                         onChange={(ev) => setRule('two_comps', ev.target.checked)} />
+                  Backed by 2+ agreeing comps
+                </label>
+                <span style={panelRow}>
+                  <button style={{ fontSize: 12, padding: '3px 9px' }} onClick={handleSaveGoldRules}
+                          data-track="Save gold mine rules">Save rules</button>
+                </span>
+              </>)}
             </fieldset>
           </div>
         )}

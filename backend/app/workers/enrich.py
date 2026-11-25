@@ -44,6 +44,7 @@ from ..services import twins
 from ..services import metal
 from ..services import weight
 from ..services import mailer
+from ..services import gold_rules
 from ..services import sell_through
 from ..services import settings as settings_store
 from ..services.bolo import BoloMatcher
@@ -76,13 +77,10 @@ MIN_DESC_FOR_TEXT_PASS = 80     # below this the description carries no signal
 # median lot's all-in cost and swamped everything the ROI was meant to show.
 LOGISTICS_COST = {"EASY": 3.50, "NEUTRAL": 6.50, "HARD": 21.00}
 
-# Least a gold mine must clear if won at the max bid (the user's call,
-# 2026-10-03: "add the $10 minimum").
-MIN_GOLD_PROFIT = float(os.environ.get("MIN_GOLD_PROFIT", "10"))
-# Heaviest lot worth buying, in pounds (the user's call, 2026-10-28: "I
-# don't want to buy anything that's over 10 lb"). Judged on the AI's weight
-# when it has one, else the item-type estimate (services/weight).
-MAX_WEIGHT_LB = float(os.environ.get("MAX_WEIGHT_LB", "10"))
+# The least a gold mine must clear if won at the max bid ("add the $10
+# minimum", 2026-10-03), the heaviest lot worth buying ("I don't want to buy
+# anything that's over 10 lb", 2026-10-28), the mailer it must fit and the
+# two-comp evidence bar are the user's switches now: services/gold_rules.
 
 # Share of melt value used as the resale floor: about what a refiner pays.
 MELT_FLOOR_SHARE = float(os.environ.get("MELT_FLOOR_SHARE", "0.9"))
@@ -419,10 +417,17 @@ def _take_ai_weight(e: models.Enrichment, value) -> None:
 STR_RECHECK_DAYS = float(os.environ.get("STR_RECHECK_DAYS", "7"))
 
 
+def _sold_but_zero(e: models.Enrichment, sold: int | None) -> bool:
+    """A zero sold total on a lot that was priced from sold comps: the
+    search missed, the item didn't fail to sell."""
+    return (sold == 0 and (e.comp_count or 0) > 0
+            and (e.price_source or "").startswith("sold"))
+
+
 def _str_due(e: models.Enrichment) -> bool:
     if e.roi_status != "GOLD MINE":
         return False
-    if e.str_checked_at is None:
+    if e.str_checked_at is None or _sold_but_zero(e, e.str_sold):
         return True
     age = datetime.now(timezone.utc).replace(tzinfo=None) - e.str_checked_at
     return age.total_seconds() > STR_RECHECK_DAYS * 86400
@@ -438,6 +443,11 @@ def _check_str(db: Session, lot: models.Lot, e: models.Enrichment) -> bool:
     query = e.enriched_title or pricing.title_without_retail_prefix(lot.title or "")
     result = sell_through.check(query)
     if result is None:
+        return False
+    # Zero sold for a lot priced on sold comps is the search failing, not the
+    # item never selling - recording it would show a confident 0% (the star
+    # note). Leave it unchecked for the next pass instead.
+    if _sold_but_zero(e, result["sold"]):
         return False
     e.str_sold, e.str_active, e.str_pct = result["sold"], result["active"], result["pct"]
     e.str_checked_at = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -1060,7 +1070,11 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
         # outlive the number it vouched for.
         audit_backed = ((e.price_source or "").startswith("audit-corrected")
                         or e.gold_check in ("confirmed", "corrected"))
-        thin_evidence = ((e.comp_count or 0) < 2
+        # The user's switches for what makes a gold mine (services/gold_rules).
+        rules = gold_rules.current()
+        min_profit = rules["min_profit_usd"]
+        max_lb = rules["max_weight_lb"]
+        thin_evidence = (rules["two_comps"] and (e.comp_count or 0) < 2
                          and not (from_title or audit_backed or melt_backed))
         e.profit = lead.profit
         # An audit demotion stands until the VALUE changes (which clears
@@ -1078,7 +1092,7 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
         fk = funko.assess(f"{lot.title or ''} {lot.description or ''}")
         not_genuine = bool(fk and fk["block"])
         # A gold mine has to be worth the trip: the max bid is the most you
-        # can pay and still hit the target ROI AND clear MIN_GOLD_PROFIT.
+        # can pay and still hit the target ROI AND clear the minimum profit.
         # The Rare Estate audit had 43 of 58 gold mines under $10 each at
         # max - costume pieces resold for $18-22. Rejecting every lot whose
         # ROI ceiling cleared under $10 then failed a $40 lantern sitting at
@@ -1086,19 +1100,19 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
         acq = financials.acquisition_multiplier(premium)
         min_profit_ceiling = max(0.0, round(
             (value * (1 - financials.PLATFORM_FEE) - penalty
-             - financials.BUFFER - MIN_GOLD_PROFIT) / acq, 2))
+             - financials.BUFFER - min_profit) / acq, 2))
         small_win = False
-        if min_profit_ceiling < float(lead.max_bid):
+        if rules["min_profit"] and min_profit_ceiling < float(lead.max_bid):
             e.max_bid = min_profit_ceiling
             small_win = (lead.status == "GOLD MINE"
                          and effective_bid > min_profit_ceiling)
-        too_heavy = (e.weight_lb is not None
-                     and float(e.weight_lb) > MAX_WEIGHT_LB)
+        too_heavy = (rules["weight"] and e.weight_lb is not None
+                     and float(e.weight_lb) > max_lb)
         # Everything you sell goes out in one poly mailer (the user's call,
         # 2026-10-28); a lot that won't fit it is not worth buying.
         mailer_size = mailer.current_size()
-        too_big = not mailer.fits(lot.title, lot.description, lot.logistics_ease,
-                                  e.weight_lb, mailer_size)
+        too_big = rules["mailer"] and not mailer.fits(
+            lot.title, lot.description, lot.logistics_ease, e.weight_lb, mailer_size)
         e.roi_status = ("PASS" if (red_flag or lot.unreachable_pickup
                                    or too_big or too_heavy
                                    or titled_vehicle or not_genuine
@@ -1127,7 +1141,7 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
             e.roi_reason = f"won't fit your {mailer.size_label(mailer_size)} mailer"
         elif too_heavy:
             e.roi_reason = (f"{'about ' if e.weight_source != 'ai' else ''}"
-                            f"{float(e.weight_lb):g} lb - over your {MAX_WEIGHT_LB:g} lb limit")
+                            f"{float(e.weight_lb):g} lb - over your {max_lb:g} lb limit")
         elif not_genuine:
             e.roi_reason = f"fraud check: listing says \"{fk['bootleg']}\" - not a genuine Funko"
         elif identity_uncertain:
@@ -1141,12 +1155,12 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
         elif demoted:
             e.roi_reason = "audit demoted the value (see its note)"
         elif small_win and min_profit_ceiling <= 0:
-            e.roi_reason = (f"under ${MIN_GOLD_PROFIT:.0f} profit at any bid - "
+            e.roi_reason = (f"under ${min_profit:.0f} profit at any bid - "
                             "the minimum for a gold mine")
         elif small_win:
             e.roi_reason = (f"bid ${effective_bid:.0f} already past "
                             f"${min_profit_ceiling:.0f}, the most you can pay and "
-                            f"still clear ${MIN_GOLD_PROFIT:.0f}")
+                            f"still clear ${min_profit:.0f}")
         elif e.roi_status == "PASS":
             # Quote the max the lot actually shows - after the $10-profit
             # cap - not the ROI-only ceiling under it: a Swarovski bell read
@@ -1154,8 +1168,8 @@ def _apply_roi(lot: models.Lot, e: models.Enrichment) -> None:
             shown_max = float(e.max_bid or 0)
             if lead.max_bid <= 0:
                 e.roi_reason = "value too low to clear costs at any bid"
-            elif shown_max <= 0:
-                e.roi_reason = (f"under ${MIN_GOLD_PROFIT:.0f} profit at any bid - "
+            elif shown_max <= 0 and rules["min_profit"]:
+                e.roi_reason = (f"under ${min_profit:.0f} profit at any bid - "
                                 "the minimum for a gold mine")
             else:
                 e.roi_reason = (f"bid ${effective_bid:.0f} already past the "
@@ -2025,7 +2039,11 @@ def _str_sweep_query(db: Session):
               .join(models.Auction, models.Lot.auction_id == models.Auction.id)
               .filter(models.Enrichment.roi_status == "GOLD MINE",
                       or_(models.Enrichment.str_checked_at.is_(None),
-                          models.Enrichment.str_checked_at < stale),
+                          models.Enrichment.str_checked_at < stale,
+                          # A recorded zero on a sold-comped lot (_sold_but_zero).
+                          and_(models.Enrichment.str_sold == 0,
+                               models.Enrichment.comp_count > 0,
+                               models.Enrichment.price_source.like("sold%"))),
                       or_(models.Lot.hidden.is_(False), models.Lot.hidden.is_(None)),
                       open_state.still_open(datetime.now())))
 

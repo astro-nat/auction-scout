@@ -76,3 +76,24 @@ def test_a_failed_check_leaves_it_due(monkeypatch):
     lot, e = _gold()
     assert enrich._check_str(_Db(), lot, e) is False
     assert e.str_checked_at is None
+
+
+def _priced(e):
+    e.comp_count, e.price_source = 12, "sold (SoldComps)"
+    return e
+
+
+def test_zero_sold_on_a_sold_comped_lot_is_not_recorded(monkeypatch):
+    """A $2 star note read 0 sold against 42 listed: the search missed."""
+    monkeypatch.setattr(sell_through, "check", lambda q: {"sold": 0, "active": 42, "pct": 0.0})
+    lot, e = _gold()
+    _priced(e)
+    assert enrich._check_str(_Db(), lot, e) is False
+    assert e.str_pct is None
+
+
+def test_a_recorded_zero_is_rechecked(monkeypatch):
+    lot, e = _gold(checked=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=1))
+    _priced(e)
+    e.str_sold, e.str_active, e.str_pct = 0, 42, 0.0
+    assert enrich._str_due(e)

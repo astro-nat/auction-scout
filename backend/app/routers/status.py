@@ -1,5 +1,7 @@
 """GET /status — everything happening server-side right now, for the top bar."""
 
+import threading
+import time
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -7,15 +9,49 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .. import models
-from ..database import get_db
+from ..database import SessionLocal, get_db
 from ..services import jobs, pricing
 
 router = APIRouter(tags=["status"])
 
 
+# Every open tab polls this each second, and one answer costs several
+# database connections. On 2026-11-25 slow answers overlapped until the
+# backend's whole pool (10 + 20 overflow) was checked out and every request
+# waited on it - the app hung until restarted. So: one answer serves every
+# caller for a second, only one is ever being built, and a caller arriving
+# while one is being built gets the last answer instead of queueing for a
+# connection.
+_STATUS_TTL_SECONDS = 1.0
+_status_lock = threading.Lock()
+_status_cache: tuple[float, dict] | None = None
+
+
 @router.get("/status")
-def get_status(db: Session = Depends(get_db)):
+def get_status():
     """Active scans/imports plus the enrichment queue's live state."""
+    global _status_cache
+    hit = _status_cache
+    if hit and time.monotonic() - hit[0] < _STATUS_TTL_SECONDS:
+        return hit[1]
+    if not _status_lock.acquire(blocking=hit is None):
+        return hit[1]           # one is being built; the last answer will do
+    try:
+        hit = _status_cache
+        if hit and time.monotonic() - hit[0] < _STATUS_TTL_SECONDS:
+            return hit[1]
+        db = SessionLocal()
+        try:
+            payload = _build_status(db)
+        finally:
+            db.close()
+        _status_cache = (time.monotonic(), payload)
+        return payload
+    finally:
+        _status_lock.release()
+
+
+def _build_status(db: Session) -> dict:
     from sqlalchemy import case, func
     # One aggregate pass: total queued plus the enrich/inspect split, so the
     # bar can say what KIND of work is waiting, straight from postgres.
@@ -224,11 +260,13 @@ def get_settings():
     from ..services import settings as settings_store
     from ..services import drive
     o = drive.origin()
-    from ..services import mailer
+    from ..services import gold_rules, mailer
     width, length = mailer.current_size()
     return {"target_roi_pct": round(financials.current_target_roi() * 100),
             # The poly mailer everything you sell ships in, in inches.
             "mailer_size": {"width": width, "length": length},
+            # Which rules make a gold mine (services/gold_rules).
+            "gold_rules": gold_rules.current(),
             "exclude_titled_vehicles": settings_store.flag(
                 "exclude_titled_vehicles",
                 settings_store.EXCLUDE_VEHICLES_DEFAULT),
@@ -284,8 +322,18 @@ def patch_settings(payload: dict,
         if size is None:
             raise HTTPException(status_code=422,
                                 detail="mailer_size must be two sizes in inches, like 14.5x20")
+    rules = None
+    if "gold_rules" in payload:
+        from ..services import gold_rules
+        if not isinstance(payload["gold_rules"], dict):
+            raise HTTPException(status_code=422, detail="gold_rules must be an object")
+        try:
+            rules = gold_rules.merge(payload["gold_rules"])
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
     roi = None
-    if "target_roi_pct" in payload or (not to_save and vehicles is None and size is None):
+    if "target_roi_pct" in payload or (not to_save and vehicles is None
+                                       and size is None and rules is None):
         roi = payload.get("target_roi_pct")
         if not isinstance(roi, (int, float)) or not (1 <= roi <= 10000):
             raise HTTPException(status_code=422,
@@ -307,6 +355,11 @@ def patch_settings(payload: dict,
         settings_store.set("mailer_size", f"{size[0]:g}x{size[1]:g}")
         to_save["mailer_size"] = {"width": size[0], "length": size[1]}
         regrade = True   # what fits decides what can be a gold mine
+    if rules is not None:
+        from ..services import gold_rules
+        gold_rules.save(rules)
+        to_save["gold_rules"] = rules
+        regrade = True
     n = 0
     if regrade:
         # Re-GRADE, not re-price: neither knob changes what anything is

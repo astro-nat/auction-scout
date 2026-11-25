@@ -70,11 +70,20 @@ export default function StatusBar({ onQuiet, onStatus }) {
       }
     }
 
-    tick()
     // 1s: fast enough that per-lot stage changes and queue counts visibly
-    // tick down. The endpoint is one aggregate query — cheap to poll.
-    const interval = setInterval(tick, 1000)
-    return () => { alive = false; clearInterval(interval) }
+    // tick down. But never overlapping, and not from a hidden tab: a fixed
+    // 1s interval kept firing while slow answers were still out, each one
+    // holding several database connections, until the backend's pool of 30
+    // was gone and every request waited on it - the app jammed for good on
+    // 2026-11-25. The next tick is scheduled only once this one has answered.
+    let timer = null
+    async function loop() {
+      if (!alive) return
+      if (!document.hidden) await tick()
+      if (alive) timer = setTimeout(loop, 1000)
+    }
+    loop()
+    return () => { alive = false; clearTimeout(timer) }
   }, [onQuiet])
 
   if (!status) return null

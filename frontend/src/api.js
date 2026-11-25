@@ -345,6 +345,13 @@ export function saveTargetRoi(pct) {
   return request('/settings', { method: 'PATCH', body: JSON.stringify({ target_roi_pct: pct }) })
 }
 
+// Which rules make a gold mine (backend services/gold_rules): a partial
+// object - {mailer, weight, max_weight_lb, min_profit, min_profit_usd,
+// two_comps}. Saving re-grades.
+export function saveGoldRules(rules) {
+  return request('/settings', { method: 'PATCH', body: JSON.stringify({ gold_rules: rules }) })
+}
+
 // The poly mailer everything you sell ships in, "14.5x20". Saving re-grades.
 export function saveMailerSize(width, length) {
   return request('/settings', { method: 'PATCH', body: JSON.stringify({ mailer_size: `${width}x${length}` }) })

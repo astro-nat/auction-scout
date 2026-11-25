@@ -13,7 +13,6 @@ mailer; a hard-to-ship lot doesn't; anything else fits if it weighs about
 
 from __future__ import annotations
 
-import os
 import re
 
 from . import hibid, weight
@@ -112,8 +111,8 @@ def fits(title: str | None, description: str | None, logistics_ease: str | None,
 
 # Pricing a lot that can never be a gold mine is money spent on nothing:
 # a comp lookup, often an AI check (the user's call, 2026-11-10: "so that I
-# don't waste resources analyzing furniture"). Same limit as the grader's.
-MAX_WEIGHT_LB = float(os.environ.get("MAX_WEIGHT_LB", "10"))
+# don't waste resources analyzing furniture"). Same switches as the grader's
+# (services/gold_rules): a rule switched off skips nothing.
 
 
 def wont_be_gold(title: str | None, description: str | None, logistics_ease: str | None,
@@ -122,10 +121,14 @@ def wont_be_gold(title: str | None, description: str | None, logistics_ease: str
     priced, or None. Sure means the listing says so - its words, its size,
     its ship tier, or a recognised item type's weight. An unrecognised title
     is not sure: an AI look might find it small, so it still gets priced."""
+    from . import gold_rules
+    rules = gold_rules.current()
     size = size or current_size()
     lb = weight.by_item_type(title)
-    if lb is not None and lb > MAX_WEIGHT_LB:
-        return f"about {lb:g} lb - over your {MAX_WEIGHT_LB:g} lb limit"
+    if rules["weight"] and lb is not None and lb > rules["max_weight_lb"]:
+        return f"about {lb:g} lb - over your {rules['max_weight_lb']:g} lb limit"
+    if not rules["mailer"]:
+        return None
     sure = _sure(title, description, logistics_ease, size)
     if sure is False or (sure is None and lb is not None and lb > LIGHT_ENOUGH_LB):
         return f"won't fit your {size_label(size)} mailer"

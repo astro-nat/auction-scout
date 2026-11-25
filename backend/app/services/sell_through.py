@@ -6,9 +6,11 @@ the thing actually sells, and show it - informational, not a gate.
 SoldComps has no STR field. Its /v1/scrape search reports eBay's own
 total for the search ("totalResults", e.g. "14,000+") in both modes, so
 STR is two searches on the same words: sold / (sold + active). Both run
-with exactMatch on - the pricing search turns it off to gather volume,
-but "results matching fewer words" would inflate both totals unevenly.
-eBay rounds big totals, so a broad search's STR is approximate.
+with exactMatch off, as the pricing search does. They first ran with it
+on, and eBay's sold search demands every word of a long title where the
+active one doesn't: a 1953-B $2 star note read 0 sold against 42 listed,
+an STR of 0% for a note that plainly sells. eBay rounds big totals, so a
+broad search's STR is approximate.
 
 Costs two SoldComps requests per lot; callers keep the result on the lot
 and recheck at most weekly. Shares pricing's pacing, outage breaker and
@@ -53,7 +55,7 @@ def _total(query: str, sold: bool) -> int | None:
                 headers={"Authorization": f"Bearer {pricing.SOLDCOMPS_API_KEY}"},
                 # The smallest page: only the total is wanted, and a request
                 # costs the same whatever it returns.
-                params={"keyword": query, "count": 60, "exactMatch": "true",
+                params={"keyword": query, "count": 60, "exactMatch": "false",
                         "sold": "true" if sold else "false"},
             )
     except Exception as exc:  # noqa: BLE001 - a missing STR must not fail the lot

@@ -21,6 +21,14 @@ from app.services import pricing
 pytestmark = pytest.mark.db
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _fresh_status():
+    """/status serves one answer for a second; these tests read it right
+    after writing."""
+    from app.routers import status
+    status._status_cache = None
 PREFIX = "api-replies-test "          # every row this file writes starts with it
 
 
