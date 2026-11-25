@@ -85,3 +85,18 @@ def test_a_lot_that_wont_fit_is_never_gold(monkeypatch):
 ])
 def test_a_size_in_feet_in_the_title(title, fits):
     assert mailer.fits(title, "", "EASY", 1.0, SIZE) is fits
+
+
+@pytest.mark.parametrize("title,fits", [
+    # A2Z, 2026-11-25: a 7 ft rigid golf cart roof read as a 5 lb mailer item.
+    ("$200 KEMIMOTO 85 Inch Sun Top Compatible with Club Car", False),
+    ('Samsung 65" Class Crystal UHD TV', False),
+    ("Kids 24-Inch Bike", False),
+    ("12 Inch Ruler Set", True),
+    ('Greenlee 35713 6-3/8" Recessed Light Hole Saw', True),
+    # Soft goods coil or fold, whatever their length.
+    ('Signed Kenneth Lane 36" Faceted Necklace', True),
+    ("Navajo Sterling Concho Belt 40 Inch", True),
+])
+def test_a_size_in_inches_in_the_title(title, fits):
+    assert mailer.fits(title, "", "EASY", 1.0, SIZE) is fits

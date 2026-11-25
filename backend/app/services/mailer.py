@@ -24,8 +24,9 @@ LIGHT_ENOUGH_LB = 3.0
 
 # Soft or flat: folds, rolls or lies flat in a poly mailer whatever its
 # printed size. Clothing and shoes by the user's say-so.
+# Not a bare "top": a golf cart "Sun Top" is a 7 ft roof (2026-11-25).
 _ALWAYS_FITS_RE = re.compile(
-    r"\b(?:shirts?|t-shirt|tee|jersey|blouse|tops?|sweaters?|cardigan|hoodies?|"
+    r"\b(?:shirts?|t-shirt|tee|jersey|blouse|tank top|crop top|sweaters?|cardigan|hoodies?|"
     r"sweatshirt|jackets?|coats?|vest|dress(?:es)?|gowns?|skirts?|jeans|pants|"
     r"shorts|leggings|pajamas|scarf|scarves|hat|cap|beanie|gloves|socks|"
     r"shoes|boots|sneakers|sandals|heels|loafers|slippers|"
@@ -94,6 +95,22 @@ def _title_sqft(title: str) -> float | None:
     return float(m.group(1)) * float(m.group(2)) if m else None
 
 
+# A size in inches in the title: "85 Inch", "85-inch", '65"', "24in",
+# fractions included ("6-3/8"").
+_TITLE_INCHES_RE = re.compile(
+    r"(?<![\d/.])((?:\d+[- ])?\d+/\d+|\d+(?:\.\d+)?)\s*-?\s*(?:\"|”|''|in\b|inch(?:es)?\b)",
+    re.IGNORECASE)
+
+
+def _title_longest_inches(title: str) -> float | None:
+    """The longest inch measurement a title states, or None. An "85 Inch"
+    golf cart sun top - a 7 ft rigid roof - read as a 5 lb mailer item and
+    stayed a gold mine (A2Z, 2026-11-25)."""
+    sides = [hibid._inches(m.group(1).replace(" ", "-"))
+             for m in _TITLE_INCHES_RE.finditer(title or "")]
+    return max(sides) if sides else None
+
+
 def _sure(title: str | None, description: str | None, logistics_ease: str | None,
           size: tuple[float, float]) -> bool | None:
     """Fits or not from the listing's own words and size, or None when only
@@ -106,6 +123,11 @@ def _sure(title: str | None, description: str | None, logistics_ease: str | None
         return False
     if _ALWAYS_FITS_RE.search(t):
         return True
+    # After the soft goods: a 36" necklace or a 40" belt coils into a mailer;
+    # an 85" sun top or a 65" TV doesn't.
+    longest = _title_longest_inches(t)
+    if longest is not None and longest > size[1]:
+        return False
     sides = hibid.dimensions_inches(description)
     # "14" H x 6.5" Diameter": round, so the diameter is the width AND the
     # thickness - not a 1-inch-thick disc.
