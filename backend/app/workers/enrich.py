@@ -417,17 +417,11 @@ def _take_ai_weight(e: models.Enrichment, value) -> None:
 STR_RECHECK_DAYS = float(os.environ.get("STR_RECHECK_DAYS", "7"))
 
 
-def _sold_but_zero(e: models.Enrichment, sold: int | None) -> bool:
-    """A zero sold count on a lot that has comps: the search missed, the
-    item didn't fail to sell. Any priced lot - an audit-corrected value was
-    still found from sold comps first (65 such zeros, 2026-11-25)."""
-    return sold == 0 and (e.comp_count or 0) > 0
-
-
 def _str_due(e: models.Enrichment) -> bool:
     if e.roi_status != "GOLD MINE":
         return False
-    if e.str_checked_at is None or _sold_but_zero(e, e.str_sold):
+    # A reading from an older method is wrong, not just old: redo it.
+    if e.str_checked_at is None or e.str_method != sell_through.METHOD:
         return True
     age = datetime.now(timezone.utc).replace(tzinfo=None) - e.str_checked_at
     return age.total_seconds() > STR_RECHECK_DAYS * 86400
@@ -435,21 +429,21 @@ def _str_due(e: models.Enrichment) -> bool:
 
 def _check_str(db: Session, lot: models.Lot, e: models.Enrichment) -> bool:
     """Sell-through rate for a gold mine (the user's call, 2026-11-10:
-    gold mines only, shown not gated). Searched on the same words the lot
-    was priced on. A failed check leaves the lot unchecked, so the next pass
-    retries it. Returns whether it saved a result."""
+    gold mines only, shown not gated): its own relevant sold comps against
+    eBay's matching active listings (services/sell_through). A lot not
+    priced from sold listings is marked checked with no figure; an eBay
+    failure leaves it due, so the next pass retries. Returns whether it
+    saved a result."""
     if not _str_due(e):
         return False
-    query = e.enriched_title or pricing.title_without_retail_prefix(lot.title or "")
-    result = sell_through.check(query)
-    if result is None:
-        return False
-    # Zero sold for a lot priced on sold comps is the search failing, not the
-    # item never selling - recording it would show a confident 0% (the star
-    # note). Leave it unchecked for the next pass instead.
-    if _sold_but_zero(e, result["sold"]):
-        return False
-    e.str_sold, e.str_active, e.str_pct = result["sold"], result["active"], result["pct"]
+    title = e.enriched_title or pricing.title_without_retail_prefix(lot.title or "")
+    sold = sell_through.sold_side(e.comp_count, e.comps)
+    active = sell_through.listed_side(title) if sold is not None else None
+    if sold is not None and active is None:
+        return False                    # eBay couldn't be asked: try again later
+    e.str_sold, e.str_active = sold, active
+    e.str_pct = sell_through.rate(sold, active) if sold is not None else None
+    e.str_method = sell_through.METHOD
     e.str_checked_at = datetime.now(timezone.utc).replace(tzinfo=None)
     db.commit()
     return True
@@ -2040,9 +2034,9 @@ def _str_sweep_query(db: Session):
               .filter(models.Enrichment.roi_status == "GOLD MINE",
                       or_(models.Enrichment.str_checked_at.is_(None),
                           models.Enrichment.str_checked_at < stale,
-                          # A recorded zero on a lot with comps (_sold_but_zero).
-                          and_(models.Enrichment.str_sold == 0,
-                               models.Enrichment.comp_count > 0)),
+                          # A reading from an older method (_str_due).
+                          models.Enrichment.str_method.is_(None),
+                          models.Enrichment.str_method != sell_through.METHOD),
                       or_(models.Lot.hidden.is_(False), models.Lot.hidden.is_(None)),
                       open_state.still_open(datetime.now())))
 

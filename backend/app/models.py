@@ -233,6 +233,7 @@ class Enrichment(Base):
     str_sold = Column(Integer)
     str_active = Column(Integer)
     str_checked_at = Column(DateTime)              # UTC, naive like the rest
+    str_method = Column(String)                    # sell_through.METHOD that made it
     est_roi = Column(Float)            # at current bid
     profit = Column(Numeric)
     roi_status = Column(String)        # GOLD MINE | PASS

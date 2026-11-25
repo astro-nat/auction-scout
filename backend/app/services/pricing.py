@@ -1279,6 +1279,19 @@ def _soldcomps_lookup(query: str, count: int = 120) -> list[tuple[float, str]]:
     logger.warning("SoldComps gave up on %r (last status %s)", query, last_status)
     return []
 
+def active_matches(title: str, query: str, listing_title: str) -> bool:
+    """Is an active eBay listing the same item as the lot? The relevance
+    checks the active-listing fallback prices with, shared with the
+    sell-through count (services/sell_through) so the two never drift."""
+    return (_relevant(query, listing_title) and _quantity_match(title, listing_title)
+            and _model_match(title, listing_title)
+            and _stone_match(title, listing_title)
+            and _audience_match(title, listing_title)
+            and _promo_match(title, listing_title)
+            and funko.comp_fits(title, listing_title)
+            and coins.comp_fits(title, listing_title))
+
+
 def _active_lookup(query: str) -> list[dict]:
     """eBay Browse active fixed-price listings — the always-available fallback."""
     out = []
@@ -1344,14 +1357,7 @@ def lookup_comps(title: str) -> dict:
     best = None
     for query in variants:
         comps = _active_lookup(query)
-        comps = [c for c in comps
-                 if _relevant(query, c["title"]) and _quantity_match(title, c["title"])
-                 and _model_match(title, c["title"])
-                 and _stone_match(title, c["title"])
-                 and _audience_match(title, c["title"])
-                 and _promo_match(title, c["title"])
-                 and funko.comp_fits(title, c["title"])
-                 and coins.comp_fits(title, c["title"])]
+        comps = [c for c in comps if active_matches(title, query, c["title"])]
         kept = _iqr_records(comps)
         if not kept:
             continue

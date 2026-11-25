@@ -39,6 +39,7 @@ class EnrichmentOut(BaseModel):
     str_sold: Optional[int] = None          # eBay sold total behind it
     str_active: Optional[int] = None        # eBay active total behind it
     str_checked_at: Optional[datetime] = None
+    str_method: Optional[str] = None        # which STR method made the reading
     est_roi: Optional[float] = None
     profit: Optional[Decimal] = None
     roi_status: Optional[str] = None
