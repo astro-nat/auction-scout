@@ -3,13 +3,15 @@
 The user's call (2026-11-10): once a lot is a gold mine, check how fast
 the thing actually sells, and show it - informational, not a gate.
 
-SoldComps has no STR field. Its /v1/scrape search reports eBay's own
-total for the search ("totalResults", e.g. "14,000+") in both modes, so
-STR is two searches on the same words: sold / (sold + active). Both run
-with exactMatch off, as the pricing search does. They first ran with it
-on, and eBay's sold search demands every word of a long title where the
-active one doesn't: a 1953-B $2 star note read 0 sold against 42 listed,
-an STR of 0% for a note that plainly sells. eBay rounds big totals, so a
+SoldComps has no STR field, so STR is two searches on the same words:
+sold / (sold + active), the usual 90-day sell-through. Active is eBay's
+own total for the search ("totalResults", e.g. "14,000+"). Sold is the
+count of sales in the last 90 days, read from the listings themselves:
+in sold mode totalResults came back empty, and reading it showed 65 of
+138 gold mines at STR 0% - 0 sold against 899 listed for a squash blossom
+whose pricing search had just returned 100+ sales (2026-11-25). Sold
+listings cap at 240 a search, so "240" means 240 or more. Both searches
+run with exactMatch off, as pricing does. eBay rounds big totals, so a
 broad search's STR is approximate.
 
 Costs two SoldComps requests per lot; callers keep the result on the lot
@@ -22,6 +24,7 @@ from __future__ import annotations
 import logging
 import re
 import time
+from datetime import datetime, timedelta, timezone
 
 import httpx
 
@@ -40,8 +43,33 @@ def parse_total(value) -> int | None:
     return int(digits) if digits else None
 
 
+SOLD_WINDOW_DAYS = 90
+SOLD_MAX = 240          # the most one search returns
+
+
+def _params(query: str, sold: bool) -> dict:
+    if sold:
+        # Every sale in the window, as listings: the count IS the figure.
+        after = datetime.now(timezone.utc) - timedelta(days=SOLD_WINDOW_DAYS)
+        return {"keyword": query, "count": SOLD_MAX, "exactMatch": "false",
+                "sold": "true", "soldAfter": after.strftime("%Y-%m-%d")}
+    # The smallest page: only eBay's total is read, and a request costs the
+    # same whatever it returns.
+    return {"keyword": query, "count": 60, "exactMatch": "false", "sold": "false"}
+
+
+def count_from(body: dict, sold: bool) -> int:
+    """The figure one reply gives: sales listed in the window when sold,
+    eBay's total when active (falling back to the listings returned)."""
+    items = body.get("items") or []
+    if sold:
+        return min(len(items), SOLD_MAX)
+    total = parse_total(body.get("totalResults"))
+    return total if total is not None else len(items)
+
+
 def _total(query: str, sold: bool) -> int | None:
-    """eBay's total result count for one search, or None on any failure."""
+    """One side of the STR for a search, or None on any failure."""
     if not pricing.SOLDCOMPS_API_KEY or pricing._breaker_open():
         return None
     pricing._throttle.wait()
@@ -53,10 +81,7 @@ def _total(query: str, sold: bool) -> int | None:
             r = client.get(
                 SCRAPE_URL,
                 headers={"Authorization": f"Bearer {pricing.SOLDCOMPS_API_KEY}"},
-                # The smallest page: only the total is wanted, and a request
-                # costs the same whatever it returns.
-                params={"keyword": query, "count": 60, "exactMatch": "false",
-                        "sold": "true" if sold else "false"},
+                params=_params(query, sold),
             )
     except Exception as exc:  # noqa: BLE001 - a missing STR must not fail the lot
         took = (time.perf_counter() - sent) * 1000
@@ -74,10 +99,8 @@ def _total(query: str, sold: bool) -> int | None:
         return None
     pricing._note_ok()
     body = r.json() or {}
-    total = parse_total(body.get("totalResults"))
-    if total is None and not body.get("items"):
-        total = 0               # nothing listed or sold is an answer: zero
-    pricing._note_response(query, 200, total_items=body.get("totalResults"),
+    total = count_from(body, sold)
+    pricing._note_response(query, 200, total_items=total,
                            note=f"STR {'sold' if sold else 'active'} total",
                            duration_ms=took)
     return total

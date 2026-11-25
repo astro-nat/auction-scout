@@ -16,6 +16,12 @@ import re
 _ITEMS = [
     # Industrial light fixtures are cast housings, not lamps (#660 Pauluhn).
     (r"flood ?lights?|light fixture|high bay|explosion[- ]proof|hazardous location", 35),
+    # Pool and plumbing equipment: a booster pump, a 12x24 ft solar cover and
+    # a 100 ft sewer camera all read as 1 lb mailer items (A2Z, 2026-11-25).
+    (r"\bpumps?\b", 15), (r"(?:pool|solar|spa|hot tub) cover", 10),
+    (r"(?:sewer|pipe|drain|inspection|borescope) camera", 12),
+    (r"air compressor", 30), (r"pressure washer", 30), (r"(?:shop|wet|dry) vac", 15),
+    (r"space heater|heater", 8), (r"dehumidifier|humidifier", 12),
     (r"wheelchair", 40), (r"commode", 20), (r"(?:weight|workout|exercise) bench", 45),
     (r"treadmill|elliptical", 150), (r"dresser|armoire|hutch|china cabinet", 120),
     (r"sofa|couch|loveseat|recliner", 100), (r"desk|table", 40), (r"chair", 20),

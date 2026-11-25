@@ -28,6 +28,12 @@ from app.workers import enrich
     ("DeWalt Circular Saw", "NEUTRAL", 6),
     ("West Virginia Mountaineers #44 Basketball Jersey", "NEUTRAL", 1.5),
     ("Evan Gattis #11 MLB Baseball in Display Case", "NEUTRAL", 1),
+    # A2Z misses, 2026-11-25: liquidation equipment read as 1 lb.
+    ("$299 Aquastrong PB4-60 Pool Booster Pump, Pure Copper Motor", "EASY", 15),
+    ("$170 BigXwell Solar Pool Cover, 12Mil 12x24 Foot Rectangle", "EASY", 10),
+    ("$354 Sewer Camera 100FT/30M with 512Hz Transmitter", "EASY", 12),
+    # ...and the plain words stay what they were.
+    ("Canon PowerShot Digital Camera", "EASY", 1),
     # Counts multiply.
     ("Set of 4 Dog Man Series Books", "NEUTRAL", 6),
     ("Vintage Fishing Landing Nets Duo", "NEUTRAL", 4),

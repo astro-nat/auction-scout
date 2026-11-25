@@ -97,3 +97,29 @@ def test_a_recorded_zero_is_rechecked(monkeypatch):
     _priced(e)
     e.str_sold, e.str_active, e.str_pct = 0, 42, 0.0
     assert enrich._str_due(e)
+
+
+def test_sold_counts_the_sales_listed_not_the_empty_total():
+    """In sold mode totalResults came back empty: 65 of 138 gold mines read
+    0 sold. The sales themselves are the count."""
+    body = {"totalResults": None, "items": [{"soldPrice": "$40"}] * 113}
+    assert sell_through.count_from(body, sold=True) == 113
+    assert sell_through.count_from({"items": [{}] * 500}, sold=True) == 240   # capped
+
+
+def test_active_reads_ebays_total():
+    assert sell_through.count_from({"totalResults": "14,000+", "items": [{}] * 60}, sold=False) == 14000
+    assert sell_through.count_from({"totalResults": None, "items": [{}] * 7}, sold=False) == 7
+
+
+def test_the_sold_search_covers_ninety_days():
+    p = sell_through._params("squash blossom", sold=True)
+    assert p["sold"] == "true" and p["count"] == 240 and "soldAfter" in p
+    assert "soldAfter" not in sell_through._params("squash blossom", sold=False)
+
+
+def test_a_zero_on_an_audit_corrected_lot_is_rechecked(monkeypatch):
+    lot, e = _gold(checked=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=1))
+    e.comp_count, e.price_source = 108, "audit-corrected (comps said $807.5)"
+    e.str_sold, e.str_active, e.str_pct = 0, 899, 0.0
+    assert enrich._str_due(e)

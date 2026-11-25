@@ -894,8 +894,9 @@ def _retry_after_seconds(response, attempt: int) -> float:
 # completed sales. It does not move in a week, and pretending otherwise is
 # what makes the quota the binding constraint.
 COMP_CACHE_DAYS = float(os.environ.get("COMP_CACHE_DAYS", "7"))
-# A cache, not an archive: enough rows to price against, not every result.
-_CACHE_MAX_ITEMS = 60
+# A cache, not an archive - but as many rows as a live lookup can return
+# (count is at most 240), or a cached answer prices thinner than a fresh one.
+_CACHE_MAX_ITEMS = 240
 _db_cache_stats = {"hit": 0, "miss": 0}
 
 # The last replies from SoldComps, for /status. A lookup that comes back
@@ -993,7 +994,7 @@ def _db_cache_get(query: str, source: str):
         row.hits = (row.hits or 0) + 1
         db.commit()
         _db_cache_stats["hit"] += 1
-        return [(float(p), t) for p, t in (row.payload or [])]
+        return [_cached_comp(c) for c in (row.payload or [])]
     except Exception as exc:  # noqa: BLE001
         logger.warning("Comp cache read failed for %r: %s", query, exc)
         return None
@@ -1002,13 +1003,53 @@ def _db_cache_get(query: str, source: str):
             db.close()
 
 
+_SHIP_TYPES = {"free", "paid", "pickup"}
+
+
+def shipping_of(item: dict) -> dict:
+    """How a sold comp shipped, from SoldComps' shippingType/shippingPrice.
+
+    soldPrice is the item alone. On a free-shipping sale the seller paid the
+    postage out of it, so the item netted less than its price - and you sell
+    with the buyer paying postage. Recorded and shown first, to see how
+    common it is, before deciding how to price it (the user's call,
+    2026-11-25). ship: "free" | "paid" | "pickup" | None (not known)."""
+    kind = str(item.get("shippingType") or "").lower()
+    cost = None
+    try:
+        cost = round(float(str(item.get("shippingPrice")).replace("$", "").replace(",", "")), 2)
+    except (TypeError, ValueError):
+        cost = None
+    return {"ship": kind if kind in _SHIP_TYPES else None,
+            "ship_cost": cost if kind == "paid" else None}
+
+
+def _cached_comp(c) -> dict:
+    """One stored comp as the full record the lookup returns. Rows written
+    before comps were records hold bare [price, title] pairs."""
+    if isinstance(c, dict):
+        return c
+    price, title = c
+    return {"price": float(price), "title": title or "", "url": None,
+            "date": None, "kind": "sold"}
+
+
 def _db_cache_put(query: str, source: str, comps: list) -> None:
+    """Keep a lookup's answer for COMP_CACHE_DAYS. Comps are full records
+    ({price, title, url, date, kind}); this unpacked them as (price, title)
+    pairs, so every write failed with "too many values to unpack" and the
+    durable cache never held a thing - each repeat title cost a fresh
+    SoldComps request (found in the worker log, 2026-11-25)."""
     from ..database import SessionLocal
     from .. import models
     db = None
     try:
         db = SessionLocal()
-        payload = [[float(p), (t or "")[:200]] for p, t in comps[:_CACHE_MAX_ITEMS]]
+        payload = [{"price": float(c["price"]), "title": (c.get("title") or "")[:200],
+                    "url": c.get("url"), "date": c.get("date"),
+                    "kind": c.get("kind") or "sold",
+                    "ship": c.get("ship"), "ship_cost": c.get("ship_cost")}
+                   for c in comps[:_CACHE_MAX_ITEMS]]
         row = (db.query(models.CompCache)
                  .filter(models.CompCache.query == query,
                          models.CompCache.source == source).first())
@@ -1220,9 +1261,12 @@ def _soldcomps_lookup(query: str, count: int = 120) -> list[tuple[float, str]]:
                 out.append({"price": p, "title": item.get("title") or "",
                             "url": item.get("link") or item.get("url")
                                    or item.get("itemUrl"),
-                            "date": item.get("soldDate") or item.get("dateSold")
-                                    or item.get("date"),
-                            "kind": "sold"})
+                            # endedAt is the name SoldComps documents; the
+                            # others were guesses that never matched.
+                            "date": item.get("endedAt") or item.get("soldDate")
+                                    or item.get("dateSold") or item.get("date"),
+                            "kind": "sold",
+                            **shipping_of(item)})
         _note_response(query, 200, total_items=body.get("totalItems"),
                        items=len(items), parsed=len(out),
                        note=_item_fields(items), duration_ms=took)
@@ -1366,7 +1410,8 @@ def _finalize(title: str, comps: list[dict], source: str, result: dict,
                   comps=[{"price": round(c["price"], 2),
                           "title": (c["title"] or "")[:120],
                           "url": c.get("url"), "date": c.get("date"),
-                          "kind": c.get("kind", "sold")}
+                          "kind": c.get("kind", "sold"),
+                          "ship": c.get("ship"), "ship_cost": c.get("ship_cost")}
                          for c in sorted(comps, key=lambda c: -c["price"])
                          [:_COMPS_STORED]])
     return result

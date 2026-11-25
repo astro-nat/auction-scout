@@ -6,7 +6,7 @@ import { notify } from '../lib/notice'
 import { enrichLot, compsLot, recheckLot, fetchLot, patchEnrichment, flagComp, enrichBatch, repriceSelected, setWatch, setHidden, hideLike, refreshBidsForLots, analyzeShippingForLots, alertOnce, parseUtc } from '../api'
 import { aiDone, rowAction } from '../lib/pricing'
 import { PAGE_SIZES, pageButtons, pageWindow, savePageSize, savedPageSize, searchMatches, showingText } from '../lib/paging'
-import { compRows, ebaySoldUrl } from '../lib/comps'
+import { compRows, shippingSummary, ebaySoldUrl } from '../lib/comps'
 import { houseRatioLabel, houseRatioTitle } from '../lib/calibration'
 import { CLOSING_RANGES, ROI_RANGES, hoursUntil, matchesFilter, presetsFor, roiPercent } from '../lib/filters'
 import { allSelected, chunked, inView, selectAll, toggle } from '../lib/selection'
@@ -90,6 +90,12 @@ function CompsPeek({ lot, e, onLotUpdated, label, labelStyle }) {
                 title="Mark this valuation as wrong — builds a worklist for fixing the comp matching">
           {flagging ? 'saving…' : e.comp_flagged ? 'unflag' : 'flag these comps as wrong'}
         </button>
+        {shippingSummary(comps) && (
+          <div style={{ color: 'var(--muted)', marginBottom: 3 }}
+               title="Prices are the item alone. A free-shipping sale paid its postage out of that price, so the item netted less than it reads.">
+            {shippingSummary(comps)}
+          </div>
+        )}
         {rows.map((r, i) => (
           <div key={i} style={{ marginBottom: 2 }}>
             {r.label}

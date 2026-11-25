@@ -2,7 +2,7 @@
 // nothing.
 import { describe, expect, it } from 'vitest'
 
-import { compRows, ebaySoldUrl, kindLabel } from './comps'
+import { compRows, ebaySoldUrl, kindLabel, shippingSummary } from './comps'
 
 describe('ebaySoldUrl', () => {
   it('builds a completed+sold search for the title', () => {
@@ -57,5 +57,24 @@ describe('compRows', () => {
 
   it('survives a record with a missing title', () => {
     expect(compRows([{ price: 10, kind: 'sold' }])[0].title).toBe('')
+  })
+})
+
+describe('comp shipping', () => {
+  it('labels how each comp shipped', () => {
+    const [free, paid, unknown] = compRows([
+      { price: 30, kind: 'sold', ship: 'free' },
+      { price: 30, kind: 'sold', ship: 'paid', ship_cost: 8.5 },
+      { price: 30, kind: 'sold' },
+    ])
+    expect(free.label).toBe('$30.00 sold free ship')
+    expect(paid.label).toBe('$30.00 sold +$8.50 ship')
+    expect(unknown.label).toBe('$30.00 sold')
+  })
+  it('sums up the free-shipping share', () => {
+    expect(shippingSummary([{ ship: 'free' }, { ship: 'paid' }, { ship: 'free' }, {}]))
+      .toBe('2 of 3 sold with free shipping (1 not stated)')
+    expect(shippingSummary([{}, {}])).toBe(null)
+    expect(shippingSummary(null)).toBe(null)
   })
 })

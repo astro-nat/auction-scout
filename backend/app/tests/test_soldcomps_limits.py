@@ -182,6 +182,11 @@ def test_a_long_retry_after_is_treated_as_quota_not_pace(monkeypatch):
     monkeypatch.undo()
     monkeypatch.setattr(pricing, "SOLDCOMPS_API_KEY", "test-key")
     monkeypatch.setattr(pricing, "_cache", {})
+    # undo() dropped _reset's durable-cache stubs too. Once the cache really
+    # saved (2026-11-25), a "widget" answer left in Postgres by another test
+    # came back here instead of the 429 under test.
+    monkeypatch.setattr(pricing, "_db_cache_get", lambda *a, **k: None)
+    monkeypatch.setattr(pricing, "_db_cache_put", lambda *a, **k: None)
     monkeypatch.setattr(pricing, "_blocked_until", 0.0)
     monkeypatch.setattr(pricing, "_throttle", pricing._Throttle(0))
     slept = []
@@ -201,6 +206,11 @@ def test_a_short_retry_after_is_still_retried(monkeypatch):
     monkeypatch.undo()
     monkeypatch.setattr(pricing, "SOLDCOMPS_API_KEY", "test-key")
     monkeypatch.setattr(pricing, "_cache", {})
+    # undo() dropped _reset's durable-cache stubs too. Once the cache really
+    # saved (2026-11-25), a "widget" answer left in Postgres by another test
+    # came back here instead of the 429 under test.
+    monkeypatch.setattr(pricing, "_db_cache_get", lambda *a, **k: None)
+    monkeypatch.setattr(pricing, "_db_cache_put", lambda *a, **k: None)
     monkeypatch.setattr(pricing, "_blocked_until", 0.0)
     monkeypatch.setattr(pricing, "_consecutive_429", 0)
     monkeypatch.setattr(pricing, "_throttle", pricing._Throttle(0))

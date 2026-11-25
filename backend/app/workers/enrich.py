@@ -418,10 +418,10 @@ STR_RECHECK_DAYS = float(os.environ.get("STR_RECHECK_DAYS", "7"))
 
 
 def _sold_but_zero(e: models.Enrichment, sold: int | None) -> bool:
-    """A zero sold total on a lot that was priced from sold comps: the
-    search missed, the item didn't fail to sell."""
-    return (sold == 0 and (e.comp_count or 0) > 0
-            and (e.price_source or "").startswith("sold"))
+    """A zero sold count on a lot that has comps: the search missed, the
+    item didn't fail to sell. Any priced lot - an audit-corrected value was
+    still found from sold comps first (65 such zeros, 2026-11-25)."""
+    return sold == 0 and (e.comp_count or 0) > 0
 
 
 def _str_due(e: models.Enrichment) -> bool:
@@ -2040,10 +2040,9 @@ def _str_sweep_query(db: Session):
               .filter(models.Enrichment.roi_status == "GOLD MINE",
                       or_(models.Enrichment.str_checked_at.is_(None),
                           models.Enrichment.str_checked_at < stale,
-                          # A recorded zero on a sold-comped lot (_sold_but_zero).
+                          # A recorded zero on a lot with comps (_sold_but_zero).
                           and_(models.Enrichment.str_sold == 0,
-                               models.Enrichment.comp_count > 0,
-                               models.Enrichment.price_source.like("sold%"))),
+                               models.Enrichment.comp_count > 0)),
                       or_(models.Lot.hidden.is_(False), models.Lot.hidden.is_(None)),
                       open_state.still_open(datetime.now())))
 
