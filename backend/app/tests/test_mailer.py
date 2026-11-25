@@ -73,3 +73,15 @@ def test_a_lot_that_wont_fit_is_never_gold(monkeypatch):
     enrich._apply_roi(lot, e)
     assert e.roi_status == "PASS"
     assert e.roi_reason == "won't fit your 14.5 x 20 in mailer"
+
+
+@pytest.mark.parametrize("title,fits", [
+    # A2Z, 2026-11-25: the title was cut off before it ever said "cover".
+    ("$143 Sun2Solar Blue 16 ft x 32 ft Rectangle Solar", False),
+    ("$170 BigXwell Solar Pool Cover, 12Mil 12x24 Foot Rectangle", False),
+    ("Heavy Duty Poly Tarp 10' x 12'", False),
+    ("Lightweight Tarp 8 ft x 10 ft", True),
+    ("Vigoro 50 FT Landscape Edging", True),           # one length, not an area: the weight given decides
+])
+def test_a_size_in_feet_in_the_title(title, fits):
+    assert mailer.fits(title, "", "EASY", 1.0, SIZE) is fits

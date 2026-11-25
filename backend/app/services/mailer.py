@@ -78,12 +78,31 @@ def _fits_measured(sides: list[float], size: tuple[float, float]) -> bool:
     return a + c <= length and b + c <= width
 
 
+# A size in feet in the title: "16 ft x 32 ft", "12x24 Foot", "10' x 12'".
+_TITLE_FEET_RE = re.compile(
+    r"(\d+(?:\.\d+)?)\s*(?:ft|feet|foot|')?\s*[x×]\s*(\d+(?:\.\d+)?)\s*(?:ft\b|feet\b|foot\b|')",
+    re.IGNORECASE)
+# Square feet past which a flat item - a pool cover, tarp or rug - is too
+# much to fold into a mailer: a 16 x 32 ft solar cover is 512 and ~15 lb
+# (A2Z, 2026-11-25, whose cut-off title never said "cover"); a light
+# 8 x 10 ft tarp, at 80, still goes.
+FOLD_LIMIT_SQFT = 100
+
+
+def _title_sqft(title: str) -> float | None:
+    m = _TITLE_FEET_RE.search(title or "")
+    return float(m.group(1)) * float(m.group(2)) if m else None
+
+
 def _sure(title: str | None, description: str | None, logistics_ease: str | None,
           size: tuple[float, float]) -> bool | None:
     """Fits or not from the listing's own words and size, or None when only
     the item's weight can decide."""
     t = title or ""
     if _NEVER_FITS_RE.search(t):
+        return False
+    sqft = _title_sqft(t)
+    if sqft is not None and sqft >= FOLD_LIMIT_SQFT:
         return False
     if _ALWAYS_FITS_RE.search(t):
         return True
