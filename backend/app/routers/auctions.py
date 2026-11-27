@@ -259,15 +259,50 @@ async def analyze_shipping(dry_run: bool = False,
     return {"auctions": len(targets), "queued": True}
 
 
+def _refresh_gold_bids(db: Session) -> dict:
+    """Queue a targeted bid refresh of every open, visible gold mine."""
+    from .lots import _auctions_behind
+    now = datetime.now()
+    lot_ids = [r[0] for r in (
+        db.query(models.Lot.lot_id)
+          .join(models.Enrichment, models.Enrichment.lot_id == models.Lot.id)
+          .filter(models.Enrichment.roi_status == "GOLD MINE",
+                  or_(models.Lot.hidden.is_(False), models.Lot.hidden.is_(None)),
+                  or_(models.Lot.closes_at.is_(None), models.Lot.closes_at >= now),
+                  or_(models.Lot.status.is_(None), ~models.Lot.status.like("CLOSED%")))
+          .all())]
+    if not lot_ids:
+        return {"lots": 0, "auctions": 0, "queued": False,
+                "reason": "no open gold mines to refresh"}
+    info = _auctions_behind(db, lot_ids)
+    if not info["auction_ids"]:
+        return {"lots": len(lot_ids), "auctions": 0, "queued": False,
+                "reason": "none of the gold mines are in an open HiBid sale"}
+    # lot_ids makes the worker fetch these lots by number, not whole
+    # catalogues (workers/refresh.run_bid_refresh).
+    jobs.enqueue("bid-refresh", "Refreshing gold mine bids",
+                 total=info["auctions"],
+                 payload={"auction_ids": info["auction_ids"], "lot_ids": lot_ids})
+    return {"lots": len(lot_ids), "auctions": info["auctions"], "queued": True}
+
+
 @router.post("/refresh-bids", status_code=202)
-def refresh_bids(window_hours: float | None = None,
+def refresh_bids(window_hours: float | None = None, gold_only: bool = False,
                  db: Session = Depends(get_db)):
     """Re-pull current bids from HiBid and recompute ROI at the new bids.
     Free — no AI calls.
 
     Limited to auctions closing inside BID_REFRESH_WINDOW_HOURS, same as the
     hourly loop. Pass window_hours=0 to refresh everything still open.
+
+    gold_only: just the open gold mines, fetched lot by lot rather than
+    whole catalogues - the button's default (the user's call, 2026-11-27:
+    "prioritize refreshing bids on the gold mines only"). They're the lots
+    a bid decision rests on, and three catalogues of 2,800 lots to reach
+    156 of them was the slow way.
     """
+    if gold_only:
+        return _refresh_gold_bids(db)
     from ..workers.refresh import auctions_due_for_bid_refresh
     ids = auctions_due_for_bid_refresh(db, window_hours)
     if not ids:

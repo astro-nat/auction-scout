@@ -315,8 +315,10 @@ export function setHidden(lotId, hidden) {
 }
 
 
-export function refreshBids() {
-  return request('/auctions/refresh-bids', { method: 'POST' })
+// goldOnly: just the open gold mines, fetched lot by lot - the button's
+// default. Without it, every auction inside the refresh window.
+export function refreshBids({ goldOnly = false } = {}) {
+  return request(`/auctions/refresh-bids${goldOnly ? '?gold_only=true' : ''}`, { method: 'POST' })
 }
 
 export function fetchSettings() {

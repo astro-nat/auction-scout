@@ -642,12 +642,13 @@ export default function App() {
   }
 
   async function handleRefreshBids() {
-    // No popup on success — the status bar showing the job IS the feedback,
-    // and this runs often (button + hourly timer).
+    // The gold mines only, lot by lot: they're what a bid decision rests on
+    // (the user's call, 2026-11-27). No popup on success — the status bar
+    // showing the job IS the feedback.
     try {
-      // Fully silent: the status bar is the feedback, and "nothing to
-      // refresh" is not worth interrupting for either.
-      await refreshBids()
+      const r = await refreshBids({ goldOnly: true })
+      if (!r.queued) notify(r.reason === 'no open gold mines to refresh'
+        ? 'No open gold mines to refresh.' : `Nothing to refresh: ${r.reason}.`)
     } catch (e) { alertOnce(e.message) }
   }
 
@@ -1306,7 +1307,7 @@ export default function App() {
             <button style={{ textAlign: 'left' }}
                     onClick={runBusy('bid-refresh', 'Starting the bid refresh…', handleRefreshBids)}
                     disabled={!!busy['bid-refresh']}
-                    title="Re-pull current bids from HiBid for every imported open auction and recompute ROI. Free — progress shows in the top bar.">
+                    title="Re-pull current bids from HiBid for your open gold mines and recompute their max bids. Free — progress shows in the top bar. To refresh other lots, select them and use Refresh bids there.">
               Refresh bids
             </button>
             {(<>
