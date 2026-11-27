@@ -3,18 +3,21 @@
 The user's call (2026-11-10): once a lot is a gold mine, check how fast
 the thing actually sells, and show it - informational, not a gate.
 
-Both sides count the SAME item - listings that pass the relevance checks
-pricing uses - or the ratio means nothing. Two earlier versions read
-SoldComps' raw search totals and failed that way: sold mode's total came
-back empty (65 of 138 gold mines at 0%), then counting loose sold matches
-capped at 240 against eBay's much narrower active total put the median at
-92% (2026-11-25).
+Both sides have to count the SAME item, found the same way, or the ratio
+means nothing. Every earlier version broke that (2026-11-25..27):
+- SoldComps' raw totals: an empty sold total read 65 gold mines as 0%,
+  then loose sold matches against a narrow active total put the median at
+  92%;
+- eBay's Browse search for the listed side: it requires every word, the
+  artist's name included, while SoldComps' sold search is loose - a quarter
+  of gold mines read 100% ("Leonard Maloney" lapis cuff: 16 sold, 0 listed)
+  however the wording was chosen.
 
-- Sold: the lot's own sold comps. Pricing's sold search covers the last 90
-  days and keeps only relevant comps, so its comp count is the sold side,
-  already paid for.
-- Listed: eBay's active listings for the same words (the Browse API, free),
-  kept only if they pass pricing's active-listing relevance checks.
+So both sides now come from the same engine, wording and filter:
+- Sold: the lot's own sold comps - pricing's loose SoldComps sold search
+  over 90 days, kept by its relevance checks. Already paid for.
+- Listed: the same loose SoldComps search in active mode, same wording,
+  same page size, kept by the same relevance checks. One request a lot.
 
 A lot priced from a printed retail price or from asking prices has no sold
 side, so it gets no STR rather than an invented one. METHOD marks which
@@ -24,18 +27,18 @@ version made a reading: older readings are hidden and redone.
 from __future__ import annotations
 
 import logging
+import time
 
-from . import ebay, pricing
+import httpx
+
+from . import pricing
 
 logger = logging.getLogger(__name__)
 
-# v3: the listed count searches with the wording that found the sold comps.
-# v2 always used the most specific wording - artist name and all - which
-# eBay rarely has listed, so a quarter of gold mines read 100% (16 sold
-# against 0 listed) when their sold comps came from a broader search.
-METHOD = "matched-v3"
-# The most one Browse search returns.
-LISTED_MAX = 200
+METHOD = "matched-v4"
+SCRAPE_URL = "https://api.sold-comps.com/v1/scrape"
+# The page pricing's sold search asks for, so the two sides see alike.
+LISTED_COUNT = 120
 
 
 def rate(sold: int | None, active: int | None) -> float | None:
@@ -67,14 +70,49 @@ def comp_wording(title: str, comps) -> str | None:
     return variants[-1]                 # the broadest, as pricing's last try
 
 
-def listed_side(title: str, comp_query: str | None = None, comps=None) -> int | None:
-    """Active eBay listings that are the same item as the lot, searched with
-    the wording that found its sold comps; None when eBay can't be asked."""
-    if not ebay.enabled():
+def _active_titles(query: str) -> list[str] | None:
+    """Titles from SoldComps' loose active search, or None on any failure.
+    Shares pricing's pacing, outage breaker and usage counters."""
+    if not pricing.SOLDCOMPS_API_KEY or pricing._breaker_open():
         return None
+    pricing._throttle.wait()
+    sent = time.perf_counter()
+    try:
+        with httpx.Client(timeout=httpx.Timeout(
+                pricing.SOLDCOMPS_TIMEOUT_SECONDS,
+                connect=pricing._CONNECT_TIMEOUT_SECONDS)) as client:
+            r = client.get(
+                SCRAPE_URL,
+                headers={"Authorization": f"Bearer {pricing.SOLDCOMPS_API_KEY}"},
+                params={"keyword": query, "count": LISTED_COUNT,
+                        "exactMatch": "false", "sold": "false"})
+    except Exception as exc:  # noqa: BLE001 - a missing STR must not fail the lot
+        took = (time.perf_counter() - sent) * 1000
+        pricing._usage_add(calls=1, http_ms=took)
+        pricing._note_response(query, None, note=f"STR listed: {type(exc).__name__}"[:120],
+                               duration_ms=took)
+        return None
+    took = (time.perf_counter() - sent) * 1000
+    pricing._usage_add(calls=1, http_ms=took)
+    if r.status_code == 429:
+        pricing._note_429()
+    if r.status_code != 200:
+        pricing._note_response(query, r.status_code, note="STR listed", duration_ms=took)
+        return None
+    pricing._note_ok()
+    items = (r.json() or {}).get("items") or []
+    pricing._note_response(query, 200, items=len(items), note="STR listed",
+                           duration_ms=took)
+    return [it.get("title") or "" for it in items]
+
+
+def listed_side(title: str, comp_query: str | None = None, comps=None) -> int | None:
+    """Active listings that are the same item as the lot, found the way its
+    sold comps were; None when the search can't be made."""
     query = comp_query or comp_wording(title, comps)
     if not query:
         return None
-    items = ebay.search_active(query, limit=LISTED_MAX)
-    return sum(1 for it in items
-               if pricing.active_matches(title, query, it.get("title") or ""))
+    titles = _active_titles(query)
+    if titles is None:
+        return None
+    return sum(1 for t in titles if pricing.active_matches(title, query, t))

@@ -1,4 +1,4 @@
-"""Sell-through rate on gold mines. Pure - eBay is stubbed.
+"""Sell-through rate on gold mines. Pure - SoldComps is stubbed.
 
 Both sides count the same item: the lot's own relevant sold comps, and
 eBay's active listings that pass pricing's relevance checks. Two earlier
@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from app import models
-from app.services import ebay, sell_through
+from app.services import sell_through
 from app.workers import enrich
 
 TITLE = "Vtg Coleman Model 220J Double Mantle Lantern"
@@ -36,29 +36,61 @@ def test_the_sold_side_is_the_lots_own_sold_comps(count, comps, sold):
 
 
 def test_the_listed_side_counts_only_the_same_item(monkeypatch):
-    monkeypatch.setattr(ebay, "enabled", lambda: True)
-    monkeypatch.setattr(ebay, "search_active", lambda q, limit=20: [
-        {"title": "Vintage Coleman 220J Double Mantle Lantern Green"},
-        {"title": "Coleman 220J Double Mantle Lantern 1978 w/ Box"},
-        {"title": "Coleman 228H Lantern"},                 # another model
-        {"title": "Mantles for Coleman Lanterns 10 pack"},
+    monkeypatch.setattr(sell_through, "_active_titles", lambda q: [
+        "Vintage Coleman 220J Double Mantle Lantern Green",
+        "Coleman 220J Double Mantle Lantern 1978 w/ Box",
+        "Coleman 228H Lantern",                            # another model
+        "Mantles for Coleman Lanterns 10 pack",
     ])
     assert sell_through.listed_side(TITLE, "Coleman 220J Double Mantle Lantern") == 2
 
 
-def test_no_ebay_means_no_figure(monkeypatch):
-    monkeypatch.setattr(ebay, "enabled", lambda: False)
+def test_a_failed_search_means_no_figure(monkeypatch):
+    monkeypatch.setattr(sell_through, "_active_titles", lambda q: None)
     assert sell_through.listed_side(TITLE, "Coleman 220J lantern") is None
 
 
 def test_the_listed_side_searches_with_the_comps_wording(monkeypatch):
-    """v2 always searched the most specific wording - artist and all - and
-    found nothing listed: 16 sold against 0 read as 100%."""
     asked = []
-    monkeypatch.setattr(ebay, "enabled", lambda: True)
-    monkeypatch.setattr(ebay, "search_active", lambda q, limit=20: asked.append(q) or [])
+    monkeypatch.setattr(sell_through, "_active_titles", lambda q: asked.append(q) or [])
     sell_through.listed_side(TITLE, "Coleman 220J lantern")
     assert asked == ["Coleman 220J lantern"]
+
+
+def test_the_listed_search_is_as_loose_as_the_sold_one(monkeypatch):
+    """eBay's Browse search requires every word, artist and all; SoldComps'
+    sold search doesn't. A "Leonard Maloney" cuff read 16 sold, 0 listed."""
+    from app.services import pricing
+    sent = {}
+
+    class _Resp:
+        status_code = 200
+
+        def json(self):
+            return {"items": [{"title": "a"}, {"title": "b"}]}
+
+    class _Client:
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def get(self, url, headers=None, params=None):
+            sent.update(params)
+            return _Resp()
+
+    monkeypatch.setattr(pricing, "SOLDCOMPS_API_KEY", "test-key")
+    monkeypatch.setattr(pricing, "_breaker_open", lambda: False)
+    monkeypatch.setattr(pricing, "_throttle", pricing._Throttle(0))
+    monkeypatch.setattr(pricing, "_note_response", lambda *a, **k: None)
+    monkeypatch.setattr(sell_through.httpx, "Client", _Client)
+    assert sell_through._active_titles("Leonard Maloney Bracelet") == ["a", "b"]
+    assert sent["sold"] == "false" and sent["exactMatch"] == "false"
+    assert sent["count"] == sell_through.LISTED_COUNT
 
 
 def test_older_lots_get_their_wording_worked_out_from_their_comps():
@@ -108,7 +140,7 @@ def test_a_retail_priced_lot_gets_no_figure(monkeypatch):
     assert e.str_pct is None and e.str_checked_at is not None   # checked, not re-asked
 
 
-def test_an_ebay_failure_leaves_it_due(monkeypatch):
+def test_a_failed_search_leaves_it_due(monkeypatch):
     _listed(monkeypatch, None)
     lot, e = _gold()
     assert enrich._check_str(_Db(), lot, e) is False

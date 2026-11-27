@@ -5,7 +5,7 @@
 // Only readings from the current method are shown. The two before it
 // compared different things and read 0% or 92% for nearly everything
 // (2026-11-25); the sweep redoes them, and until it does they stay hidden.
-export const STR_METHOD = 'matched-v3'
+export const STR_METHOD = 'matched-v4'
 
 export function strLabel(e) {
   if (e?.str_pct == null || e.str_method !== STR_METHOD) return null
