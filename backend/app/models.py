@@ -209,6 +209,9 @@ class Enrichment(Base):
     # never scaled. NULL on rows enriched before this column existed; the UI
     # falls back to a sold-listings search link.
     comps = Column(JSONB)
+    # The search wording that found those comps (pricing.lookup_comps); the
+    # sell-through count reuses it so both sides count the same item.
+    comp_query = Column(String)
 
     # --- ROI verdict ---
     max_bid = Column(Numeric)          # highest hammer price that still hits target ROI

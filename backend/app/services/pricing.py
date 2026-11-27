@@ -1341,11 +1341,16 @@ def lookup_comps(title: str) -> dict:
                  and coins.comp_fits(title, c["title"])]
         kept = _iqr_records(comps)
         if len(kept) >= _MIN_FULL_COMPS:
+            # The wording that found them: the sell-through count searches
+            # active listings with the same words, or it counts a different
+            # item (services/sell_through).
+            result["comp_query"] = query
             return _finalize(title, kept, source, result)
         if kept and best_partial is None:
-            best_partial = (kept, f"sold (thin comps · {query})")
+            best_partial = (kept, f"sold (thin comps · {query})", query)
 
     if best_partial:
+        result["comp_query"] = best_partial[2]
         return _finalize(title, best_partial[0], best_partial[1], result)
 
     # Active-listing fallback. Walk the variants MOST-SPECIFIC first (same

@@ -29,7 +29,11 @@ from . import ebay, pricing
 
 logger = logging.getLogger(__name__)
 
-METHOD = "matched-v2"
+# v3: the listed count searches with the wording that found the sold comps.
+# v2 always used the most specific wording - artist name and all - which
+# eBay rarely has listed, so a quarter of gold mines read 100% (16 sold
+# against 0 listed) when their sold comps came from a broader search.
+METHOD = "matched-v3"
 # The most one Browse search returns.
 LISTED_MAX = 200
 
@@ -49,27 +53,28 @@ def sold_side(comp_count: int | None, comps) -> int | None:
     return int(comp_count)
 
 
-def listed_side(title: str) -> int | None:
-    """Active eBay listings that are the same item as the lot, or None when
-    eBay can't be asked."""
+def comp_wording(title: str, comps) -> str | None:
+    """The search wording a lot's sold comps came from, for lots priced
+    before pricing saved it: the first wording, most specific first, that
+    most of its stored sold comps match - the one pricing would have kept."""
+    variants = pricing.query_variants(title)
+    titles = [c.get("title") or "" for c in (comps or []) if (c or {}).get("kind") == "sold"]
+    if not variants or not titles:
+        return None
+    for query in variants:
+        if 2 * sum(1 for t in titles if pricing._relevant(query, t)) >= len(titles):
+            return query
+    return variants[-1]                 # the broadest, as pricing's last try
+
+
+def listed_side(title: str, comp_query: str | None = None, comps=None) -> int | None:
+    """Active eBay listings that are the same item as the lot, searched with
+    the wording that found its sold comps; None when eBay can't be asked."""
     if not ebay.enabled():
         return None
-    variants = pricing.query_variants(title)
-    if not variants:
+    query = comp_query or comp_wording(title, comps)
+    if not query:
         return None
-    query = variants[0]                 # most specific, as pricing tries first
     items = ebay.search_active(query, limit=LISTED_MAX)
     return sum(1 for it in items
                if pricing.active_matches(title, query, it.get("title") or ""))
-
-
-def check(title: str, comp_count: int | None, comps) -> dict | None:
-    """{sold, active, pct} for a lot, or None when there's no fair figure."""
-    title = (title or "").strip()
-    sold = sold_side(comp_count, comps)
-    if not title or sold is None:
-        return None
-    active = listed_side(title)
-    if active is None:
-        return None
-    return {"sold": sold, "active": active, "pct": rate(sold, active)}

@@ -438,7 +438,8 @@ def _check_str(db: Session, lot: models.Lot, e: models.Enrichment) -> bool:
         return False
     title = e.enriched_title or pricing.title_without_retail_prefix(lot.title or "")
     sold = sell_through.sold_side(e.comp_count, e.comps)
-    active = sell_through.listed_side(title) if sold is not None else None
+    active = (sell_through.listed_side(title, e.comp_query, e.comps)
+              if sold is not None else None)
     if sold is not None and active is None:
         return False                    # eBay couldn't be asked: try again later
     e.str_sold, e.str_active = sold, active
@@ -462,7 +463,7 @@ def _progress(db: Session, e: models.Enrichment, text: str | None) -> None:
 # Bid guidance (max bid, ROI, profit) is recomputed per lot - bids differ.
 _TWIN_FIELDS = ("enriched_title", "verdict", "confidence", "ai_source", "notes",
                 "identity_note", "fraud_note", "auth_required")
-_TWIN_PRICE_FIELDS = ("est_resale", "price_low", "price_high", "comp_count", "comps",
+_TWIN_PRICE_FIELDS = ("est_resale", "price_low", "price_high", "comp_count", "comps", "comp_query",
                       "gold_check", "gold_check_note")
 _TWIN_SUFFIX_RE = re.compile(r"\s*·\s*same title as lot .*$")
 
@@ -949,6 +950,7 @@ def _enrich(lot: models.Lot, e: models.Enrichment, db: Session,
             # .get: the retail-in-title path predates the comps key on some
             # builders — missing simply means no evidence rows to show.
             e.comps = comps.get("comps") or None
+            e.comp_query = comps.get("comp_query")
             if mult != 1.0 and comps["price_source"]:
                 e.price_source += f" ×{mult:g} condition"
             _apply_estimate_cap(lot, e)
@@ -2201,6 +2203,7 @@ def _apply_reprice(db: Session, plan: dict, comps, audits: list | None = None) -
                              price_source=e.price_source,
                              comp_count=e.comp_count, query=search_title)
         e.comps = comps.get("comps") or None
+        e.comp_query = comps.get("comp_query")
         if mult != 1.0 and comps["price_source"]:
             e.price_source += f" ×{mult:g} condition"
         _apply_estimate_cap(lot, e)
